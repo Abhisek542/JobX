@@ -1,0 +1,38 @@
+spring:
+  application:
+    name: jobx-backend
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/jobx
+    username: jobx
+    password: jobx
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: validate          # Flyway owns the schema, Hibernate just validates
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+  # Disable Spring Security's default login page during dev
+  # Replace with real JWT config before adding other users
+  security:
+    user:
+      name: dev
+      password: dev
+
+jobx:
+  fetch:
+    interval-ms: 1800000    # 30 minutes — override to 60000 for local dev testing
+
+logging:
+  level:
+    com.jobx: DEBUG
+    org.springframework.web.reactive: INFO
