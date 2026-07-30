@@ -5,10 +5,10 @@ import com.jobx.dto.WatchedCompanyRequest;
 import com.jobx.dto.WatchedCompanyResponse;
 import com.jobx.entity.User;
 import com.jobx.entity.WatchedCompany;
-import com.jobx.repository.UserRepository;
 import com.jobx.repository.WatchedCompanyRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -18,11 +18,6 @@ import java.util.UUID;
 /**
  * Real CRUD for the watchlist (Phase 2's last open item, per CLAUDE.md /
  * JobX-plan) — replaces manually poking the DB during dev.
- *
- * No auth yet (Phase 4 not started, SecurityConfig still permitAll()s
- * everything): userId is taken as an explicit query param instead of an
- * authenticated principal. Swap requireUser()'s source for the real
- * principal once Spring Security lands.
  */
 @RestController
 @RequestMapping("/watchlist")
@@ -30,11 +25,9 @@ import java.util.UUID;
 public class WatchlistController {
 
     private final WatchedCompanyRepository watchedCompanyRepository;
-    private final UserRepository userRepository;
 
     @GetMapping
-    public List<WatchedCompanyResponse> list(@RequestParam UUID userId) {
-        User user = requireUser(userId);
+    public List<WatchedCompanyResponse> list(@AuthenticationPrincipal User user) {
         return watchedCompanyRepository.findByUser(user).stream()
                 .map(WatchedCompanyResponse::from)
                 .toList();
@@ -42,9 +35,7 @@ public class WatchlistController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public WatchedCompanyResponse add(@RequestParam UUID userId, @RequestBody WatchedCompanyRequest request) {
-        User user = requireUser(userId);
-
+    public WatchedCompanyResponse add(@AuthenticationPrincipal User user, @RequestBody WatchedCompanyRequest request) {
         if (isBlank(request.companyName())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "companyName is required");
         }
@@ -72,9 +63,9 @@ public class WatchlistController {
     }
 
     @PatchMapping("/{id}")
-    public WatchedCompanyResponse updateStatus(@PathVariable UUID id, @RequestParam UUID userId,
+    public WatchedCompanyResponse updateStatus(@PathVariable UUID id, @AuthenticationPrincipal User user,
                                                 @RequestBody UpdateWatchedCompanyStatusRequest request) {
-        WatchedCompany company = requireOwnedCompany(id, userId);
+        WatchedCompany company = requireOwnedCompany(id, user);
         if (request.status() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "status is required");
         }
@@ -84,21 +75,16 @@ public class WatchlistController {
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void remove(@PathVariable UUID id, @RequestParam UUID userId) {
-        WatchedCompany company = requireOwnedCompany(id, userId);
+    public void remove(@PathVariable UUID id, @AuthenticationPrincipal User user) {
+        WatchedCompany company = requireOwnedCompany(id, user);
         // Cascades to jobs (and matches on those jobs) per V1__create_schema.sql ON DELETE CASCADE.
         watchedCompanyRepository.delete(company);
     }
 
-    private User requireUser(UUID userId) {
-        return userRepository.findById(userId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "user not found"));
-    }
-
-    private WatchedCompany requireOwnedCompany(UUID id, UUID userId) {
+    private WatchedCompany requireOwnedCompany(UUID id, User user) {
         WatchedCompany company = watchedCompanyRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "watched company not found"));
-        if (!company.getUser().getId().equals(userId)) {
+        if (!company.getUser().getId().equals(user.getId())) {
             // 404 rather than 403 — don't reveal that another user's row exists
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "watched company not found");
         }

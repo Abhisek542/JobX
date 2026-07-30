@@ -5,9 +5,9 @@ import com.jobx.dto.UpdateMatchStatusRequest;
 import com.jobx.entity.Match;
 import com.jobx.entity.User;
 import com.jobx.repository.MatchRepository;
-import com.jobx.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -21,8 +21,6 @@ import java.util.UUID;
  * Matches are only ever created by FetchScheduler after a poll cycle; this
  * controller is read + status-update only (dashboard alert feed: mark
  * seen/applied/dismissed).
- *
- * No auth yet — same userId-as-query-param caveat as WatchlistController.
  */
 @RestController
 @RequestMapping("/matches")
@@ -30,20 +28,18 @@ import java.util.UUID;
 public class MatchController {
 
     private final MatchRepository matchRepository;
-    private final UserRepository userRepository;
 
     @GetMapping
-    public List<MatchResponse> list(@RequestParam UUID userId) {
-        User user = requireUser(userId);
+    public List<MatchResponse> list(@AuthenticationPrincipal User user) {
         return matchRepository.findByUserOrderByCreatedAtDesc(user).stream()
                 .map(MatchResponse::from)
                 .toList();
     }
 
     @PatchMapping("/{id}")
-    public MatchResponse updateStatus(@PathVariable UUID id, @RequestParam UUID userId,
+    public MatchResponse updateStatus(@PathVariable UUID id, @AuthenticationPrincipal User user,
                                        @RequestBody UpdateMatchStatusRequest request) {
-        Match match = requireOwnedMatch(id, userId);
+        Match match = requireOwnedMatch(id, user);
         if (request.status() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "status is required");
         }
@@ -51,15 +47,10 @@ public class MatchController {
         return MatchResponse.from(matchRepository.save(match));
     }
 
-    private User requireUser(UUID userId) {
-        return userRepository.findById(userId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "user not found"));
-    }
-
-    private Match requireOwnedMatch(UUID id, UUID userId) {
+    private Match requireOwnedMatch(UUID id, User user) {
         Match match = matchRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "match not found"));
-        if (!match.getUser().getId().equals(userId)) {
+        if (!match.getUser().getId().equals(user.getId())) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "match not found");
         }
         return match;

@@ -1,3 +1,4 @@
+
 # Jobx — project context for Claude Code
 
 Handoff doc from design work in claude.ai. Captures *decisions*, not just ideas —
@@ -5,7 +6,7 @@ read before writing code, don't re-litigate items marked DECIDED unless explicit
 asked to revisit. Detailed per-ATS API field notes live in `docs/ats-api-reference.md`
 (not loaded by default) — check that file before touching Lever/Ashby/Workable code.
 
-## Implementation status (updated 2026-07-19)
+## Implementation status (updated 2026-07-30)
 
 Read this first — reflects actual verified backend progress, not design intent.
 
@@ -17,6 +18,22 @@ Read this first — reflects actual verified backend progress, not design intent
 - `MatchScorer` ported to a Spring `@Service`, confirmed correct in isolation (test job scored 79 correctly via a temporary `/dev/test-score` endpoint).
 - Real test data in place: FilterProfile for user `e373e792-5d4a-458f-98c1-3183eac63366`, watching Razorpay + PhonePe.
 - **Match-creation bug (below) fixed and verified 2026-07-18** — `/dev/backfill-matches` now correctly populates the `matches` table.
+- **Phase 4 auth done and verified 2026-07-30** — JWT access-token-only (no refresh token, 7-day
+  expiry), `POST /auth/register` + `POST /auth/login`, `BCryptPasswordEncoder`, no
+  `UserDetailsService`/`AuthenticationManager` (deliberately skipped — login does a direct
+  `passwordEncoder.matches()` check, and `JwtAuthenticationFilter` loads the `User` entity and
+  sets it directly as the `Authentication` principal, so controllers bind it with
+  `@AuthenticationPrincipal User user`). `users.role` column added (`USER`/`ADMIN`, migration
+  `V2__add_user_role.sql`) but nothing branches on it yet — provisioned early to avoid a second
+  migration later. `SecurityConfig` now locks down every route except `/auth/**`, `/dev/**`, and
+  `/error` (`/dev/**` stays open on purpose — dev-only tooling, revisit before a real deploy).
+  `WatchlistController`/`MatchController` no longer take `userId` as a query param — swapped for
+  the real authenticated principal, closing the last item from step 4's build-order note below.
+  **Gotcha hit and fixed during verification:** a `ResponseStatusException` (e.g. 409 on duplicate
+  register) triggers an internal Spring forward to `/error`; without permitting that path too,
+  `AuthorizationFilter` denies the forward for anonymous callers and the 401 entry point silently
+  overwrites the real status/body. Any future custom `exceptionHandling()` work should keep
+  `/error` in mind.
 
 **FIXED (2026-07-18) — was blocking Phase 2/3:**
 `matches` stayed at 0 rows despite 73–93 real jobs and a valid FilterProfile. The
@@ -43,11 +60,10 @@ went from 0 → 4 real matches against the live 73-job dataset, all word-boundar
 Two temp debug endpoints on `DevController` support this, delete once the feature has
 real CRUD endpoints: `POST /dev/backfill-matches`, `POST /dev/test-score?jobId=&userId=`.
 
-**CURRENT FOCUS (2026-07-19): real CRUD endpoints** (`/watchlist`, `/matches`) — the
-one open item left in step 2 of the build order below. `SecurityConfig` still
-`permitAll()`s everything (step 4, not started); Lever/Ashby/Workable fetchers remain
-stubs — their live API verification is no longer a separate upfront step, it's now
-bundled into step 3 (verify each platform as its fetcher gets built, not before).
+**CURRENT FOCUS (2026-07-30): step 5, Angular dashboard.** Step 3 (Ashby/Workable/Lever
+fetchers + their live API verification) is **explicitly deferred/skipped for now, per
+user decision on 2026-07-30** — not cancelled, just not next. Step 4 (auth) is done
+(see above). Re-confirm with the user before resuming step 3 or reordering further.
 
 ## What this is
 
@@ -112,7 +128,7 @@ Each user has their own `keywords`, `excludeWords`, `expMin`, `expMax`.
 ## Data model
 
 ```
-User            (id, email, password_hash, created_at)
+User            (id, email, password_hash, role, created_at)
 FilterProfile   (id, user_id, keywords[], exclude_words[], exp_min, exp_max)
 WatchedCompany  (id, user_id, company_name, ats_platform, board_token/url, status)
 Job             (id, company_id, external_id, title, description, location,
@@ -152,15 +168,17 @@ resuming multi-ATS work.
    Lever/Ashby/Workable verification is no longer a separate step here — moved into
    step 3, verified live as each fetcher is built instead of upfront.
 2. Core entities + Greenhouse fetcher + MatchScorer as a Spring service, no auth yet.
-   **Fetch + matching loop done — working end-to-end.** Match-creation bug fixed
-   2026-07-18; backfill verified against live data.
-   **🎯 CURRENT FOCUS — remaining:** real CRUD endpoints (`/watchlist`, `/matches`);
-   retire temp `/dev/*` endpoints once they exist.
-3. More fetchers: Ashby, Workable, Lever, then harder ones if time allows. **Now also
-   includes live API verification for Lever/Ashby/Workable (moved from step 1)** —
-   verify each platform against actual watchlist companies as its fetcher is built.
+   **Done** — fetch + matching loop, real CRUD (`/watchlist`, `/matches`); temp `/dev/*`
+   endpoints retired.
+3. More fetchers: Ashby, Workable, Lever, then harder ones if time allows. **Deferred/
+   skipped for now (2026-07-30, user decision)** — not cancelled, just not next; still
+   includes live API verification for each platform (moved from step 1) whenever it's
+   picked back up.
 4. Auth (Spring Security) + multi-tenant data, before handing app to other test users.
-5. Angular dashboard wired to the live backend, matching the mockup.
+   **Done and verified 2026-07-30** — see Implementation status above for the full
+   design (JWT access-token-only, `role` column added early, `/dev/**` intentionally
+   still permitAll).
+5. Angular dashboard wired to the live backend, matching the mockup. **🎯 CURRENT FOCUS.**
 6. Tailoring feature (Spring AI + LLM), fast-follow after discovery validated.
 7. Astro layer for SEO/public pages, only after product validated with real users.
 
@@ -171,4 +189,7 @@ resuming multi-ATS work.
 - ATS API shapes: Greenhouse verified. Lever, Ashby, Workable documented and partially
   spot-checked but not verified against this project's actual watchlist companies —
   verification for these now happens per-fetcher in step 3, not as a standalone step.
-- Shared app with logins means real auth security work — no skipping password hashing, no plaintext secrets.
+- **Shared app with logins means real auth security work — done as of 2026-07-30**: BCrypt
+  hashing (never plaintext), JWT secret sourced from `JOBX_JWT_SECRET` env var (never
+  committed), no server-side session state. No refresh-token revocation yet — accepted
+  tradeoff for v1, revisit if a logout/revocation need shows up.

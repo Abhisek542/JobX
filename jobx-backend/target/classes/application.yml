@@ -21,16 +21,13 @@ spring:
     enabled: true
     locations: classpath:db/migration
 
-  # Disable Spring Security's default login page during dev
-  # Replace with real JWT config before adding other users
-  security:
-    user:
-      name: dev
-      password: dev
-
 jobx:
   fetch:
     interval-ms: 1800000    # 30 minutes — override to 60000 for local dev testing
+  jwt:
+    # Real deployments MUST set JOBX_JWT_SECRET via env var — never commit a real secret.
+    secret: ${JOBX_JWT_SECRET:dev-only-insecure-secret-change-me-please-32bytes}
+    expiration-ms: 604800000   # 7 days
 
 logging:
   level:

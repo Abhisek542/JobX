@@ -37,6 +37,7 @@ public class FilterProfile {
     @Column(name = "exclude_words", columnDefinition = "text[]")
     private List<String> excludeWords;
 
+
     // Soft experience range — MatchScorer uses these for distance penalty
     @Column(name = "exp_min")
     private Integer expMin;
