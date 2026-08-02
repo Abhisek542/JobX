@@ -27,40 +27,69 @@ developers.greenhouse.io/job-board.html.
 - Harvest API v1/v2 deprecation (Aug 31, 2026) does **not** affect this — that's a
   separate authenticated internal-recruiter API. The public Job Board API is unaffected.
 
-## Lever — confirmed live via public demo account
+## Lever — VERIFIED (fetcher built + live-tested 2026-08-02)
 
-`api.lever.co/v0/postings/leverdemo?group=team&mode=json`. Field shape: `id`, `text`
-(title), `categories.{team, department, location, commitment}`, `createdAt` (epoch
-**milliseconds**, needs conversion), `hostedUrl`, `applyUrl`, `descriptionPlain`,
-`lists[]` (structured bullets). **No `updated_at` field at all** — only `createdAt`.
+`GET api.lever.co/v0/postings/{company}?mode=json`. Verified live against FamPay
+(`fampay`, 14 jobs) and Sprinto (`Sprinto`, 29 jobs); identical key sets on both.
+**Postman (`postman`) is dead — 404 as of 2026-08-02, dropped as a test target.**
 
-Real, currently-live Indian boards worth testing next: FamPay (`fampay`), Sprinto
-(`Sprinto`), Postman (`postman`).
+- **Root is a bare JSON array**, not `{jobs: []}`.
+- Field shape: `id` (UUID), `text` (title), `categories.{team, department, location,
+  allLocations, commitment}` (`commitment` per-board optional — null-safe access),
+  `createdAt` (epoch **milliseconds**, needs conversion), `hostedUrl` (posting page →
+  applyUrl), `applyUrl` (bare form), `descriptionPlain`, `lists[]`, `additionalPlain`,
+  plus newer `openingPlain`/`descriptionBodyPlain`. **No `updated_at` field at all.**
+- **`descriptionPlain` alone is only the intro** (~1.8k chars) — the requirement
+  bullets ("Must Haves" incl. "3-5 years..." experience strings) are **HTML inside
+  `lists[].content`**. The fetcher assembles: `descriptionPlain` + `lists[].text` +
+  stripped `lists[].content` + `additionalPlain`. Don't "simplify" this back to
+  `descriptionPlain` only — it silently guts keyword and experience matching.
 
-## Ashby — confirmed live via real company board
+## Ashby — VERIFIED (fetcher built + live-tested 2026-08-02)
 
-`api.ashbyhq.com/posting-api/job-board/ramp` (Ramp). Field shape: `jobs[]` with `id`,
-`title`, `department`, `team`, `employmentType`, `location`, `secondaryLocations[]`,
-`publishedAt` (proper ISO, good for `posted_at`), `isListed`, `isRemote`,
-`descriptionHtml`/`descriptionPlain`, `jobUrl`, `applyUrl`.
+`GET api.ashbyhq.com/posting-api/job-board/{token}` (public path — NOT the
+`jobPosting.list` RPC, which needs an API key). Verified live against Aspora
+(`Aspora`, 18 jobs). Root: `{jobs: [], apiVersion}`.
 
-**Stale token flag:** Hasura's board token may be dead — their careers page now
-redirects to `hasura.io/careers/` under PromptQL branding (likely rebrand/pivot).
-Verify their actual current slug, or swap to Aspora (`jobs.ashbyhq.com/Aspora`, live
-Indian fintech) before building against Hasura.
+Field shape: `jobs[]` with `id` (UUID), `title`, `department`, `team`,
+`employmentType`, `location`, `secondaryLocations[]`, `address`, `publishedAt`
+(proper ISO with offset → `platform_posted_at`), `isListed` (**filter false out**),
+`isRemote`, `workplaceType`, `descriptionHtml`/`descriptionPlain`, `jobUrl`
+(posting page → applyUrl), `applyUrl` (bare form).
 
-## Workable — endpoint pattern confirmed via docs, not yet fully live-tested
+- **Use `descriptionPlain` directly** — no HTML stripping needed.
+- **`location` has trailing whitespace live** ("Bangalore ") — trim it.
+- Hasura's board token is likely dead (careers page redirects to `hasura.io/careers/`
+  under PromptQL branding) — Aspora is the confirmed working target.
 
-Pattern confirmed via Workable's help docs and third-party sources, but a full live
-JSON fetch hasn't been completed in this project yet.
+## Workable — VERIFIED (fetcher built + live-tested 2026-08-02); TWO-CALL DESIGN
 
-**Stale assumption flag:** Zerodha's real careers page (`careers.zerodha.com`) looks
-custom-built, not Workable-hosted — confirm before using as the test target. A
-confirmed live, active Indian Workable board to use instead: Apna
-(`apply.workable.com/api/v1/widget/accounts/apna`).
+Verified live against Apna. **The list endpoint carries no description at all**, so
+the fetcher makes two kinds of calls:
 
-## Not blocking anything right now
+- **List:** `GET apply.workable.com/api/v1/widget/accounts/{token}` — root
+  `{name, description, jobs: []}`. Items: `shortcode` (**the external id**), `title`,
+  `city`/`country`/`state`, `url` (→ applyUrl), `published_on` (**date-only**, parsed
+  as midnight UTC fallback), `created_at`, `department`, `experience` (**a seniority
+  label like "Associate", NOT years — ignore it**), `locations[]`.
+  **The list repeats a job once per posting location with the same `shortcode`** —
+  observed live: 128 rows, 96 unique. Fetcher dedupes within the batch.
+- **Detail:** `GET apply.workable.com/api/v2/accounts/{token}/jobs/{shortcode}` —
+  `description` + `requirements` + `benefits` (all HTML, stripped and concatenated),
+  `published` (full ISO → `platform_posted_at`), `location`, `remote`, `workplace`.
+  (`/api/v1/widget/accounts/{t}/jobs/{code}` and `/api/v3/...` both 404 — v2 is the
+  only working public detail path.)
+- **N+1 guard:** detail is fetched only for shortcodes not already in the DB
+  (`JobRepository` check inside `WorkableFetcher`). First fetch of a board pays full
+  price (~96 calls for Apna, ~50s); steady state is ~0 per cycle. If a detail call
+  fails, the job is still emitted from list data (null description), not dropped.
 
-None of the Lever/Ashby/Workable notes above are blocking current work — they're
-reference to pick back up once Greenhouse-only work (and the open Match-creation bug
-in CLAUDE.md) is done and the user explicitly decides to resume other ATS platforms.
+Zerodha's careers page is custom-built, not Workable-hosted — Apna (`apna`) is the
+confirmed working target.
+
+## Test fixtures
+
+Real captured responses (2026-08-02) live in `src/test/resources/fixtures/` and back
+the fetcher unit tests: `ashby-aspora.json`, `lever-fampay.json`, `lever-sprinto.json`,
+`workable-apna.json` (list), `workable-v2-job.json` (detail). If a board's live shape
+drifts, re-capture with curl and update both fixture and mapping.

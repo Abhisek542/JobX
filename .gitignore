@@ -28,7 +28,7 @@ Thumbs.db
 ############################
 # Spring Boot (Backend)
 ############################
-backend/target/
+target/
 backend/.mvn/wrapper/maven-wrapper.jar
 
 ############################

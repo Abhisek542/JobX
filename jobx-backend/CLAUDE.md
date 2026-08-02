@@ -6,7 +6,7 @@ read before writing code, don't re-litigate items marked DECIDED unless explicit
 asked to revisit. Detailed per-ATS API field notes live in `docs/ats-api-reference.md`
 (not loaded by default) — check that file before touching Lever/Ashby/Workable code.
 
-## Implementation status (updated 2026-07-30)
+## Implementation status (updated 2026-08-02)
 
 Read this first — reflects actual verified backend progress, not design intent.
 
@@ -60,10 +60,22 @@ went from 0 → 4 real matches against the live 73-job dataset, all word-boundar
 Two temp debug endpoints on `DevController` support this, delete once the feature has
 real CRUD endpoints: `POST /dev/backfill-matches`, `POST /dev/test-score?jobId=&userId=`.
 
-**CURRENT FOCUS (2026-07-30): step 5, Angular dashboard.** Step 3 (Ashby/Workable/Lever
-fetchers + their live API verification) is **explicitly deferred/skipped for now, per
-user decision on 2026-07-30** — not cancelled, just not next. Step 4 (auth) is done
-(see above). Re-confirm with the user before resuming step 3 or reordering further.
+**Step 3 (multi-ATS fetchers) done and verified 2026-08-02** — user reversed the
+2026-07-30 deferral and pulled step 3 back ahead of the Angular dashboard. All three
+fetchers (`AshbyFetcher`, `LeverFetcher`, `WorkableFetcher`) implemented and verified
+against live boards (Aspora 18 jobs / FamPay 14 / Sprinto 29 / Apna 96 after
+shortcode dedup; 124 real matches scored for the `phase3-verify@jobx.dev` test user,
+zero duplicates on re-fetch). Workable needs a two-call list+detail design — full
+field notes and quirks (Lever's multi-field description assembly, Workable's
+duplicate-shortcode list rows, dead Postman board) are in `docs/ats-api-reference.md`.
+`parseExperience` was hoisted out of `GreenhouseFetcher` into the shared
+`ExperienceParser`. First unit tests added: fixture-based mapping tests per fetcher
+under `src/test/java/com/jobx/fetcher/`, real captured API responses in
+`src/test/resources/fixtures/`.
+
+**CURRENT FOCUS (2026-08-02): step 5, Angular dashboard** — next up now that step 3
+is closed. Note: `dashboard-mockup.html` (the UX target below) is NOT in this repo —
+locate it before starting the Angular build, or re-derive the design.
 
 ## What this is
 
@@ -100,13 +112,10 @@ Detect ATS from careers URL, hit that platform's public job API directly:
 - Workable: `apply.workable.com/api/v1/widget/accounts/{token}` (embed-widget endpoint)
 - Trickier/later: Rippling, Recruitee, BambooHR, Workday — no clean public API, mark "portal unsupported" rather than faking support
 
-**CURRENT FOCUS: CRUD endpoints for the Greenhouse-only loop (step 2), not fetchers.**
-Greenhouse itself is done end-to-end. Lever/Ashby/Workable fetcher work — including
-their live API verification — is deliberately deferred until step 2's CRUD endpoints
-are done; all four are still in scope for v1, this is a sequencing change, not a scope
-cut. Verified field-level details for all four platforms (JSON shapes, date formats,
-known-stale board tokens like Hasura/Zerodha) are in `docs/ats-api-reference.md` — read
-that file when resuming this work, not this one.
+**All four platforms are now implemented and live-verified (2026-08-02).** Verified
+field-level details (JSON shapes, date formats, Workable's two-call design, per-board
+quirks, dead board tokens) are in `docs/ats-api-reference.md` — read that file before
+touching any fetcher code, not this one.
 
 ## The matching engine — VERIFIED, port this logic, don't redesign it
 
@@ -170,10 +179,11 @@ resuming multi-ATS work.
 2. Core entities + Greenhouse fetcher + MatchScorer as a Spring service, no auth yet.
    **Done** — fetch + matching loop, real CRUD (`/watchlist`, `/matches`); temp `/dev/*`
    endpoints retired.
-3. More fetchers: Ashby, Workable, Lever, then harder ones if time allows. **Deferred/
-   skipped for now (2026-07-30, user decision)** — not cancelled, just not next; still
-   includes live API verification for each platform (moved from step 1) whenever it's
-   picked back up.
+3. More fetchers: Ashby, Workable, Lever, then harder ones if time allows. **Done and
+   verified 2026-08-02** (order actually built: Ashby → Lever → Workable) — each
+   verified against a live board as built, per-platform notes in
+   `docs/ats-api-reference.md`. Harder platforms (Rippling, Recruitee, Workday) still
+   out of scope.
 4. Auth (Spring Security) + multi-tenant data, before handing app to other test users.
    **Done and verified 2026-07-30** — see Implementation status above for the full
    design (JWT access-token-only, `role` column added early, `/dev/**` intentionally

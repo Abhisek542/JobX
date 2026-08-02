@@ -6,6 +6,7 @@ import com.jobx.entity.Job;
 import com.jobx.entity.WatchedCompany;
 import com.jobx.enums.AtsPlatform;
 import com.jobx.fetcher.AtsFetcher;
+import com.jobx.fetcher.ExperienceParser;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jsoup.Jsoup;
@@ -16,8 +17,6 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * Fetcher for Greenhouse ATS — VERIFIED in Phase 0 against Razorpay and PhonePe.
@@ -41,12 +40,6 @@ import java.util.regex.Pattern;
 public class GreenhouseFetcher implements AtsFetcher {
 
     private static final String BASE_URL = "https://boards-api.greenhouse.io";
-
-    // Patterns for best-effort experience range extraction from JD text
-    // e.g. "3-5 years", "5+ years", "minimum 2 years", "0-1 years"
-    private static final Pattern EXP_RANGE  = Pattern.compile("(\\d+)\\s*[-–]\\s*(\\d+)\\s*(?:years?|yrs?)", Pattern.CASE_INSENSITIVE);
-    private static final Pattern EXP_PLUS   = Pattern.compile("(\\d+)\\+\\s*(?:years?|yrs?)", Pattern.CASE_INSENSITIVE);
-    private static final Pattern EXP_MIN_KW = Pattern.compile("(?:minimum|at\\s+least|min\\.?)\\s+(\\d+)\\s*(?:years?|yrs?)", Pattern.CASE_INSENSITIVE);
 
     private final WebClient.Builder webClientBuilder;
     private final ObjectMapper objectMapper;
@@ -137,7 +130,7 @@ public class GreenhouseFetcher implements AtsFetcher {
 
                     // Best-effort experience range extraction from description text
                     // Nullable — MatchScorer handles null as distance=0 (full 30 pts)
-                    parseExperience(plainText, job);
+                    ExperienceParser.parse(plainText, job);
                 }
 
                 // raw_json: full ATS node for escape hatch
@@ -160,38 +153,5 @@ public class GreenhouseFetcher implements AtsFetcher {
         }
 
         return results;
-    }
-
-    /**
-     * Best-effort extraction of experience range from JD free text.
-     * Sets expMin and/or expMax on the job. Both remain null if nothing matches.
-     *
-     * Patterns handled:
-     *   "3-5 years"         → min=3, max=5
-     *   "5+ years"          → min=5, max=null
-     *   "minimum 2 years"   → min=2, max=null
-     */
-    private void parseExperience(String text, Job job) {
-        // Try "X-Y years" first (most specific)
-        Matcher rangeMatcher = EXP_RANGE.matcher(text);
-        if (rangeMatcher.find()) {
-            job.setExpMin(Integer.parseInt(rangeMatcher.group(1)));
-            job.setExpMax(Integer.parseInt(rangeMatcher.group(2)));
-            return;
-        }
-
-        // Try "X+ years"
-        Matcher plusMatcher = EXP_PLUS.matcher(text);
-        if (plusMatcher.find()) {
-            job.setExpMin(Integer.parseInt(plusMatcher.group(1)));
-            // no upper bound
-            return;
-        }
-
-        // Try "minimum X years"
-        Matcher minMatcher = EXP_MIN_KW.matcher(text);
-        if (minMatcher.find()) {
-            job.setExpMin(Integer.parseInt(minMatcher.group(1)));
-        }
     }
 }
