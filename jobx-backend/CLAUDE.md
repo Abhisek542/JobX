@@ -92,6 +92,16 @@ file is the adopted improvement scope — read it alongside this one):
   In-memory, single-instance; X-Forwarded-For handling is a TODO if deployed
   behind a proxy.
 
+**Manual "Check now" backend done 2026-08-02** (first P1 item pulled forward, per user
+request): `POST /watchlist/{id}/fetch` — same fetch/dedup/scoring flow as the
+scheduler (`FetchScheduler.fetchCompany` is now public and returns
+`FetchResult(newJobs, newMatchesForOwner)`), 404 for non-owned, 409 for non-ACTIVE,
+429 during the per-company cooldown (rides on `last_fetched_at` — no new state;
+`jobx.fetch.manual-cooldown-ms`, default 5 min). Response feeds the dashboard
+button's "Checked just now; N new matches" / "No new roles" text. A global
+"Refresh all" was deliberately NOT built — needs a stricter cooldown first because
+Workable boards fan out into per-job detail requests.
+
 **CURRENT FOCUS (2026-08-02): step 5, Angular dashboard** — next up now that step 3
 and the backend P0 slice are closed. The remaining P0 items in `V1_IMPROVEMENTS.md`
 (empty/error states, feed search/sort/filter, save-apply flow) are Angular work —

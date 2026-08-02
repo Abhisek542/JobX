@@ -1,18 +1,22 @@
 package com.jobx.controller;
 
+import com.jobx.dto.ManualFetchResponse;
 import com.jobx.dto.UpdateWatchedCompanyStatusRequest;
 import com.jobx.dto.WatchedCompanyRequest;
 import com.jobx.dto.WatchedCompanyResponse;
 import com.jobx.entity.User;
 import com.jobx.entity.WatchedCompany;
 import com.jobx.repository.WatchedCompanyRepository;
+import com.jobx.scheduler.FetchScheduler;
 import jakarta.validation.Valid;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -22,10 +26,19 @@ import java.util.UUID;
  */
 @RestController
 @RequestMapping("/watchlist")
-@RequiredArgsConstructor
 public class WatchlistController {
 
     private final WatchedCompanyRepository watchedCompanyRepository;
+    private final FetchScheduler fetchScheduler;
+    private final long manualCooldownMs;
+
+    public WatchlistController(WatchedCompanyRepository watchedCompanyRepository,
+                               FetchScheduler fetchScheduler,
+                               @Value("${jobx.fetch.manual-cooldown-ms:300000}") long manualCooldownMs) {
+        this.watchedCompanyRepository = watchedCompanyRepository;
+        this.fetchScheduler = fetchScheduler;
+        this.manualCooldownMs = manualCooldownMs;
+    }
 
     @GetMapping
     public List<WatchedCompanyResponse> list(@AuthenticationPrincipal User user) {
@@ -60,6 +73,37 @@ public class WatchlistController {
         WatchedCompany company = requireOwnedCompany(id, user);
         company.setStatus(request.status());
         return WatchedCompanyResponse.from(watchedCompanyRepository.save(company));
+    }
+
+    /**
+     * Manual "Check now" — V1_IMPROVEMENTS.md P1: makes the watchlist feel
+     * responsive right after adding a company, supplementing (not replacing)
+     * the 30-minute scheduled poll. Same fetch/dedup/scoring flow as the
+     * scheduler. Cooldown rides on last_fetched_at, so a company polled by
+     * the scheduler moments ago is also "fresh" — no separate state needed.
+     */
+    @PostMapping("/{id}/fetch")
+    public ManualFetchResponse fetchNow(@PathVariable UUID id, @AuthenticationPrincipal User user) {
+        WatchedCompany company = requireOwnedCompany(id, user);
+
+        if (company.getStatus() != WatchedCompany.CompanyStatus.ACTIVE) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "company is " + company.getStatus() + " — only ACTIVE companies can be checked");
+        }
+
+        Instant lastFetched = company.getLastFetchedAt();
+        if (lastFetched != null) {
+            long sinceMs = Duration.between(lastFetched, Instant.now()).toMillis();
+            if (sinceMs < manualCooldownMs) {
+                long retryInSeconds = (manualCooldownMs - sinceMs + 999) / 1000;
+                throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,
+                        "checked recently — try again in " + retryInSeconds + "s");
+            }
+        }
+
+        FetchScheduler.FetchResult result = fetchScheduler.fetchCompany(company);
+        return new ManualFetchResponse(company.getId(), company.getCompanyName(),
+                Instant.now(), result.newJobs(), result.newMatchesForOwner());
     }
 
     @DeleteMapping("/{id}")

@@ -30,6 +30,7 @@ spring:
 jobx:
   fetch:
     interval-ms: 1800000    # 30 minutes — override to 60000 for local dev testing
+    manual-cooldown-ms: 300000   # 5 min between manual "Check now" fetches per company
   jwt:
     # Real deployments MUST set JOBX_JWT_SECRET via env var — never commit a real
     # secret. The fallback only works under the 'dev' profile; JwtService fails
