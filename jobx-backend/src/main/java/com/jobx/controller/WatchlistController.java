@@ -6,6 +6,7 @@ import com.jobx.dto.WatchedCompanyResponse;
 import com.jobx.entity.User;
 import com.jobx.entity.WatchedCompany;
 import com.jobx.repository.WatchedCompanyRepository;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -35,17 +36,8 @@ public class WatchlistController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public WatchedCompanyResponse add(@AuthenticationPrincipal User user, @RequestBody WatchedCompanyRequest request) {
-        if (isBlank(request.companyName())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "companyName is required");
-        }
-        if (request.atsPlatform() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "atsPlatform is required");
-        }
-        if (isBlank(request.boardToken())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "boardToken is required — never guess it, read it from the live careers URL");
-        }
-
+    public WatchedCompanyResponse add(@AuthenticationPrincipal User user,
+                                      @Valid @RequestBody WatchedCompanyRequest request) {
         WatchedCompany company = new WatchedCompany();
         company.setUser(user);
         company.setCompanyName(request.companyName());
@@ -64,11 +56,8 @@ public class WatchlistController {
 
     @PatchMapping("/{id}")
     public WatchedCompanyResponse updateStatus(@PathVariable UUID id, @AuthenticationPrincipal User user,
-                                                @RequestBody UpdateWatchedCompanyStatusRequest request) {
+                                                @Valid @RequestBody UpdateWatchedCompanyStatusRequest request) {
         WatchedCompany company = requireOwnedCompany(id, user);
-        if (request.status() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "status is required");
-        }
         company.setStatus(request.status());
         return WatchedCompanyResponse.from(watchedCompanyRepository.save(company));
     }
@@ -89,9 +78,5 @@ public class WatchlistController {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "watched company not found");
         }
         return company;
-    }
-
-    private static boolean isBlank(String s) {
-        return s == null || s.isBlank();
     }
 }

@@ -73,9 +73,31 @@ duplicate-shortcode list rows, dead Postman board) are in `docs/ats-api-referenc
 under `src/test/java/com/jobx/fetcher/`, real captured API responses in
 `src/test/resources/fixtures/`.
 
+**Backend P0 slice from `V1_IMPROVEMENTS.md` done and verified 2026-08-02** (that
+file is the adopted improvement scope — read it alongside this one):
+- **FilterProfile CRUD**: `GET/PUT/DELETE /profile/filter` (`FilterProfileController`).
+  PUT upserts; lists trimmed/deduped case-insensitively via `TextLists`; ≥1 keyword
+  required; `expMin <= expMax` enforced. This closed the "profiles only via manual
+  SQL" gap.
+- **Error contract**: every non-2xx response is `ApiError`
+  `{status, code, detail, fieldErrors?}` via `GlobalExceptionHandler`
+  (`@RestControllerAdvice`); `@Valid` on all request DTOs (manual null/blank checks
+  in controllers removed). The 401 entry point and the 429 limiter hand-write the
+  same JSON shape — keep them in sync if `ApiError` changes.
+- **Prod safety**: `spring.profiles.default: dev`. Outside the `dev` profile,
+  `JwtService` refuses to start on a missing/default `JOBX_JWT_SECRET`;
+  `DevController` is `@Profile("dev")` and `/dev/**` is only permitAll in dev
+  (verified live: 401 under prod). `RateLimitFilter` throttles `/auth/*` per IP
+  (10/min default, `jobx.auth.rate-limit.*` props) with 429 + Retry-After.
+  In-memory, single-instance; X-Forwarded-For handling is a TODO if deployed
+  behind a proxy.
+
 **CURRENT FOCUS (2026-08-02): step 5, Angular dashboard** — next up now that step 3
-is closed. Note: `dashboard-mockup.html` (the UX target below) is NOT in this repo —
-locate it before starting the Angular build, or re-derive the design.
+and the backend P0 slice are closed. The remaining P0 items in `V1_IMPROVEMENTS.md`
+(empty/error states, feed search/sort/filter, save-apply flow) are Angular work —
+treat them as step 5's acceptance criteria. Note: `dashboard-mockup.html` (the UX
+target below) is NOT in this repo — but `v1-improvements-wireframes.html` (untracked,
+repo root) may supersede it; confirm with the user before starting the Angular build.
 
 ## What this is
 

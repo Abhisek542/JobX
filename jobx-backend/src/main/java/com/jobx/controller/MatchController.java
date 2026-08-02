@@ -5,6 +5,7 @@ import com.jobx.dto.UpdateMatchStatusRequest;
 import com.jobx.entity.Match;
 import com.jobx.entity.User;
 import com.jobx.repository.MatchRepository;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -38,11 +39,8 @@ public class MatchController {
 
     @PatchMapping("/{id}")
     public MatchResponse updateStatus(@PathVariable UUID id, @AuthenticationPrincipal User user,
-                                       @RequestBody UpdateMatchStatusRequest request) {
+                                       @Valid @RequestBody UpdateMatchStatusRequest request) {
         Match match = requireOwnedMatch(id, user);
-        if (request.status() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "status is required");
-        }
         match.setStatus(request.status());
         return MatchResponse.from(matchRepository.save(match));
     }

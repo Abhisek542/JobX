@@ -2,6 +2,12 @@ spring:
   application:
     name: jobx-backend
 
+  profiles:
+    # Local runs are 'dev' unless a profile is set explicitly. dev enables the
+    # /dev/** tooling and the committed JWT-secret fallback; any other profile
+    # refuses to start without a real JOBX_JWT_SECRET (see JwtService).
+    default: dev
+
   datasource:
     url: jdbc:postgresql://localhost:5432/jobx
     username: jobx
@@ -25,9 +31,15 @@ jobx:
   fetch:
     interval-ms: 1800000    # 30 minutes — override to 60000 for local dev testing
   jwt:
-    # Real deployments MUST set JOBX_JWT_SECRET via env var — never commit a real secret.
+    # Real deployments MUST set JOBX_JWT_SECRET via env var — never commit a real
+    # secret. The fallback only works under the 'dev' profile; JwtService fails
+    # startup with it anywhere else. Keep the value in sync with JwtService.DEV_ONLY_SECRET.
     secret: ${JOBX_JWT_SECRET:dev-only-insecure-secret-change-me-please-32bytes}
     expiration-ms: 604800000   # 7 days
+  auth:
+    rate-limit:
+      max-attempts: 10     # per IP per /auth/* endpoint per window
+      window-seconds: 60
 
 logging:
   level:
