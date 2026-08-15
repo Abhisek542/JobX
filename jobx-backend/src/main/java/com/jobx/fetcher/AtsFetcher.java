@@ -26,7 +26,13 @@ public interface AtsFetcher {
     /**
      * Fetch all active job postings for the given watched company.
      * Returns normalized Job objects ready to persist.
-     * Never throws — catches all errors, logs them, returns empty list.
+     *
+     * An empty list means the board genuinely has no (new) postings — a normal,
+     * successful outcome. Anything that stopped us from finding that out must
+     * throw {@link AtsFetchException} instead, so the scheduler can record
+     * FAILED health rather than reporting a dead board as a quiet one.
+     * FetchScheduler isolates the failure; one board's outage never stops the
+     * next company from being processed.
      */
     List<Job> fetch(WatchedCompany company);
 }

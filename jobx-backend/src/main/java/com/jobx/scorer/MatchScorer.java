@@ -97,11 +97,31 @@ public class MatchScorer {
         return new ScoredJob(job, total, false, reason, matched);
     }
 
-    /** Whole-word (or whole-phrase) match, case-insensitive, no substring bleed. */
+    /**
+     * Whole-word (or whole-phrase) match, case-insensitive, no substring bleed.
+     *
+     * A plain \b on both ends silently fails for any keyword whose first or last
+     * character isn't a word character: "\bc++\b" can never match anything,
+     * because the trailing \b demands a word char right after the '+'. That
+     * killed "C++", "C#" and ".NET" outright — empty feed, no error, the same
+     * silent shape as the excludeWords substring bug. So a boundary is asserted
+     * only on the side where the keyword actually ends in a word character; a
+     * symbol edge already is its own boundary. ".NET" therefore also matches
+     * "ASP.NET", and "C++" matches "C/C++", which is what a job seeker means.
+     */
     private boolean containsWord(String textLc, String word) {
         if (word == null || word.isBlank()) return false;
-        String pattern = "\\b" + Pattern.quote(word.trim().toLowerCase()) + "\\b";
+        String trimmed = word.trim().toLowerCase();
+        String pattern =
+                (isWordChar(trimmed.charAt(0)) ? "(?<!\\w)" : "")
+                + Pattern.quote(trimmed)
+                + (isWordChar(trimmed.charAt(trimmed.length() - 1)) ? "(?!\\w)" : "");
         return Pattern.compile(pattern).matcher(textLc).find();
+    }
+
+    /** Exactly the character class Java's \w matches, so the guards above stay consistent with it. */
+    private static boolean isWordChar(char c) {
+        return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_';
     }
 
     /** Rank all non-excluded jobs for a user, descending by score. */

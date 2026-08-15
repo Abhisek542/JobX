@@ -31,6 +31,17 @@ jobx:
   fetch:
     interval-ms: 1800000    # 30 minutes — override to 60000 for local dev testing
     manual-cooldown-ms: 300000   # 5 min between manual "Check now" fetches per company
+  http:
+    # Timeouts for outbound ATS calls. Without these a board that accepts the
+    # connection and never replies parks the scheduler thread forever and no
+    # later company is ever polled again.
+    connect-timeout-ms: 10000
+    response-timeout-ms: 60000   # generous: a full Greenhouse board is MBs of JSON
+  cors:
+    # Origins allowed to call this API from a browser. The Angular dev server is
+    # the dev default; add the deployed dashboard origin per environment.
+    # Explicit list only — never "*".
+    allowed-origins: ${JOBX_CORS_ORIGINS:http://localhost:4200}
   jwt:
     # Real deployments MUST set JOBX_JWT_SECRET via env var — never commit a real
     # secret. The fallback only works under the 'dev' profile; JwtService fails

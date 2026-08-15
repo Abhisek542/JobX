@@ -102,6 +102,15 @@ public class WatchlistController {
         }
 
         FetchScheduler.FetchResult result = fetchScheduler.fetchCompany(company);
+
+        // Don't dress a failed fetch up as "no new roles" — the attempt is already
+        // recorded as FAILED (its own transaction, committed), so say so.
+        if (result.failed()) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+                    "couldn't reach the " + company.getAtsPlatform()
+                            + " board for " + company.getCompanyName() + " — we'll keep retrying");
+        }
+
         return new ManualFetchResponse(company.getId(), company.getCompanyName(),
                 Instant.now(), result.newJobs(), result.newMatchesForOwner());
     }

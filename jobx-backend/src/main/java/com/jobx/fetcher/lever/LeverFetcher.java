@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jobx.entity.Job;
 import com.jobx.entity.WatchedCompany;
 import com.jobx.enums.AtsPlatform;
+import com.jobx.fetcher.AtsFetchException;
 import com.jobx.fetcher.AtsFetcher;
 import com.jobx.fetcher.ExperienceParser;
 import lombok.RequiredArgsConstructor;
@@ -52,30 +53,31 @@ public class LeverFetcher implements AtsFetcher {
     @Override
     public List<Job> fetch(WatchedCompany company) {
         String token = company.getBoardToken();
+        String url = BASE_URL + "/v0/postings/" + token + "?mode=json";
+        log.info("Fetching Lever board: {} ({})", company.getCompanyName(), token);
 
+        String responseBody;
         try {
-            String url = BASE_URL + "/v0/postings/" + token + "?mode=json";
-            log.info("Fetching Lever board: {} ({})", company.getCompanyName(), token);
-
-            String responseBody = webClientBuilder.build()
+            responseBody = webClientBuilder.build()
                     .get()
                     .uri(url)
                     .retrieve()
                     .bodyToMono(String.class)
                     .block();
-
-            if (responseBody == null) {
-                log.warn("Empty response from Lever for token: {}", token);
-                return List.of();
-            }
-
-            return parse(responseBody, company);
-
         } catch (Exception e) {
-            // Never throw — log and return empty list, next poll cycle will retry
-            log.error("Failed to fetch Lever board for {} (token={}): {}",
-                    company.getCompanyName(), token, e.getMessage(), e);
-            return List.of();
+            throw new AtsFetchException("Lever board request failed for token " + token, e);
+        }
+
+        if (responseBody == null) {
+            throw new AtsFetchException("Empty response from Lever for token " + token);
+        }
+
+        try {
+            return parse(responseBody, company);
+        } catch (AtsFetchException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new AtsFetchException("Could not parse Lever response for token " + token, e);
         }
     }
 
@@ -85,10 +87,12 @@ public class LeverFetcher implements AtsFetcher {
 
         JsonNode root = objectMapper.readTree(responseBody);
 
+        // A live board with no openings returns an empty array. An object root
+        // is Lever's error shape ({"error": ...}) — a dead/renamed board token,
+        // which must surface as a failure rather than "no jobs today".
         if (!root.isArray()) {
-            log.warn("Expected bare array in Lever response for {}, got {}",
-                    company.getCompanyName(), root.getNodeType());
-            return results;
+            throw new AtsFetchException("Expected bare array in Lever response for token "
+                    + company.getBoardToken() + ", got " + root.getNodeType());
         }
 
         for (JsonNode node : root) {

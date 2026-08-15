@@ -6,6 +6,12 @@ import com.jobx.enums.AtsPlatform;
 import java.time.Instant;
 import java.util.UUID;
 
+/**
+ * lastFetchStatus drives the watchlist's health line: null = "not checked yet",
+ * SUCCESS = "last checked {lastFetchedAt}", FAILED = the "Refresh issue"
+ * warning state. The stored last_fetch_error is intentionally NOT exposed —
+ * V1_IMPROVEMENTS.md keeps the raw cause server-side.
+ */
 public record WatchedCompanyResponse(
         UUID id,
         String companyName,
@@ -13,6 +19,7 @@ public record WatchedCompanyResponse(
         String boardToken,
         WatchedCompany.CompanyStatus status,
         Instant lastFetchedAt,
+        WatchedCompany.FetchStatus lastFetchStatus,
         Instant createdAt
 ) {
     public static WatchedCompanyResponse from(WatchedCompany company) {
@@ -23,6 +30,7 @@ public record WatchedCompanyResponse(
                 company.getBoardToken(),
                 company.getStatus(),
                 company.getLastFetchedAt(),
+                company.getLastFetchStatus(),
                 company.getCreatedAt()
         );
     }

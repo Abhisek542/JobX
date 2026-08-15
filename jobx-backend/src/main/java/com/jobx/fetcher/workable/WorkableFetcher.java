@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jobx.entity.Job;
 import com.jobx.entity.WatchedCompany;
 import com.jobx.enums.AtsPlatform;
+import com.jobx.fetcher.AtsFetchException;
 import com.jobx.fetcher.AtsFetcher;
 import com.jobx.fetcher.ExperienceParser;
 import com.jobx.repository.JobRepository;
@@ -60,30 +61,31 @@ public class WorkableFetcher implements AtsFetcher {
     @Override
     public List<Job> fetch(WatchedCompany company) {
         String token = company.getBoardToken();
+        String url = BASE_URL + "/api/v1/widget/accounts/" + token;
+        log.info("Fetching Workable board: {} ({})", company.getCompanyName(), token);
 
+        String responseBody;
         try {
-            String url = BASE_URL + "/api/v1/widget/accounts/" + token;
-            log.info("Fetching Workable board: {} ({})", company.getCompanyName(), token);
-
-            String responseBody = webClientBuilder.build()
+            responseBody = webClientBuilder.build()
                     .get()
                     .uri(url)
                     .retrieve()
                     .bodyToMono(String.class)
                     .block();
-
-            if (responseBody == null) {
-                log.warn("Empty response from Workable for token: {}", token);
-                return List.of();
-            }
-
-            return parseList(responseBody, company, true);
-
         } catch (Exception e) {
-            // Never throw — log and return empty list, next poll cycle will retry
-            log.error("Failed to fetch Workable board for {} (token={}): {}",
-                    company.getCompanyName(), token, e.getMessage(), e);
-            return List.of();
+            throw new AtsFetchException("Workable board request failed for token " + token, e);
+        }
+
+        if (responseBody == null) {
+            throw new AtsFetchException("Empty response from Workable for token " + token);
+        }
+
+        try {
+            return parseList(responseBody, company, true);
+        } catch (AtsFetchException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new AtsFetchException("Could not parse Workable response for token " + token, e);
         }
     }
 
@@ -97,12 +99,15 @@ public class WorkableFetcher implements AtsFetcher {
         JsonNode root = objectMapper.readTree(responseBody);
         JsonNode jobs = root.get("jobs");
 
+        // A board with no openings returns an empty array, not a missing one —
+        // a missing/!array "jobs" means the payload isn't a board response.
         if (jobs == null || !jobs.isArray()) {
-            log.warn("No jobs array in Workable response for {}", company.getCompanyName());
-            return results;
+            throw new AtsFetchException(
+                    "No jobs array in Workable response for token " + company.getBoardToken());
         }
 
         int detailCalls = 0;
+        int skipped = 0;
         // The list repeats a job once per posting location, same shortcode —
         // observed live on Apna (128 rows, 96 unique). Dedupe within the batch.
         java.util.Set<String> seenShortcodes = new java.util.HashSet<>();
@@ -148,30 +153,49 @@ public class WorkableFetcher implements AtsFetcher {
             job.setRawJson(node.toString());
 
             if (fetchDetails) {
-                // Own try/catch per job — one bad detail call must not kill the batch
+                // Own try/catch per job — one bad detail call must not kill the batch.
+                //
+                // On failure the job is SKIPPED, not emitted list-only. The list
+                // endpoint carries no description at all, and because the N+1
+                // guard above skips anything already in the DB, a job persisted
+                // with a null description would never be revisited — one transient
+                // 503 would leave it permanently unscoreable against description
+                // keywords. Skipping leaves it absent, so the next cycle retries
+                // it and it self-heals. The cost is that a posting whose detail
+                // endpoint is durably broken stays invisible; that is the better
+                // failure, because the alternative is showing it with a wrong score.
+                String detailBody;
                 try {
-                    String detailBody = webClientBuilder.build()
+                    detailBody = webClientBuilder.build()
                             .get()
                             .uri(BASE_URL + "/api/v2/accounts/" + company.getBoardToken() + "/jobs/" + shortcode)
                             .retrieve()
                             .bodyToMono(String.class)
                             .block();
                     detailCalls++;
-                    if (detailBody != null) {
-                        applyDetail(detailBody, job);
-                    }
                 } catch (Exception e) {
-                    log.warn("Workable detail fetch failed for {} ({}) — emitting list-only job: {}",
+                    log.warn("Workable detail fetch failed for {} ({}) — skipping, will retry next cycle: {}",
                             shortcode, company.getCompanyName(), e.getMessage());
+                    skipped++;
+                    continue;
                 }
+
+                if (detailBody == null) {
+                    log.warn("Workable detail was empty for {} ({}) — skipping, will retry next cycle",
+                            shortcode, company.getCompanyName());
+                    skipped++;
+                    continue;
+                }
+
+                applyDetail(detailBody, job);
             }
 
             job.setFirstSeenAt(Instant.now());
             results.add(job);
         }
 
-        log.info("Translated {} new jobs for {} (Workable, {} detail calls)",
-                results.size(), company.getCompanyName(), detailCalls);
+        log.info("Translated {} new jobs for {} (Workable, {} detail calls, {} skipped pending retry)",
+                results.size(), company.getCompanyName(), detailCalls, skipped);
         return results;
     }
 

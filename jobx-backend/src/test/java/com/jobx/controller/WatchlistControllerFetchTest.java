@@ -3,6 +3,7 @@ package com.jobx.controller;
 import com.jobx.dto.ManualFetchResponse;
 import com.jobx.entity.User;
 import com.jobx.entity.WatchedCompany;
+import com.jobx.enums.AtsPlatform;
 import com.jobx.repository.WatchedCompanyRepository;
 import com.jobx.scheduler.FetchScheduler;
 import org.junit.jupiter.api.BeforeEach;
@@ -53,7 +54,7 @@ class WatchlistControllerFetchTest {
     @Test
     void fetchesAndReturnsCounts() {
         company.setLastFetchedAt(null); // never fetched — no cooldown
-        when(fetchScheduler.fetchCompany(company)).thenReturn(new FetchScheduler.FetchResult(4, 2));
+        when(fetchScheduler.fetchCompany(company)).thenReturn(FetchScheduler.FetchResult.success(4, 2));
 
         ManualFetchResponse response = controller.fetchNow(company.getId(), owner);
 
@@ -95,6 +96,20 @@ class WatchlistControllerFetchTest {
 
         assertEquals(409, ex.getStatusCode().value());
         verify(fetchScheduler, never()).fetchCompany(any());
+    }
+
+    @Test
+    void failedFetchIs502NotAQuietZero() {
+        // A board we couldn't reach must not come back as "no new roles" —
+        // the scheduler has already recorded FAILED health for it.
+        company.setLastFetchedAt(null);
+        company.setAtsPlatform(AtsPlatform.GREENHOUSE);
+        when(fetchScheduler.fetchCompany(company)).thenReturn(FetchScheduler.FetchResult.failure());
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+                () -> controller.fetchNow(company.getId(), owner));
+
+        assertEquals(502, ex.getStatusCode().value());
     }
 
     @Test

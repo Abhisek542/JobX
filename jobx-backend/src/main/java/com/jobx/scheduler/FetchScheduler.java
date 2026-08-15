@@ -7,6 +7,7 @@ import com.jobx.repository.*;
 import com.jobx.scorer.MatchScorer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,25 +32,46 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class FetchScheduler {
 
+    /** Max chars of last_fetch_error kept — a summary for operators, never a stack trace. */
+    private static final int MAX_ERROR_LENGTH = 500;
+
     private final WatchedCompanyRepository watchedCompanyRepository;
     private final JobRepository jobRepository;
     private final FilterProfileRepository filterProfileRepository;
     private final MatchRepository matchRepository;
     private final FetcherRegistry fetcherRegistry;
     private final MatchScorer matchScorer;
+    /** Own proxy, so fetchAllCompanies gets a real transaction per company. */
+    private final ObjectProvider<FetchScheduler> self;
 
     /**
      * Outcome of one company fetch — feeds the manual "Check now" endpoint's
      * user feedback ("Checked just now; 3 new matches" / "No new roles").
      * newMatchesForOwner counts only matches created for the watching user
      * who owns this WatchedCompany row, not for other users on the same board.
+     *
+     * failed distinguishes "the board had nothing new" from "we could not reach
+     * the board" — without it both look like newJobs == 0.
      */
-    public record FetchResult(int newJobs, int newMatchesForOwner) {
-        public static final FetchResult EMPTY = new FetchResult(0, 0);
+    public record FetchResult(int newJobs, int newMatchesForOwner, boolean failed) {
+        public static final FetchResult EMPTY = new FetchResult(0, 0, false);
+
+        public static FetchResult success(int newJobs, int newMatchesForOwner) {
+            return new FetchResult(newJobs, newMatchesForOwner, false);
+        }
+
+        public static FetchResult failure() {
+            return new FetchResult(0, 0, true);
+        }
     }
 
+    /**
+     * Deliberately NOT @Transactional: each company gets its own transaction via
+     * the proxy below, so a failure partway through one company can't roll back
+     * the companies already processed, and a long cycle doesn't hold a single DB
+     * connection open across every outbound ATS call.
+     */
     @Scheduled(fixedDelayString = "${jobx.fetch.interval-ms:1800000}") // 30min default
-    @Transactional
     public void fetchAllCompanies() {
         List<WatchedCompany> activeCompanies =
                 watchedCompanyRepository.findByStatus(WatchedCompany.CompanyStatus.ACTIVE);
@@ -57,7 +79,18 @@ public class FetchScheduler {
         log.info("Fetch cycle starting — {} active companies", activeCompanies.size());
 
         for (WatchedCompany company : activeCompanies) {
-            fetchCompany(company);
+            try {
+                // Through the proxy, not this.fetchCompany(...) — self-invocation
+                // would skip @Transactional and put us back in one big transaction.
+                self.getObject().fetchCompany(company);
+            } catch (Exception e) {
+                // Belt-and-braces: fetchCompany already converts board failures
+                // into FAILED health. This catches anything else (a DB error mid
+                // company) so the remaining companies still get their turn —
+                // "a fetch error for one company never stops the next".
+                log.error("Fetch cycle: {} failed, continuing with the rest",
+                        company.getCompanyName(), e);
+            }
         }
 
         log.info("Fetch cycle complete");
@@ -66,9 +99,7 @@ public class FetchScheduler {
     /**
      * Fetch one company now — shared by the scheduled cycle above and the
      * manual POST /watchlist/{id}/fetch endpoint (same dedup + scoring flow).
-     * @Transactional so the manual path gets its own transaction; scheduled
-     * calls run inside fetchAllCompanies' transaction (self-invocation skips
-     * the proxy there, which is fine).
+     * One transaction per company, whether called from the cycle or the endpoint.
      */
     @Transactional
     public FetchResult fetchCompany(WatchedCompany company) {
@@ -76,10 +107,21 @@ public class FetchScheduler {
 
         if (fetcher.isEmpty()) {
             log.warn("No fetcher for {} ({})", company.getCompanyName(), company.getAtsPlatform());
-            return FetchResult.EMPTY;
+            return recordFailure(company, "no fetcher for platform " + company.getAtsPlatform());
         }
 
-        List<Job> fetchedJobs = fetcher.get().fetch(company);
+        List<Job> fetchedJobs;
+        try {
+            fetchedJobs = fetcher.get().fetch(company);
+        } catch (Exception e) {
+            // The board is unreachable or unintelligible. Record it as FAILED and
+            // return normally: nothing has been written yet, so the transaction is
+            // clean, and the caller/cycle carries on.
+            log.error("Fetch failed for {} ({}): {}",
+                    company.getCompanyName(), company.getAtsPlatform(), e.getMessage(), e);
+            return recordFailure(company, summarize(e));
+        }
+
         int newCount = 0;
         int ownerMatches = 0;
 
@@ -99,12 +141,37 @@ public class FetchScheduler {
 
         // Update last fetched timestamp (also the manual-fetch cooldown anchor)
         company.setLastFetchedAt(Instant.now());
+        company.setLastFetchStatus(WatchedCompany.FetchStatus.SUCCESS);
+        company.setLastFetchError(null);
         watchedCompanyRepository.save(company);
 
         if (newCount > 0) {
             log.info("New jobs for {}: {}", company.getCompanyName(), newCount);
         }
-        return new FetchResult(newCount, ownerMatches);
+        return FetchResult.success(newCount, ownerMatches);
+    }
+
+    /**
+     * Stamp a failed attempt. lastFetchedAt still moves so the manual-fetch
+     * cooldown applies to failures too — a broken board must not become a way to
+     * hammer an ATS by holding down "Check now".
+     */
+    private FetchResult recordFailure(WatchedCompany company, String error) {
+        company.setLastFetchedAt(Instant.now());
+        company.setLastFetchStatus(WatchedCompany.FetchStatus.FAILED);
+        company.setLastFetchError(error);
+        watchedCompanyRepository.save(company);
+        return FetchResult.failure();
+    }
+
+    /** Short, sanitized cause for last_fetch_error — type + message, never a stack trace. */
+    private String summarize(Exception e) {
+        String message = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+        Throwable cause = e.getCause();
+        if (cause != null && cause.getMessage() != null) {
+            message = message + " (" + cause.getClass().getSimpleName() + ": " + cause.getMessage() + ")";
+        }
+        return message.length() > MAX_ERROR_LENGTH ? message.substring(0, MAX_ERROR_LENGTH) : message;
     }
 
     /** Returns how many of the created matches belong to the company row's owner. */

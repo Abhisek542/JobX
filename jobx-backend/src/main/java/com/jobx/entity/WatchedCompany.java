@@ -44,6 +44,18 @@ public class WatchedCompany {
     @Column(name = "last_fetched_at")
     private Instant lastFetchedAt;
 
+    // Whether the LAST attempt succeeded — null until the first attempt.
+    // Without this, "last checked 2 min ago, 0 new jobs" is what a board that
+    // has been 404ing for a week looks like.
+    @Enumerated(EnumType.STRING)
+    @Column(name = "last_fetch_status")
+    private FetchStatus lastFetchStatus;
+
+    // Short sanitized summary for operators — never a stack trace, and not
+    // returned by the API (see WatchedCompanyResponse).
+    @Column(name = "last_fetch_error")
+    private String lastFetchError;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 
@@ -51,5 +63,10 @@ public class WatchedCompany {
         ACTIVE,
         PAUSED,
         UNSUPPORTED   // shown as "portal unsupported" in dashboard
+    }
+
+    public enum FetchStatus {
+        SUCCESS,
+        FAILED   // dashboard shows the "Refresh issue" warning state
     }
 }

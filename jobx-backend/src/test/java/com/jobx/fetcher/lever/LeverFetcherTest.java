@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jobx.entity.Job;
 import com.jobx.entity.WatchedCompany;
 import com.jobx.enums.AtsPlatform;
+import com.jobx.fetcher.AtsFetchException;
 import com.jobx.fetcher.FixtureSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -74,8 +75,18 @@ class LeverFetcherTest {
     }
 
     @Test
-    void nonArrayRootReturnsEmpty() throws Exception {
-        List<Job> jobs = fetcher.parse("{\"error\":\"not found\"}", company);
-        assertTrue(jobs.isEmpty());
+    void nonArrayRootIsAFailureNotAnEmptyBoard() {
+        // Lever's error shape for a dead/renamed token. Returning an empty list
+        // here would report a broken board as "no jobs today" and still stamp
+        // last_fetched_at as a success.
+        assertThrows(AtsFetchException.class,
+                () -> fetcher.parse("{\"error\":\"not found\"}", company));
+    }
+
+    @Test
+    void emptyBoardIsASuccessfulEmptyResult() throws Exception {
+        // The other side of the same coin: a live board with nothing open is
+        // an empty ARRAY, and must NOT be treated as a failure.
+        assertTrue(fetcher.parse("[]", company).isEmpty());
     }
 }

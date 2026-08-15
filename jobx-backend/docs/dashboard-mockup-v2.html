@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jobx — dashboard mockup (design only, not wired to the real API)</title>
+<style>
+  /*
+    DESIGN MOCKUP ONLY — all data is hardcoded. Field names mirror the real DTOs
+    (MatchResponse, WatchedCompanyResponse, FilterProfileResponse) wherever a real
+    field exists. Anything the backend can't back yet is marked "GAP" in comments;
+    see docs/ui-design-spec.md for the full list and the decisions still needed.
+
+    Design direction: minimal + professional. One accent color, neutral greys,
+    hairline borders, no drop shadows in dark, restrained use of color (reserved
+    for the match score and warning states only).
+
+    NOTE: the dark palette below deliberately REPLACES the mint/navy tokens from
+    jobx-dashboard.html that CLAUDE.md currently cites as the dark-theme source.
+    Update that section of CLAUDE.md if this direction is approved.
+  */
+  :root{
+    /* ---------- LIGHT ---------- */
+    --bg:#fbfbfc;
+    --panel:#ffffff;
+    --panel-2:#f6f7f9;
+    --line:#eaebef;
+    --line-strong:#dcdee4;
+    --text:#16181d;
+    --text-2:#61656e;
+    --text-3:#9195a0;
+    --accent:#3d5afe;
+    --accent-ink:#ffffff;
+    --score-high:#0f9d6e;
+    --score-mid:#c99a1e;
+    --score-low:#9195a0;
+    --warn:#b9791d;
+    --track:#eceef2;
+
+    --radius:10px;
+    --radius-sm:7px;
+    --font:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+    --shadow:0 1px 2px rgba(20,22,28,.04);
+  }
+  html[data-theme="dark"]{
+    /* ---------- DARK — neutral near-black, no blue/green cast ---------- */
+    --bg:#0b0b0d;
+    --panel:#131316;
+    --panel-2:#191a1e;
+    --line:#232429;
+    --line-strong:#2f3037;
+    --text:#ececee;
+    --text-2:#9b9ca4;
+    --text-3:#6b6d76;
+    --accent:#6a83ff;
+    --accent-ink:#0b0b0d;
+    --score-high:#2fbe8d;
+    --score-mid:#d4a53c;
+    --score-low:#6b6d76;
+    --warn:#d4a53c;
+    --track:#232429;
+    --shadow:none;
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--bg);color:var(--text);font-family:var(--font);
+    font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;
+    letter-spacing:-.005em;
+  }
+  button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+  input,select{font-family:inherit;font-size:inherit;color:inherit}
+  ::-webkit-scrollbar{width:9px;height:9px}
+  ::-webkit-scrollbar-thumb{background:var(--line-strong);border-radius:9px}
+  ::-webkit-scrollbar-track{background:transparent}
+
+  .app{display:grid;grid-template-columns:212px 1fr;min-height:100vh}
+  .app.collapsed{grid-template-columns:64px 1fr}
+
+  /* ---------- sidebar ---------- */
+  .side{
+    border-right:1px solid var(--line);background:var(--panel);
+    display:flex;flex-direction:column;padding:20px 12px;
+    position:sticky;top:0;height:100vh;
+  }
+  .brand{display:flex;align-items:center;gap:9px;padding:2px 10px 26px}
+  .brand .mark{
+    width:24px;height:24px;border-radius:6px;background:var(--text);
+    color:var(--panel);display:flex;align-items:center;justify-content:center;
+    font-weight:600;font-size:13px;flex:none;
+  }
+  .brand h1{font-size:15px;font-weight:600;letter-spacing:-.02em}
+  .app.collapsed .brand h1,
+  .app.collapsed .nav-btn .lbl,
+  .app.collapsed .collapse-btn .lbl,
+  .app.collapsed .side-foot .who{display:none}
+
+  nav{display:flex;flex-direction:column;gap:1px;flex:1}
+  .nav-btn{
+    display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--radius-sm);
+    color:var(--text-2);font-size:13.5px;font-weight:450;text-align:left;width:100%;
+    transition:background .12s,color .12s;
+  }
+  .nav-btn:hover{background:var(--panel-2);color:var(--text)}
+  .nav-btn.active{background:var(--panel-2);color:var(--text);font-weight:550}
+  .nav-btn .ic{width:16px;height:16px;flex:none;stroke:currentColor;fill:none;stroke-width:1.6}
+
+  .collapse-btn{
+    display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--radius-sm);
+    color:var(--text-3);font-size:13px;margin-top:6px;
+  }
+  .collapse-btn:hover{background:var(--panel-2);color:var(--text-2)}
+  .collapse-btn .ic{width:16px;height:16px;flex:none;stroke:currentColor;fill:none;stroke-width:1.6}
+
+  .side-foot{
+    margin-top:8px;display:flex;align-items:center;gap:9px;
+    padding:12px 8px 2px;border-top:1px solid var(--line);
+  }
+  .avatar{
+    width:28px;height:28px;border-radius:50%;background:var(--panel-2);
+    border:1px solid var(--line);color:var(--text-2);
+    display:flex;align-items:center;justify-content:center;
+    font-weight:600;font-size:11px;flex:none;
+  }
+  .side-foot .who{font-size:12.5px;font-weight:550;line-height:1.35}
+  .side-foot .who span{display:block;font-weight:400;color:var(--text-3);font-size:11.5px}
+
+  /* ---------- header ---------- */
+  .main{min-width:0}
+  .header{
+    display:flex;align-items:center;justify-content:space-between;gap:20px;
+    padding:22px 28px 18px;
+  }
+  .header h2{font-size:20px;font-weight:600;letter-spacing:-.02em}
+  .header p{color:var(--text-3);font-size:13.5px;margin-top:2px}
+  .header-actions{display:flex;align-items:center;gap:8px;flex:none}
+
+  .icon-btn{
+    width:32px;height:32px;border-radius:var(--radius-sm);
+    border:1px solid var(--line);background:var(--panel);
+    display:flex;align-items:center;justify-content:center;color:var(--text-2);
+    transition:.12s;
+  }
+  .icon-btn:hover{color:var(--text);border-color:var(--line-strong)}
+  .icon-btn svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.6}
+
+  .btn{
+    display:inline-flex;align-items:center;gap:7px;font-size:13.5px;font-weight:550;
+    padding:8px 14px;border-radius:var(--radius-sm);transition:.12s;
+  }
+  .btn .ic{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.8}
+  .btn.solid{background:var(--accent);color:var(--accent-ink)}
+  .btn.solid:hover{filter:brightness(1.06)}
+  .btn.ghost{background:var(--panel);border:1px solid var(--line);color:var(--text-2)}
+  .btn.ghost:hover{color:var(--text);border-color:var(--line-strong)}
+  .btn.sm{padding:6px 11px;font-size:12.5px}
+
+  /* ---------- layout ---------- */
+  .wrap{display:grid;grid-template-columns:1fr 292px;gap:20px;padding:0 28px 32px;align-items:start}
+
+  /* ---------- toolbar ---------- */
+  .toolbar{display:flex;align-items:center;gap:6px;margin-bottom:18px;flex-wrap:wrap}
+  .search-box{
+    flex:1;min-width:180px;display:flex;align-items:center;gap:8px;
+    background:var(--panel);border:1px solid var(--line);
+    border-radius:var(--radius-sm);padding:7px 11px;transition:border-color .12s;
+  }
+  .search-box:focus-within{border-color:var(--line-strong)}
+  .search-box svg{width:14px;height:14px;stroke:var(--text-3);fill:none;stroke-width:1.7;flex:none}
+  .search-box input{flex:1;background:none;border:none;outline:none;color:var(--text);font-size:13px}
+  .search-box input::placeholder{color:var(--text-3)}
+
+  .segmented{display:flex;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius-sm);padding:2px}
+  .seg-btn{
+    font-size:12.5px;font-weight:500;color:var(--text-3);
+    padding:5px 11px;border-radius:5px;transition:.12s;white-space:nowrap;
+  }
+  .seg-btn:hover{color:var(--text-2)}
+  .seg-btn.on{background:var(--panel-2);color:var(--text);font-weight:550}
+  .seg-btn .count{color:var(--text-3);font-weight:450}
+  .seg-btn.on .count{color:var(--text-2)}
+
+  .sort-select{
+    font-size:12.5px;color:var(--text-2);background:var(--panel);
+    border:1px solid var(--line);padding:6px 9px;border-radius:var(--radius-sm);
+    cursor:pointer;
+  }
+
+  /* ---------- feed ---------- */
+  .section-label{
+    font-size:11px;font-weight:600;color:var(--text-3);
+    text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;
+  }
+  .card{
+    background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+    padding:16px 18px;margin-bottom:8px;box-shadow:var(--shadow);
+    transition:border-color .12s;
+  }
+  .card:hover{border-color:var(--line-strong)}
+  .card-top{display:flex;gap:14px;align-items:flex-start}
+  .logo-sq{
+    width:34px;height:34px;border-radius:8px;flex:none;
+    display:flex;align-items:center;justify-content:center;
+    font-weight:600;font-size:13px;color:var(--text-2);
+    background:var(--panel-2);border:1px solid var(--line);
+  }
+  .card-body{flex:1;min-width:0}
+  .card h3{font-size:14.5px;font-weight:600;letter-spacing:-.01em}
+  .co-line{
+    display:flex;align-items:center;gap:7px;margin-top:2px;
+    font-size:12.5px;color:var(--text-3);flex-wrap:wrap;
+  }
+  .co-line b{color:var(--text-2);font-weight:550}
+  .co-line .sep{color:var(--line-strong)}
+  .chips{display:flex;gap:5px;margin-top:10px;flex-wrap:wrap}
+  .chip{
+    font-size:11.5px;font-weight:450;color:var(--text-2);
+    background:var(--panel-2);padding:2px 8px;border-radius:5px;
+  }
+
+  /* score: the one place color carries meaning */
+  .score{flex:none;text-align:right;min-width:52px}
+  .score .num{font-size:17px;font-weight:600;letter-spacing:-.02em;line-height:1.1}
+  .score .bar{width:44px;height:3px;border-radius:3px;background:var(--track);margin:6px 0 0 auto;overflow:hidden}
+  .score .bar i{display:block;height:100%;border-radius:3px}
+  .score .lbl{font-size:10.5px;color:var(--text-3);margin-top:5px;letter-spacing:.02em}
+
+  .matched{font-size:12.5px;color:var(--text-3);margin-top:11px;line-height:1.45}
+  .matched b{color:var(--text-2);font-weight:550}
+
+  .actions{
+    display:flex;align-items:center;gap:2px;margin-top:12px;
+    padding-top:11px;border-top:1px solid var(--line);
+  }
+  .act{
+    display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:450;
+    color:var(--text-3);padding:5px 9px;border-radius:5px;transition:.12s;
+  }
+  .act:hover{color:var(--text);background:var(--panel-2)}
+  .act.on{color:var(--text);font-weight:550}
+  .act svg{width:13.5px;height:13.5px;stroke:currentColor;fill:none;stroke-width:1.7}
+  .act svg.fill{fill:currentColor;stroke:none}
+  .act-spacer{flex:1}
+  .details-link{font-size:12.5px;font-weight:500;color:var(--text-2);padding:5px 9px;border-radius:5px;text-decoration:none}
+  .details-link:hover{color:var(--text);background:var(--panel-2)}
+
+  .empty{
+    color:var(--text-3);text-align:center;padding:52px 24px;font-size:13px;
+    background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+  }
+  .empty b{display:block;color:var(--text-2);font-weight:550;font-size:13.5px;margin-bottom:4px}
+
+  /* ---------- right rail ---------- */
+  .rail-card{
+    background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+    padding:15px 16px;margin-bottom:10px;box-shadow:var(--shadow);
+  }
+  .rail-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:13px}
+  .rail-head h4{font-size:12.5px;font-weight:600;color:var(--text-2);letter-spacing:-.01em}
+  .rail-link{font-size:12px;font-weight:500;color:var(--text-3)}
+  .rail-link:hover{color:var(--text-2)}
+
+  .pref{display:flex;gap:10px;padding:6px 0;font-size:12.5px;align-items:baseline}
+  .pref .k{color:var(--text-3);width:74px;flex:none}
+  .pref .v{color:var(--text-2);line-height:1.5}
+
+  .meter{display:flex;align-items:center;gap:10px}
+  .meter .track{flex:1;height:4px;border-radius:4px;background:var(--track);overflow:hidden}
+  .meter .track i{display:block;height:100%;border-radius:4px;background:var(--text-2)}
+  .meter .pct{font-size:12.5px;font-weight:600;color:var(--text-2);flex:none}
+  .meter-note{font-size:11.5px;color:var(--text-3);margin-top:8px;line-height:1.45}
+
+  .wl-item{display:flex;align-items:center;gap:9px;padding:7px 0}
+  .wl-item + .wl-item{border-top:1px solid var(--line)}
+  .wl-logo{
+    width:24px;height:24px;border-radius:6px;flex:none;
+    display:flex;align-items:center;justify-content:center;
+    font-weight:600;font-size:10px;color:var(--text-3);
+    background:var(--panel-2);border:1px solid var(--line);
+  }
+  .wl-body{flex:1;min-width:0}
+  .wl-name{font-size:12.5px;font-weight:550}
+  .wl-status{font-size:11.5px;color:var(--text-3);display:flex;align-items:center;gap:5px;margin-top:1px}
+  .wl-status.warn{color:var(--warn)}
+  .wl-status .dot{width:5px;height:5px;border-radius:50%;background:currentColor;flex:none}
+
+  .add-card{text-align:center;padding:18px 16px;border-style:dashed}
+  .add-card p{font-size:12.5px;color:var(--text-3);margin-bottom:11px;line-height:1.45}
+
+  /* ---------- modals ---------- */
+  .scrim{
+    position:fixed;inset:0;background:rgba(10,11,14,.48);display:none;
+    align-items:center;justify-content:center;padding:20px;z-index:50;
+  }
+  .scrim.show{display:flex}
+  .modal{
+    background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    width:100%;max-width:420px;padding:22px;
+  }
+  .modal.wide{max-width:470px}
+  .modal h3{font-size:15px;font-weight:600;margin-bottom:3px}
+  .modal .mh-sub{color:var(--text-3);font-size:12.5px;margin-bottom:18px;line-height:1.45}
+  label.fl{display:block;font-size:12px;color:var(--text-3);margin:0 0 6px}
+  input.fi,select.fi{
+    width:100%;background:var(--panel-2);border:1px solid var(--line);color:var(--text);
+    border-radius:var(--radius-sm);padding:9px 11px;font-size:13px;margin-bottom:14px;outline:none;
+  }
+  input.fi:focus,select.fi:focus{border-color:var(--line-strong)}
+  .chip-box{
+    display:flex;flex-wrap:wrap;gap:5px;min-height:38px;background:var(--panel-2);
+    border:1px solid var(--line);border-radius:var(--radius-sm);padding:8px 9px;margin-bottom:14px;
+  }
+  .edit-chip{font-size:12px;padding:4px 9px;border-radius:5px;background:var(--panel);border:1px solid var(--line);color:var(--text-2)}
+  .exp-row{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+  .exp-row input{width:68px;text-align:center;margin-bottom:0}
+  .exp-row span{color:var(--text-3);font-size:12.5px}
+  .modal-foot{display:flex;justify-content:flex-end;gap:8px;margin-top:6px}
+
+  @media(max-width:980px){
+    .app{grid-template-columns:1fr}
+    .side{position:static;height:auto}
+    .wrap{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+<div class="app" id="appRoot">
+  <!-- SIDEBAR -->
+  <aside class="side">
+    <div class="brand">
+      <div class="mark">j</div>
+      <h1>jobx</h1>
+    </div>
+    <nav id="nav">
+      <button class="nav-btn active" data-view="dashboard">
+        <svg class="ic" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="8" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="3" y="15" width="7" height="6" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/></svg>
+        <span class="lbl">Dashboard</span>
+      </button>
+      <button class="nav-btn" data-view="matches">
+        <svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20.5 20.5-4-4"/></svg>
+        <span class="lbl">Matches</span>
+      </button>
+      <button class="nav-btn" data-view="watchlist">
+        <svg class="ic" viewBox="0 0 24 24"><path d="M5 3h14a1 1 0 0 1 1 1v16l-8-4.5L4 20V4a1 1 0 0 1 1-1z"/></svg>
+        <span class="lbl">Watchlist</span>
+      </button>
+      <button class="nav-btn" data-view="profile">
+        <svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.6"/><path d="M4.5 20.5c.6-3.6 3.8-5.5 7.5-5.5s6.9 1.9 7.5 5.5"/></svg>
+        <span class="lbl">Profile</span>
+      </button>
+      <button class="collapse-btn" onclick="toggleCollapse()">
+        <svg class="ic" viewBox="0 0 24 24"><path d="M14.5 18 8.5 12l6-6"/></svg>
+        <span class="lbl">Collapse</span>
+      </button>
+    </nav>
+    <div class="side-foot">
+      <div class="avatar" id="sideAvatar">—</div>
+      <div class="who" id="sideWho">—</div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <div class="main">
+    <div class="header">
+      <div>
+        <h2 id="greeting">Good morning</h2>
+        <p id="subhead">—</p>
+      </div>
+      <div class="header-actions">
+        <button class="icon-btn" id="themeToggle" title="Toggle theme">
+          <svg viewBox="0 0 24 24" id="themeIcon"></svg>
+        </button>
+        <button class="btn solid" onclick="openAdd()">
+          <svg class="ic" viewBox="0 0 24 24"><path d="M12 5.5v13M5.5 12h13"/></svg>
+          Add company
+        </button>
+        <div class="avatar" id="topAvatar">—</div>
+      </div>
+    </div>
+
+    <div class="wrap">
+      <!-- FEED -->
+      <section>
+        <div class="toolbar">
+          <div class="search-box">
+            <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20.5 20.5-4-4"/></svg>
+            <input id="searchInput" placeholder="Search roles or companies" oninput="renderFeed()">
+          </div>
+          <div class="segmented" id="segmented">
+            <button class="seg-btn on" data-pill="all">All</button>
+            <button class="seg-btn" data-pill="new">New<span class="count" id="cNew"></span></button>
+            <button class="seg-btn" data-pill="saved">Saved<span class="count" id="cSaved"></span></button>
+            <button class="seg-btn" data-pill="applied">Applied<span class="count" id="cApplied"></span></button>
+          </div>
+          <select class="sort-select" id="sortSelect" onchange="renderFeed()">
+            <option value="newest">Newest</option>
+            <option value="score">Highest match</option>
+          </select>
+        </div>
+
+        <div class="section-label" id="feedLabel">Top matches</div>
+        <div id="feed"></div>
+      </section>
+
+      <!-- RIGHT RAIL -->
+      <aside>
+        <div class="rail-card">
+          <div class="rail-head">
+            <h4>Search preferences</h4>
+            <button class="rail-link" onclick="openFilter()">Edit</button>
+          </div>
+          <!-- GAP: "Roles" is not a FilterProfile field. Shown as keywords[0]
+               for display only — decision #3 in docs/ui-design-spec.md. -->
+          <div class="pref"><span class="k">Roles</span><span class="v" id="prefRoles">—</span></div>
+          <div class="pref"><span class="k">Keywords</span><span class="v" id="prefKeywords">—</span></div>
+          <div class="pref"><span class="k">Experience</span><span class="v" id="prefExp">—</span></div>
+        </div>
+
+        <div class="rail-card">
+          <div class="rail-head"><h4>Profile completeness</h4></div>
+          <!-- GAP: no backend field for this. Client-computed heuristic only. -->
+          <div class="meter">
+            <div class="track"><i id="completenessBar"></i></div>
+            <span class="pct" id="completenessPct">—</span>
+          </div>
+          <p class="meter-note" id="completenessNote">—</p>
+        </div>
+
+        <div class="rail-card">
+          <div class="rail-head">
+            <h4>Watchlist</h4>
+            <button class="rail-link">View all</button>
+          </div>
+          <div id="watchlistHealth"></div>
+        </div>
+
+        <div class="rail-card add-card">
+          <p>Watch more companies to widen your feed.</p>
+          <button class="btn ghost sm" onclick="openAdd()">Add company</button>
+        </div>
+      </aside>
+    </div>
+  </div>
+</div>
+
+<!-- ADD COMPANY -->
+<div class="scrim" id="scrim">
+  <div class="modal">
+    <h3>Add a company</h3>
+    <p class="mh-sub">The board token comes from the live careers URL — never guessed.</p>
+    <label class="fl">Company name</label>
+    <input class="fi" placeholder="Razorpay" id="coName">
+    <label class="fl">ATS platform</label>
+    <select class="fi" id="coAts">
+      <option>Greenhouse</option><option>Lever</option><option>Ashby</option><option>Workable</option>
+    </select>
+    <label class="fl">Board token</label>
+    <input class="fi" placeholder="razorpaysoftwareprivatelimited" id="coToken">
+    <div class="modal-foot">
+      <button class="btn ghost" onclick="closeAdd()">Cancel</button>
+      <button class="btn solid" onclick="closeAdd()">Add</button>
+    </div>
+  </div>
+</div>
+
+<!-- EDIT FILTER -->
+<div class="scrim" id="filterScrim">
+  <div class="modal wide">
+    <h3>Search preferences</h3>
+    <p class="mh-sub">Keywords match on OR, not AND. Experience is a soft filter — it lowers a score but never removes a job.</p>
+    <label class="fl">Keywords</label>
+    <div class="chip-box" id="kwChips"></div>
+    <label class="fl">Exclude words</label>
+    <div class="chip-box" id="exChips"></div>
+    <label class="fl">Experience</label>
+    <div class="exp-row">
+      <input class="fi" type="number" id="expMinInput">
+      <span>to</span>
+      <input class="fi" type="number" id="expMaxInput">
+      <span>years</span>
+    </div>
+    <div class="modal-foot">
+      <button class="btn ghost" onclick="closeFilter()">Cancel</button>
+      <button class="btn solid" onclick="closeFilter()">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ======================================================================
+   MOCK DATA — shaped to match the real DTOs field-for-field where a real
+   field exists. GAP comments mark anything the backend can't back today.
+   ====================================================================== */
+
+// Real User entity has no name field — greeting/initials derive from the
+// email local-part (decision #6 in docs/ui-design-spec.md).
+const CURRENT_USER = { email: "arjun.k@example.com" };
+
+// FilterProfileResponse shape.
+const FILTER_PROFILE = {
+  keywords: ["Java", "Spring Boot", "PostgreSQL", "REST APIs"],
+  excludeWords: ["Senior", "Principal", "Intern"],
+  expMin: 2, expMax: 4
+};
+
+// WatchedCompanyResponse shape + mock-only `health`.
+// GAP: no lastFetchStatus/lastFetchError on the real entity; FetchScheduler
+// doesn't catch or persist fetch failures yet (P1 in V1_IMPROVEMENTS.md).
+const WATCHED_COMPANIES = [
+  { companyName:"Postman",  atsPlatform:"LEVER",      lastFetchedAt:minsAgo(8),   health:"ok" },
+  { companyName:"Razorpay", atsPlatform:"GREENHOUSE", lastFetchedAt:minsAgo(8),   health:"ok" },
+  { companyName:"Meesho",   atsPlatform:"ASHBY",      lastFetchedAt:minsAgo(120), health:"warn" },
+];
+
+// MatchResponse shape. GAP: `location` exists on the Job entity but is not
+// exposed on MatchResponse yet; there is no `verified` concept anywhere.
+const MATCHES = [
+  { id:1, jobTitle:"Backend Engineer", companyName:"Postman", location:"Bengaluru · Remote",
+    applyUrl:"#", score:94, matchedKeywords:["Java","Spring Boot","PostgreSQL","REST APIs"],
+    status:"NEW", createdAt:hoursAgo(1) },
+  { id:2, jobTitle:"Software Engineer", companyName:"Razorpay", location:"Bengaluru · Hybrid",
+    applyUrl:"#", score:89, matchedKeywords:["Java","Spring Boot","PostgreSQL"],
+    status:"NEW", createdAt:hoursAgo(3) },
+  { id:3, jobTitle:"Platform Engineer", companyName:"Meesho", location:"Bengaluru · Remote",
+    applyUrl:"#", score:82, matchedKeywords:["Java","Spring Boot"],
+    status:"SEEN", createdAt:hoursAgo(6) },
+  { id:4, jobTitle:"Backend Developer", companyName:"CRED", location:"Remote (India)",
+    applyUrl:"#", score:71, matchedKeywords:["Java","REST APIs"],
+    status:"APPLIED", createdAt:hoursAgo(20) },
+];
+
+function minsAgo(m){ return new Date(Date.now() - m*60000); }
+function hoursAgo(h){ return new Date(Date.now() - h*3600000); }
+function relTime(d){
+  const mins = Math.round((Date.now()-d.getTime())/60000);
+  if (mins < 60) return mins + "m ago";
+  const hrs = Math.round(mins/60);
+  if (hrs < 24) return hrs + "h ago";
+  return Math.round(hrs/24) + "d ago";
+}
+function initials(name){ return name.slice(0,2).toUpperCase(); }
+
+/* Score color — two bands, same thresholds as the verified ringColor() in
+   jobx-dashboard.html (>=75 high, >=60 mid). Decision #1: kept as-is rather
+   than moving to a continuous gradient. */
+function scoreColor(s){
+  return s >= 75 ? 'var(--score-high)' : s >= 60 ? 'var(--score-mid)' : 'var(--score-low)';
+}
+
+/* ======================================================================
+   Feed — search/filter/sort are all client-side, matching the backend as
+   built (GET /matches takes no query params).
+   ====================================================================== */
+let activePill = 'all';
+document.getElementById('segmented').addEventListener('click', function(e){
+  const b = e.target.closest('.seg-btn'); if(!b) return;
+  const all = document.querySelectorAll('.seg-btn');
+  for (let i=0;i<all.length;i++) all[i].classList.remove('on');
+  b.classList.add('on');
+  activePill = b.dataset.pill;
+  renderFeed();
+});
+
+// Decision #7: "Saved" maps to SEEN — Match.MatchStatus has no SAVED value.
+const PILL_STATUS = { new:'NEW', saved:'SEEN', applied:'APPLIED' };
+
+function visibleMatches(){ return MATCHES.filter(function(m){ return m.status !== 'DISMISSED'; }); }
+
+function renderCounts(){
+  const v = visibleMatches();
+  function set(id, n){ document.getElementById(id).textContent = n ? ' ' + n : ''; }
+  set('cNew', v.filter(function(m){ return m.status==='NEW'; }).length);
+  set('cSaved', v.filter(function(m){ return m.status==='SEEN'; }).length);
+  set('cApplied', v.filter(function(m){ return m.status==='APPLIED'; }).length);
+}
+
+function renderFeed(){
+  const q = document.getElementById('searchInput').value.trim().toLowerCase();
+  const sort = document.getElementById('sortSelect').value;
+  let list = visibleMatches();
+
+  if (activePill !== 'all') {
+    list = list.filter(function(m){ return m.status === PILL_STATUS[activePill]; });
+  }
+  if (q) {
+    list = list.filter(function(m){
+      return m.jobTitle.toLowerCase().indexOf(q) !== -1
+          || m.companyName.toLowerCase().indexOf(q) !== -1;
+    });
+  }
+  list = list.slice().sort(function(a,b){
+    return sort === 'score' ? b.score - a.score : b.createdAt - a.createdAt;
+  });
+
+  document.getElementById('feedLabel').textContent =
+    activePill === 'all' ? 'Top matches'
+    : activePill === 'new' ? 'New matches'
+    : activePill === 'saved' ? 'Saved' : 'Applied';
+
+  document.getElementById('feed').innerHTML = list.length
+    ? list.map(matchCard).join('')
+    : '<div class="empty"><b>Nothing here yet</b>Try another filter, or widen your keywords in search preferences.</div>';
+
+  renderCounts();
+}
+
+function matchCard(m){
+  const col = scoreColor(m.score);
+  const saved = m.status === 'SEEN';
+  const applied = m.status === 'APPLIED';
+  return '<div class="card">'
+    + '<div class="card-top">'
+      + '<div class="logo-sq">' + initials(m.companyName) + '</div>'
+      + '<div class="card-body">'
+        + '<h3>' + m.jobTitle + '</h3>'
+        + '<div class="co-line"><b>' + m.companyName + '</b>'
+          + '<span class="sep">·</span>' + m.location
+          + '<span class="sep">·</span>' + relTime(m.createdAt) + '</div>'
+        + '<div class="chips">'
+          + m.matchedKeywords.map(function(k){ return '<span class="chip">' + k + '</span>'; }).join('')
+        + '</div>'
+        + '<div class="matched"><b>Matched:</b> ' + m.matchedKeywords.join(', ') + '</div>'
+      + '</div>'
+      + '<div class="score">'
+        + '<div class="num" style="color:' + col + '">' + m.score + '</div>'
+        + '<div class="bar"><i style="width:' + m.score + '%;background:' + col + '"></i></div>'
+        + '<div class="lbl">match</div>'
+      + '</div>'
+    + '</div>'
+    + '<div class="actions">'
+      + '<button class="act' + (saved?' on':'') + '" onclick="setStatus(' + m.id + ',\'SEEN\')">'
+        + '<svg viewBox="0 0 24 24" class="' + (saved?'fill':'') + '"><path d="M6 3.5h12a.5.5 0 0 1 .5.5v16l-6.5-3.6L5.5 20V4a.5.5 0 0 1 .5-.5z"/></svg>'
+        + (saved ? 'Saved' : 'Save')
+      + '</button>'
+      + '<button class="act' + (applied?' on':'') + '" onclick="setStatus(' + m.id + ',\'APPLIED\')">'
+        + '<svg viewBox="0 0 24 24"><path d="M20 6.5 9.5 17 4 11.5"/></svg>'
+        + (applied ? 'Applied' : 'Mark applied')
+      + '</button>'
+      + '<button class="act" onclick="setStatus(' + m.id + ',\'DISMISSED\')">'
+        + '<svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>Dismiss'
+      + '</button>'
+      + '<span class="act-spacer"></span>'
+      + '<a class="details-link" href="#" onclick="return viewDetails()">View details</a>'
+    + '</div>'
+  + '</div>';
+}
+
+function setStatus(id, status){
+  const m = MATCHES.filter(function(x){ return x.id===id; })[0];
+  if(!m) return;
+  m.status = (m.status === status) ? 'NEW' : status;  // real call: PATCH /matches/{id}
+  renderFeed();
+}
+function viewDetails(){
+  alert("Design placeholder. A real detail view needs GET /matches/{id}, which doesn't exist yet (P1 in V1_IMPROVEMENTS.md). For step 5 this can link straight to applyUrl instead.");
+  return false;
+}
+
+/* ---------- right rail ---------- */
+function renderPreferences(){
+  document.getElementById('prefRoles').textContent = FILTER_PROFILE.keywords[0] || '—';
+  document.getElementById('prefKeywords').textContent = FILTER_PROFILE.keywords.join(', ');
+  document.getElementById('prefExp').textContent = FILTER_PROFILE.expMin + '–' + FILTER_PROFILE.expMax + ' years';
+}
+
+function renderCompleteness(){
+  // Placeholder heuristic — no backend field exists (ui-design-spec.md §4).
+  let pct = 25;
+  if (FILTER_PROFILE.keywords.length > 0) pct += 25;
+  if (WATCHED_COMPANIES.length > 0) pct += 25;
+  if (FILTER_PROFILE.keywords.length >= 3) pct += 25;
+  document.getElementById('completenessBar').style.width = pct + '%';
+  document.getElementById('completenessPct').textContent = pct + '%';
+  document.getElementById('completenessNote').textContent =
+    pct >= 100 ? 'Your profile is complete.' : 'Add more detail to improve match quality.';
+}
+
+function renderWatchlistHealth(){
+  document.getElementById('watchlistHealth').innerHTML = WATCHED_COMPANIES.map(function(c){
+    const warn = c.health === 'warn';
+    return '<div class="wl-item">'
+      + '<div class="wl-logo">' + initials(c.companyName) + '</div>'
+      + '<div class="wl-body">'
+        + '<div class="wl-name">' + c.companyName + '</div>'
+        + '<div class="wl-status' + (warn?' warn':'') + '"><span class="dot"></span>'
+          + (warn ? "Couldn't refresh" : 'Checked ' + relTime(c.lastFetchedAt))
+        + '</div>'
+      + '</div>'
+    + '</div>';
+  }).join('');
+}
+
+/* ---------- identity ---------- */
+function renderIdentity(){
+  const local = CURRENT_USER.email.split('@')[0];
+  const parts = local.split(/[._]/);
+  const name = parts[0].charAt(0).toUpperCase() + parts[0].slice(1);
+  const hour = new Date().getHours();
+  const part = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+  const second = (parts[1] && parts[1][0]) || parts[0][1] || '';
+  const init = (name[0] + second).toUpperCase();
+  document.getElementById('greeting').textContent = part + ', ' + name;
+  document.getElementById('subhead').textContent = 'Your next opportunity could be waiting.';
+  document.getElementById('sideAvatar').textContent = init;
+  document.getElementById('topAvatar').textContent = init;
+  document.getElementById('sideWho').innerHTML = name + '<span>Job seeker</span>';
+}
+
+/* ---------- theme ---------- */
+const SUN = '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"/>';
+const MOON = '<path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/>';
+function applyTheme(theme){
+  document.documentElement.setAttribute('data-theme', theme);
+  document.getElementById('themeIcon').innerHTML = theme === 'dark' ? SUN : MOON;
+  try { localStorage.setItem('jobx-theme', theme); } catch(e){}
+}
+document.getElementById('themeToggle').addEventListener('click', function(){
+  const cur = document.documentElement.getAttribute('data-theme');
+  applyTheme(cur === 'dark' ? 'light' : 'dark');
+});
+function toggleCollapse(){ document.getElementById('appRoot').classList.toggle('collapsed'); }
+
+document.getElementById('nav').addEventListener('click', function(e){
+  const b = e.target.closest('.nav-btn'); if(!b) return;
+  const all = document.querySelectorAll('.nav-btn');
+  for (let i=0;i<all.length;i++) all[i].classList.remove('active');
+  b.classList.add('active');
+});
+
+/* ---------- modals ---------- */
+function openAdd(){ document.getElementById('scrim').classList.add('show'); }
+function closeAdd(){ document.getElementById('scrim').classList.remove('show'); }
+function openFilter(){
+  document.getElementById('kwChips').innerHTML =
+    FILTER_PROFILE.keywords.map(function(k){ return '<span class="edit-chip">' + k + '</span>'; }).join('');
+  document.getElementById('exChips').innerHTML =
+    FILTER_PROFILE.excludeWords.map(function(k){ return '<span class="edit-chip">' + k + '</span>'; }).join('');
+  document.getElementById('expMinInput').value = FILTER_PROFILE.expMin;
+  document.getElementById('expMaxInput').value = FILTER_PROFILE.expMax;
+  document.getElementById('filterScrim').classList.add('show');
+}
+function closeFilter(){ document.getElementById('filterScrim').classList.remove('show'); }
+document.addEventListener('click', function(e){
+  if (e.target.classList && e.target.classList.contains('scrim')) e.target.classList.remove('show');
+});
+
+/* ---------- init ---------- */
+(function init(){
+  let saved = 'light';
+  try { saved = localStorage.getItem('jobx-theme') || 'light'; } catch(e){}
+  applyTheme(saved === 'dark' ? 'dark' : 'light');
+  renderIdentity();
+  renderPreferences();
+  renderCompleteness();
+  renderWatchlistHealth();
+  renderFeed();
+})();
+</script>
+</body>
+</html>

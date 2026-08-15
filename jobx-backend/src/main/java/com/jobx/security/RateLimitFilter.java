@@ -47,6 +47,11 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
+        // CORS preflights aren't login attempts — never spend a user's budget on
+        // one, or the browser's own probe can lock them out of the real request.
+        if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
+            return true;
+        }
         return !request.getRequestURI().startsWith("/auth/");
     }
 

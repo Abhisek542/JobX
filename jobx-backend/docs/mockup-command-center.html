@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Jobx Mockup B - Command Center</title>
+  <style>
+    :root{--bg:#f5f7fb;--panel:#fff;--panel2:#f0f3f8;--line:#dfe5ef;--text:#121926;--muted:#667085;--brand:#2563eb;--good:#159363;--mid:#d99a18;--bad:#dd4b4b;--shadow:0 12px 30px rgba(24,39,75,.08);--font:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Arial,sans-serif}
+    html[data-theme="dark"]{--bg:#070b10;--panel:#10161d;--panel2:#151d27;--line:#26313d;--text:#f0f6fc;--muted:#9aa8b8;--brand:#42d995;--good:#42d995;--mid:#f2bd3d;--bad:#ff7373;--shadow:none}
+    *{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at top right,rgba(66,217,149,.08),transparent 38%),var(--bg);color:var(--text);font:14px/1.45 var(--font)}button,input,select{font:inherit}button{cursor:pointer}
+    .app{display:grid;grid-template-columns:220px 1fr;min-height:100vh}.side{border-right:1px solid var(--line);background:rgba(16,22,29,.92);padding:28px 14px;display:flex;flex-direction:column;gap:28px}.logo{font-size:31px;font-weight:900}.logo b{color:var(--brand)}.nav{display:grid;gap:7px}.nav button{border:0;background:transparent;color:var(--muted);text-align:left;border-radius:12px;padding:12px 14px}.nav .active,.nav button:hover{background:var(--panel2);color:var(--brand);font-weight:800}.sidefoot{margin-top:auto;border:1px solid var(--line);border-radius:14px;padding:14px;color:var(--muted)}
+    .main{padding:28px 32px}.top{display:flex;justify-content:space-between;gap:20px;align-items:flex-start}.eyebrow{color:var(--brand);font-weight:900}.top h1{margin:8px 0 2px;font-size:28px;letter-spacing:-.7px}.top p{margin:0;color:var(--muted)}.btn{border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:10px;padding:10px 14px;font-weight:800}.btn.primary{border-color:var(--brand);color:var(--brand);background:transparent}
+    .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:22px 0}.metric{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--line);border-radius:14px;padding:18px}.metric span{color:var(--muted)}.metric strong{display:block;font-size:30px;margin-top:8px}.up{color:var(--good)}
+    .grid{display:grid;grid-template-columns:minmax(0,1fr)310px;gap:16px}.board,.card{background:rgba(16,22,29,.86);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow)}html[data-theme="light"] .board,html[data-theme="light"] .card{background:var(--panel)}
+    .filters{display:grid;grid-template-columns:1fr repeat(4,auto);gap:10px;padding:16px;border-bottom:1px solid var(--line)}.filters input,.filters select{background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:10px;padding:10px 12px}
+    .head,.row{display:grid;grid-template-columns:1.7fr 1.3fr 100px 140px 92px;gap:12px;align-items:center}.head{padding:13px 18px;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.05em}.row{padding:14px 18px;border-top:1px solid var(--line)}.job{display:flex;gap:12px;align-items:center}.logo2{width:46px;height:46px;border-radius:10px;background:var(--panel2);display:grid;place-items:center;font-weight:900;color:var(--brand)}.job b{display:block}.job span{color:var(--muted);font-size:12px}.chips{display:flex;gap:6px;flex-wrap:wrap}.chip{background:var(--panel2);border:1px solid var(--line);color:var(--muted);border-radius:7px;padding:4px 7px;font-size:12px}.score{width:58px;height:58px;border-radius:50%;border:5px solid var(--good);display:grid;place-items:center;font-weight:900;color:var(--good)}.score.mid{border-color:var(--mid);color:var(--mid)}.status{background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:8px;color:var(--text)}.iconbtn{width:36px;height:36px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--muted)}
+    .card{padding:18px}.card h2{font-size:17px;margin:0 0 15px}.health{display:grid;place-items:center;margin:12px 0}.donut{width:126px;height:126px;border-radius:50%;border:16px solid var(--good);border-left-color:var(--mid);display:grid;place-items:center;font-size:27px;font-weight:900}.company{display:flex;justify-content:space-between;border-top:1px solid var(--line);padding:12px 0}.company span{color:var(--muted)}.green{color:var(--good)!important}.amber{color:var(--mid)!important}
+    @media(max-width:1050px){.app{grid-template-columns:1fr}.side{display:none}.grid,.metrics{grid-template-columns:1fr}.filters{grid-template-columns:1fr}.head{display:none}.row{grid-template-columns:1fr}.score{width:50px;height:50px}}
+  </style>
+</head>
+<body>
+<div class="app">
+  <aside class="side"><div class="logo">Job<b>x</b></div><nav class="nav"><button class="active">Dashboard</button><button>Matches</button><button>Watchlist</button><button>Profile</button></nav><div class="sidefoot">Command center prototype<br><small>Best for power users.</small></div></aside>
+  <main class="main">
+    <header class="top"><div><div class="eyebrow">Command center</div><h1>Good morning, Arjun</h1><p>Here is your job match overview.</p></div><div><button class="btn" id="themeBtn">Light mode</button> <button class="btn primary">+ Add company</button></div></header>
+    <section class="metrics"><div class="metric"><span>Top matches</span><strong>18</strong><small class="up">+6 today</small></div><div class="metric"><span>High scores 80+</span><strong>24</strong><small class="up">+5 today</small></div><div class="metric"><span>Applied</span><strong>12</strong><small class="up">+3 this week</small></div><div class="metric"><span>Watchlist health</span><strong class="amber">78%</strong><small class="amber">2 need attention</small></div></section>
+    <div class="grid">
+      <section class="board">
+        <div class="filters"><input placeholder="Search matches"><select><option>Score: All</option></select><select><option>Status: All</option></select><select><option>Company: All</option></select><button class="btn">Saved</button></div>
+        <div class="head"><div>Job</div><div>Keywords</div><div>Score</div><div>Status</div><div>Actions</div></div>
+        <div class="row"><div class="job"><div class="logo2">ST</div><div><b>Backend Engineer</b><span>Stripe - Bengaluru / Remote</span></div></div><div class="chips"><span class="chip">Spring Boot</span><span class="chip">PostgreSQL</span><span class="chip">Kafka</span></div><div class="score">92%</div><select class="status"><option>New</option></select><div><button class="iconbtn">☆</button><button class="iconbtn">...</button></div></div>
+        <div class="row"><div class="job"><div class="logo2">AT</div><div><b>Senior Backend Engineer</b><span>Atlassian - Remote</span></div></div><div class="chips"><span class="chip">Java</span><span class="chip">Spring Boot</span></div><div class="score">88%</div><select class="status"><option>Seen</option></select><div><button class="iconbtn">☆</button><button class="iconbtn">...</button></div></div>
+        <div class="row"><div class="job"><div class="logo2">RZ</div><div><b>Software Engineer</b><span>Razorpay - Hybrid</span></div></div><div class="chips"><span class="chip">Java</span><span class="chip">PostgreSQL</span></div><div class="score mid">78%</div><select class="status"><option>Applied</option></select><div><button class="iconbtn">☆</button><button class="iconbtn">...</button></div></div>
+        <div class="row"><div class="job"><div class="logo2">PY</div><div><b>Backend Developer</b><span>Paytm - Noida</span></div></div><div class="chips"><span class="chip">Redis</span><span class="chip">MySQL</span></div><div class="score mid">71%</div><select class="status"><option>New</option></select><div><button class="iconbtn">☆</button><button class="iconbtn">...</button></div></div>
+      </section>
+      <aside class="card"><h2>Watchlist health</h2><div class="health"><div class="donut">78%</div></div><div class="company"><b>Stripe</b><span class="green">Active - 5 new</span></div><div class="company"><b>Atlassian</b><span class="green">Active - 3 new</span></div><div class="company"><b>Razorpay</b><span class="amber">Paused</span></div><div class="company"><b>Paytm</b><span class="green">Active - 2 new</span></div><button class="btn" style="width:100%;margin-top:14px">View watchlist</button></aside>
+    </div>
+  </main>
+</div>
+<script>
+  const root=document.documentElement,btn=document.getElementById('themeBtn');
+  btn.onclick=()=>{const dark=root.dataset.theme!=='dark';root.dataset.theme=dark?'dark':'light';btn.textContent=dark?'Light mode':'Dark mode'};
+</script>
+</body>
+</html>

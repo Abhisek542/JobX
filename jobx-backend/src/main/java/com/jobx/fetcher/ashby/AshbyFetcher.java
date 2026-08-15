@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jobx.entity.Job;
 import com.jobx.entity.WatchedCompany;
 import com.jobx.enums.AtsPlatform;
+import com.jobx.fetcher.AtsFetchException;
 import com.jobx.fetcher.AtsFetcher;
 import com.jobx.fetcher.ExperienceParser;
 import lombok.RequiredArgsConstructor;
@@ -51,30 +52,31 @@ public class AshbyFetcher implements AtsFetcher {
     @Override
     public List<Job> fetch(WatchedCompany company) {
         String token = company.getBoardToken();
+        String url = BASE_URL + "/posting-api/job-board/" + token;
+        log.info("Fetching Ashby board: {} ({})", company.getCompanyName(), token);
 
+        String responseBody;
         try {
-            String url = BASE_URL + "/posting-api/job-board/" + token;
-            log.info("Fetching Ashby board: {} ({})", company.getCompanyName(), token);
-
-            String responseBody = webClientBuilder.build()
+            responseBody = webClientBuilder.build()
                     .get()
                     .uri(url)
                     .retrieve()
                     .bodyToMono(String.class)
                     .block();
-
-            if (responseBody == null) {
-                log.warn("Empty response from Ashby for token: {}", token);
-                return List.of();
-            }
-
-            return parse(responseBody, company);
-
         } catch (Exception e) {
-            // Never throw — log and return empty list, next poll cycle will retry
-            log.error("Failed to fetch Ashby board for {} (token={}): {}",
-                    company.getCompanyName(), token, e.getMessage(), e);
-            return List.of();
+            throw new AtsFetchException("Ashby board request failed for token " + token, e);
+        }
+
+        if (responseBody == null) {
+            throw new AtsFetchException("Empty response from Ashby for token " + token);
+        }
+
+        try {
+            return parse(responseBody, company);
+        } catch (AtsFetchException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new AtsFetchException("Could not parse Ashby response for token " + token, e);
         }
     }
 
@@ -85,9 +87,11 @@ public class AshbyFetcher implements AtsFetcher {
         JsonNode root = objectMapper.readTree(responseBody);
         JsonNode jobs = root.get("jobs");
 
+        // A board with no openings returns an empty array, not a missing one —
+        // a missing/!array "jobs" means the payload isn't a board response.
         if (jobs == null || !jobs.isArray()) {
-            log.warn("No jobs array in Ashby response for {}", company.getCompanyName());
-            return results;
+            throw new AtsFetchException(
+                    "No jobs array in Ashby response for token " + company.getBoardToken());
         }
 
         for (JsonNode node : jobs) {

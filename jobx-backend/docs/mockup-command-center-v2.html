@@ -1,0 +1,501 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Jobx Mockup B2 - Command Center</title>
+  <style>
+    :root{
+      --bg:#f7f9fd;
+      --panel:#ffffff;
+      --panel-2:#f4f7fc;
+      --line:#e1e7f0;
+      --line-strong:#cbd5e1;
+      --text:#0b1324;
+      --muted:#64748b;
+      --soft:#94a3b8;
+      --brand:#2455f4;
+      --brand-soft:#eef3ff;
+      --good:#1fa56f;
+      --mid:#a8d600;
+      --warn:#f59e0b;
+      --danger:#ef4444;
+      --sidebar:#031432;
+      --sidebar-2:#061b42;
+      --sidebar-active:#2356f4;
+      --sidebar-text:#f8fbff;
+      --sidebar-muted:#b7c4dc;
+      --shadow:0 12px 30px rgba(15,23,42,.07);
+      --radius:18px;
+      --font:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Arial,sans-serif;
+    }
+
+    html[data-theme="dark"]{
+      --bg:#070b12;
+      --panel:#101722;
+      --panel-2:#151f2d;
+      --line:#263244;
+      --line-strong:#334155;
+      --text:#eef4ff;
+      --muted:#9eabc0;
+      --soft:#718096;
+      --brand:#6f8cff;
+      --brand-soft:#17213d;
+      --good:#38d99a;
+      --mid:#b6e51c;
+      --warn:#f8b84e;
+      --danger:#ff6b6b;
+      --sidebar:#010a1c;
+      --sidebar-2:#061633;
+      --sidebar-active:#244fee;
+      --sidebar-text:#ffffff;
+      --sidebar-muted:#a9b8d2;
+      --shadow:none;
+    }
+
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      background:var(--bg);
+      color:var(--text);
+      font:14px/1.45 var(--font);
+      letter-spacing:-.01em;
+    }
+    button,input,select{font:inherit}
+    button{cursor:pointer}
+
+    .app{
+      min-height:100vh;
+      display:grid;
+      grid-template-columns:228px minmax(0,1fr);
+    }
+
+    .sidebar{
+      background:
+        radial-gradient(circle at 20% 0%,rgba(36,85,244,.22),transparent 30%),
+        linear-gradient(180deg,var(--sidebar),#020b1f 72%,#020817);
+      border-right:1px solid rgba(255,255,255,.08);
+      padding:26px 16px 20px;
+      color:var(--sidebar-text);
+      display:flex;
+      flex-direction:column;
+      min-height:100vh;
+    }
+
+    .wordmark{
+      font-size:34px;
+      line-height:1;
+      font-weight:850;
+      letter-spacing:-1.8px;
+      margin:2px 10px 34px;
+    }
+    .wordmark .job{color:#fff}
+    .wordmark .x{color:#315cff}
+    html[data-theme="dark"] .wordmark .x{color:#6f8cff}
+
+    .nav{display:grid;gap:8px}
+    .nav button{
+      display:flex;
+      align-items:center;
+      gap:12px;
+      width:100%;
+      border:0;
+      color:var(--sidebar-muted);
+      background:transparent;
+      padding:13px 14px;
+      border-radius:12px;
+      text-align:left;
+      font-weight:560;
+    }
+    .nav button:hover{background:rgba(255,255,255,.08);color:#fff}
+    .nav .active{
+      background:linear-gradient(135deg,var(--sidebar-active),#2046d9);
+      color:#fff;
+      box-shadow:0 10px 22px rgba(36,85,244,.32);
+    }
+    .nav svg{width:21px;height:21px;stroke:currentColor;fill:none;stroke-width:2}
+
+    .unlock{
+      margin-top:auto;
+      background:rgba(255,255,255,.07);
+      border:1px solid rgba(255,255,255,.09);
+      border-radius:16px;
+      padding:16px;
+      color:#dbe6ff;
+    }
+    .unlock b{display:block;margin-bottom:7px}
+    .unlock p{margin:0 0 12px;color:var(--sidebar-muted)}
+    .unlock a{color:#6f8cff;text-decoration:none;font-weight:750}
+    .collapse{
+      display:flex;
+      align-items:center;
+      gap:12px;
+      margin-top:28px;
+      color:var(--sidebar-muted);
+    }
+    .collapse .circle{
+      width:38px;height:38px;border-radius:50%;
+      border:1px solid rgba(255,255,255,.16);
+      display:grid;place-items:center;color:#fff;
+    }
+
+    .main{padding:32px}
+    .header{
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-start;
+      gap:24px;
+      margin-bottom:24px;
+    }
+    .header h1{
+      margin:0;
+      font-size:34px;
+      line-height:1.08;
+      letter-spacing:-1.1px;
+    }
+    .header p{margin:8px 0 0;color:var(--muted);font-size:16px}
+    .header-actions{display:flex;align-items:center;gap:13px}
+    .btn{
+      border:1px solid var(--line);
+      background:var(--panel);
+      color:var(--text);
+      border-radius:12px;
+      padding:11px 15px;
+      font-weight:750;
+      box-shadow:var(--shadow);
+    }
+    .btn.primary{
+      background:linear-gradient(135deg,var(--brand),#1947dd);
+      border-color:transparent;
+      color:#fff;
+      box-shadow:0 12px 28px rgba(36,85,244,.24);
+    }
+    .avatar{
+      width:48px;height:48px;border-radius:50%;
+      background:#e8e7ff;color:#1d2360;
+      display:grid;place-items:center;
+      font-weight:850;
+      border:1px solid var(--line);
+    }
+    html[data-theme="dark"] .avatar{background:#252b52;color:#dfe5ff;border-color:#3b4266}
+
+    .metrics{
+      display:grid;
+      grid-template-columns:repeat(4,minmax(0,1fr));
+      gap:14px;
+      margin-bottom:18px;
+    }
+    .metric{
+      background:var(--panel);
+      border:1px solid var(--line);
+      border-radius:16px;
+      padding:18px;
+      box-shadow:var(--shadow);
+      min-height:118px;
+    }
+    .metric .label{color:var(--muted);font-weight:650}
+    .metric strong{display:block;font-size:31px;margin:9px 0 2px;letter-spacing:-.8px}
+    .metric small{color:var(--muted)}
+    .metric .up{color:var(--good);font-weight:750}
+
+    .content{
+      display:grid;
+      grid-template-columns:minmax(0,1fr)330px;
+      gap:20px;
+    }
+    .board,.sidecard{
+      background:var(--panel);
+      border:1px solid var(--line);
+      border-radius:18px;
+      box-shadow:var(--shadow);
+      overflow:hidden;
+    }
+    .filters{
+      padding:16px;
+      border-bottom:1px solid var(--line);
+      display:grid;
+      grid-template-columns:minmax(220px,1fr) 135px 135px 150px auto;
+      gap:10px;
+    }
+    .field{
+      border:1px solid var(--line);
+      background:var(--panel-2);
+      color:var(--text);
+      border-radius:11px;
+      padding:10px 12px;
+      outline:none;
+    }
+    .field:focus{border-color:var(--brand)}
+
+    .table-head,.job-row{
+      display:grid;
+      grid-template-columns:2fr 1.35fr 94px 134px 90px;
+      gap:14px;
+      align-items:center;
+    }
+    .table-head{
+      padding:13px 18px;
+      color:var(--soft);
+      font-size:11px;
+      text-transform:uppercase;
+      letter-spacing:.08em;
+      font-weight:850;
+    }
+    .job-row{
+      padding:15px 18px;
+      border-top:1px solid var(--line);
+    }
+    .job-info{display:flex;gap:13px;align-items:center;min-width:0}
+    .company-logo{
+      width:48px;height:48px;border-radius:12px;
+      display:grid;place-items:center;
+      background:var(--panel-2);
+      border:1px solid var(--line);
+      font-weight:900;
+      color:var(--brand);
+      flex:none;
+    }
+    .logo-hot{background:#ff5a1f;color:#fff;border-color:#ff5a1f}
+    .logo-blue{background:#eef3ff;color:#2455f4}
+    html[data-theme="dark"] .logo-blue{background:#17213d;color:#8fa5ff}
+    .job-title{font-weight:850;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .job-meta{color:var(--muted);font-size:12.5px;margin-top:2px}
+    .chips{display:flex;gap:6px;flex-wrap:wrap}
+    .chip{
+      border-radius:7px;
+      padding:4px 8px;
+      background:var(--brand-soft);
+      color:#1742bf;
+      font-size:12px;
+      font-weight:650;
+    }
+    html[data-theme="dark"] .chip{color:#c6d2ff}
+    .score{
+      width:58px;height:58px;border-radius:50%;
+      border:6px solid var(--good);
+      display:grid;place-items:center;
+      color:var(--text);
+      font-weight:900;
+      margin:auto;
+      position:relative;
+    }
+    .score.mid{border-color:var(--mid)}
+    .status{
+      background:var(--panel-2);
+      border:1px solid var(--line);
+      color:var(--text);
+      border-radius:10px;
+      padding:9px 10px;
+    }
+    .row-actions{display:flex;gap:8px;justify-content:flex-end}
+    .icon-btn{
+      width:36px;height:36px;border-radius:10px;
+      border:1px solid var(--line);
+      background:var(--panel-2);
+      color:var(--muted);
+    }
+    .pagination{
+      border-top:1px solid var(--line);
+      padding:14px 18px;
+      display:flex;
+      justify-content:space-between;
+      color:var(--muted);
+    }
+
+    .sidecol{display:grid;gap:16px}
+    .sidecard{padding:18px}
+    .sidecard h2{margin:0 0 16px;font-size:18px}
+    .health-wrap{display:flex;gap:18px;align-items:center;margin-bottom:16px}
+    .donut{
+      width:112px;height:112px;border-radius:50%;
+      border:13px solid var(--good);
+      border-left-color:var(--warn);
+      display:grid;place-items:center;
+      font-size:26px;
+      font-weight:900;
+      flex:none;
+    }
+    .legend{display:grid;gap:8px;color:var(--muted)}
+    .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:8px;background:var(--good)}
+    .dot.warn{background:var(--warn)}
+    .dot.muted{background:var(--soft)}
+    .company{
+      display:flex;
+      justify-content:space-between;
+      gap:12px;
+      padding:12px 0;
+      border-top:1px solid var(--line);
+    }
+    .company span{color:var(--muted)}
+    .company .new{color:var(--good);font-weight:750}
+    .pref-row{
+      display:grid;
+      grid-template-columns:86px 1fr;
+      gap:12px;
+      padding:12px 0;
+      border-top:1px solid var(--line);
+    }
+    .pref-row:first-of-type{border-top:0}
+    .pref-row span{color:var(--muted)}
+
+    @media(max-width:1120px){
+      .app{grid-template-columns:1fr}
+      .sidebar{display:none}
+      .content,.metrics{grid-template-columns:1fr}
+      .filters{grid-template-columns:1fr 1fr}
+      .table-head{display:none}
+      .job-row{grid-template-columns:1fr}
+      .score{margin:0}
+      .row-actions{justify-content:flex-start}
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="wordmark"><span class="job">job</span><span class="x">x</span></div>
+
+    <nav class="nav" aria-label="Primary navigation">
+      <button class="active">
+        <svg viewBox="0 0 24 24"><path d="M3 11.5 12 4l9 7.5"/><path d="M5 10.5V20h14v-9.5"/><path d="M9 20v-6h6v6"/></svg>
+        Dashboard
+      </button>
+      <button>
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+        Matches
+      </button>
+      <button>
+        <svg viewBox="0 0 24 24"><path d="M6 4h12v17l-6-4-6 4z"/></svg>
+        Watchlist
+      </button>
+      <button>
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.2-4 4-6 8-6s6.8 2 8 6"/></svg>
+        Profile
+      </button>
+    </nav>
+
+    <div class="unlock">
+      <b>✦ Unlock more matches</b>
+      <p>Add more companies and fine-tune your preferences.</p>
+      <a href="#">Learn more →</a>
+    </div>
+
+    <div class="collapse">
+      <div class="circle">‹</div>
+      <span>Collapse</span>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="header">
+      <div>
+        <h1>Good morning, Arjun</h1>
+        <p>Your command center for fresh matches, watched companies, and applications.</p>
+      </div>
+      <div class="header-actions">
+        <button class="btn" id="themeBtn">Dark mode</button>
+        <button class="btn primary">+ Add company</button>
+        <div class="avatar">AK</div>
+      </div>
+    </header>
+
+    <section class="metrics">
+      <article class="metric"><div class="label">Top matches</div><strong>18</strong><small><span class="up">+6</span> today</small></article>
+      <article class="metric"><div class="label">High scores 80+</div><strong>24</strong><small><span class="up">+5</span> today</small></article>
+      <article class="metric"><div class="label">Applied</div><strong>12</strong><small><span class="up">+3</span> this week</small></article>
+      <article class="metric"><div class="label">Watchlist health</div><strong>78%</strong><small>2 companies need attention</small></article>
+    </section>
+
+    <div class="content">
+      <section class="board">
+        <div class="filters">
+          <input class="field" placeholder="Search roles or companies">
+          <select class="field"><option>Score: all</option><option>80+</option><option>70+</option></select>
+          <select class="field"><option>Status: all</option><option>New</option><option>Seen</option><option>Applied</option></select>
+          <select class="field"><option>Company: all</option><option>Postman</option><option>Razorpay</option></select>
+          <button class="btn">Saved</button>
+        </div>
+
+        <div class="table-head">
+          <div>Job</div><div>Keywords</div><div>Score</div><div>Status</div><div>Actions</div>
+        </div>
+
+        <article class="job-row">
+          <div class="job-info"><div class="company-logo logo-hot">P</div><div><div class="job-title">Backend Engineer</div><div class="job-meta">Postman · Bengaluru, India · Remote</div></div></div>
+          <div class="chips"><span class="chip">Java</span><span class="chip">Spring Boot</span><span class="chip">PostgreSQL</span></div>
+          <div class="score">94%</div>
+          <select class="status"><option>New</option></select>
+          <div class="row-actions"><button class="icon-btn">☆</button><button class="icon-btn">⋯</button></div>
+        </article>
+
+        <article class="job-row">
+          <div class="job-info"><div class="company-logo logo-blue">R</div><div><div class="job-title">Software Engineer</div><div class="job-meta">Razorpay · Bengaluru, India · Hybrid</div></div></div>
+          <div class="chips"><span class="chip">Java</span><span class="chip">Payments</span><span class="chip">REST APIs</span></div>
+          <div class="score">89%</div>
+          <select class="status"><option>Seen</option></select>
+          <div class="row-actions"><button class="icon-btn">☆</button><button class="icon-btn">⋯</button></div>
+        </article>
+
+        <article class="job-row">
+          <div class="job-info"><div class="company-logo">M</div><div><div class="job-title">Platform Engineer</div><div class="job-meta">Meesho · Bengaluru, India · Remote</div></div></div>
+          <div class="chips"><span class="chip">Spring Boot</span><span class="chip">Kubernetes</span><span class="chip">AWS</span></div>
+          <div class="score mid">82%</div>
+          <select class="status"><option>Applied</option></select>
+          <div class="row-actions"><button class="icon-btn">☆</button><button class="icon-btn">⋯</button></div>
+        </article>
+
+        <article class="job-row">
+          <div class="job-info"><div class="company-logo">C</div><div><div class="job-title">Backend Developer</div><div class="job-meta">CRED · Remote, India</div></div></div>
+          <div class="chips"><span class="chip">Java</span><span class="chip">Microservices</span></div>
+          <div class="score mid">76%</div>
+          <select class="status"><option>New</option></select>
+          <div class="row-actions"><button class="icon-btn">☆</button><button class="icon-btn">⋯</button></div>
+        </article>
+
+        <div class="pagination">
+          <span>Showing 1-4 of 48 matches</span>
+          <span>‹ 1 2 3 4 ›</span>
+        </div>
+      </section>
+
+      <aside class="sidecol">
+        <section class="sidecard">
+          <h2>Watchlist health</h2>
+          <div class="health-wrap">
+            <div class="donut">78%</div>
+            <div class="legend">
+              <div><span class="dot"></span>22 healthy</div>
+              <div><span class="dot warn"></span>2 need attention</div>
+              <div><span class="dot muted"></span>6 paused</div>
+            </div>
+          </div>
+          <div class="company"><b>Postman</b><span class="new">5 new jobs</span></div>
+          <div class="company"><b>Razorpay</b><span class="new">3 new jobs</span></div>
+          <div class="company"><b>Meesho</b><span>Refresh issue</span></div>
+        </section>
+
+        <section class="sidecard">
+          <h2>Your search preferences</h2>
+          <div class="pref-row"><b>Roles</b><span>Backend Engineer</span></div>
+          <div class="pref-row"><b>Keywords</b><span>Java, Spring Boot, PostgreSQL</span></div>
+          <div class="pref-row"><b>Experience</b><span>2-4 years</span></div>
+          <div class="pref-row"><b>Exclude</b><span>Intern, Principal</span></div>
+          <button class="btn" style="width:100%;margin-top:12px">Edit preferences</button>
+        </section>
+      </aside>
+    </div>
+  </main>
+</div>
+
+<script>
+  const root = document.documentElement;
+  const themeBtn = document.getElementById('themeBtn');
+  themeBtn.addEventListener('click', () => {
+    const dark = root.dataset.theme !== 'dark';
+    root.dataset.theme = dark ? 'dark' : 'light';
+    themeBtn.textContent = dark ? 'Light mode' : 'Dark mode';
+  });
+</script>
+</body>
+</html>
