@@ -1,0 +1,18 @@
+/* ============================================================================
+   Global stylesheet.
+
+   The frozen mockup (docs/jobx-focused-feed-mockup.html) is written as one
+   token-driven class system, so it is ported here as global partials rather
+   than being scattered — and re-derived — across component stylesheets.
+   Components carry structure and classes only; every colour resolves through a
+   custom property in _tokens.scss (uiux_plan.md §2: never hardcode a colour).
+   ========================================================================== */
+
+@use 'styles/tokens';
+@use 'styles/base';
+@use 'styles/layout';
+@use 'styles/feed';
+@use 'styles/rail';
+@use 'styles/watchlist';
+@use 'styles/overlays';
+@use 'styles/auth';

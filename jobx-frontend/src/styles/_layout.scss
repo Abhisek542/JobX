@@ -1,0 +1,401 @@
+/* App shell: sidebar · content · rail. Ported from the mockup's "shell",
+   "sidebar" and "responsive" blocks (uiux_plan.md §9 breakpoints). */
+
+/* The third column is `auto`, not a fixed 328px, so routes that render no rail
+   (matches / watchlist / profile) collapse it to zero width without the shell
+   needing to know which route it is showing. */
+.app {
+  display: grid;
+  grid-template-columns: var(--nav-w, 248px) minmax(0, 1fr) auto;
+  min-height: 100vh;
+  transition: grid-template-columns 0.22s ease;
+}
+.app.nav-collapsed {
+  --nav-w: 76px;
+}
+
+/* ------------------------------------------------------------- sidebar --- */
+.sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border-right: 1px solid var(--line);
+  padding: 20px 14px 16px;
+  overflow: hidden;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 8px 22px;
+  font-size: 25px;
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  color: var(--text);
+  white-space: nowrap;
+}
+.brand .x {
+  color: var(--brand);
+}
+.brand-mark {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  border-radius: 9px;
+  background: linear-gradient(150deg, var(--brand), #5c82ff);
+  color: #fff;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+}
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.nav-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 0;
+  background: none;
+  border-radius: var(--r-sm);
+  color: var(--text-2);
+  font-size: 14.5px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+  text-decoration: none;
+  transition: background 0.14s ease, color 0.14s ease;
+}
+.nav-item:hover {
+  background: var(--panel-3);
+  color: var(--text);
+}
+.nav-item.active {
+  background: var(--brand-wash);
+  color: var(--brand);
+  font-weight: 650;
+}
+.nav-item.active::before {
+  content: '';
+  position: absolute;
+  left: -14px;
+  top: 9px;
+  bottom: 9px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--brand);
+}
+.nav-item .count {
+  margin-left: auto;
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--brand);
+  color: #fff;
+}
+.nav-item:not(.active) .count {
+  background: var(--panel-3);
+  color: var(--muted);
+}
+
+.side-foot {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.upsell {
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  border-radius: var(--r-md);
+  padding: 13px 14px;
+  margin-bottom: 6px;
+}
+.upsell h4 {
+  margin: 0 0 4px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.upsell p {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.account {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 8px;
+  border: 0;
+  width: 100%;
+  background: none;
+  border-top: 1px solid var(--line-soft);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  white-space: nowrap;
+  text-align: left;
+}
+.account:hover {
+  background: var(--panel-2);
+}
+.avatar {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border-radius: 50%;
+  background: linear-gradient(150deg, var(--brand), #5c82ff);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12.5px;
+  font-weight: 700;
+}
+.account-id {
+  min-width: 0;
+  flex: 1;
+}
+.account-id .nm,
+.account-id .em {
+  display: block;
+}
+.account-id .nm {
+  font-size: 13.5px;
+  font-weight: 650;
+  line-height: 1.2;
+}
+.account-id .em {
+  font-size: 11.5px;
+  color: var(--faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.collapse-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 9px 12px;
+  border: 0;
+  background: none;
+  border-radius: var(--r-sm);
+  color: var(--faint);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.collapse-btn:hover {
+  background: var(--panel-3);
+  color: var(--text-2);
+}
+
+.app.nav-collapsed .brand {
+  font-size: 0;
+  gap: 0;
+  justify-content: center;
+  padding-left: 0;
+  padding-right: 0;
+}
+.app.nav-collapsed .brand-mark {
+  display: flex;
+}
+.app.nav-collapsed .nav-item {
+  justify-content: center;
+  padding-left: 0;
+  padding-right: 0;
+}
+.app.nav-collapsed .nav-item span,
+.app.nav-collapsed .nav-item .count,
+.app.nav-collapsed .account-id,
+.app.nav-collapsed .account svg,
+.app.nav-collapsed .upsell,
+.app.nav-collapsed .collapse-btn span {
+  display: none;
+}
+.app.nav-collapsed .account {
+  justify-content: center;
+}
+.app.nav-collapsed .collapse-btn {
+  justify-content: center;
+}
+.app.nav-collapsed .collapse-btn .icon {
+  transform: rotate(180deg);
+}
+
+/* The outlet itself must not become a grid item — the routed page supplies
+   <main> and the rail. */
+router-outlet {
+  display: none;
+}
+
+/* Transparent hosts.
+   These components exist to render structure their PARENT lays out: the routed
+   pages hand <main> and <aside class="rail"> to the shell's grid, and the small
+   ui components hand an <svg>/<div> to a flex row. Their host element must not
+   become the grid/flex item itself, so it is removed from the box tree here.
+   Declared once, globally, rather than as ten near-identical :host rules. */
+app-dashboard-page,
+app-matches-page,
+app-watchlist-page,
+app-profile-page,
+app-sidebar,
+app-action-bar,
+app-match-feed,
+app-match-actions,
+app-score-ring,
+app-company-logo,
+app-icon,
+app-empty-state,
+app-feed-toolbar,
+app-pagination,
+app-search-preferences-card,
+app-watchlist-health-card,
+app-match-card {
+  display: contents;
+}
+
+/* ---------------------------------------------------------------- main --- */
+.main {
+  padding: 26px 30px 56px;
+  min-width: 0;
+}
+
+/* Change #2 (uiux_plan.md §0): no greeting. A slim right-aligned action bar. */
+.action-bar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.action-bar .page-title {
+  margin: 0;
+  margin-right: auto;
+  font-size: 28px;
+  font-weight: 750;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+}
+.action-bar .page-title .sub {
+  display: block;
+  margin-top: 4px;
+  font-size: 14.5px;
+  font-weight: 450;
+  letter-spacing: normal;
+  color: var(--muted);
+}
+
+.page-section {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-1);
+  padding: 20px 22px;
+  margin-bottom: 15px;
+}
+.page-section h2 {
+  margin: 0 0 4px;
+  font-size: 17px;
+  font-weight: 730;
+  letter-spacing: -0.02em;
+}
+.page-section > p.lede {
+  margin: 0 0 16px;
+  color: var(--muted);
+  font-size: 13.5px;
+}
+
+.mobile-bar {
+  display: none;
+}
+.nav-scrim {
+  display: none;
+}
+
+/* ----------------------------------------------------------- responsive -- */
+@media (max-width: 1280px) {
+  .app {
+    grid-template-columns: var(--nav-w, 248px) minmax(0, 1fr);
+  }
+  .rail {
+    grid-column: 1 / -1;
+    width: auto;
+    padding: 0 30px 56px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    align-items: start;
+  }
+}
+
+@media (max-width: 900px) {
+  .app {
+    grid-template-columns: 1fr;
+  }
+  .sidebar {
+    position: fixed;
+    z-index: 80;
+    left: 0;
+    top: 0;
+    width: 264px;
+    transform: translateX(-100%);
+    transition: transform 0.24s cubic-bezier(0.2, 0.7, 0.3, 1);
+    box-shadow: var(--sh-pop);
+  }
+  .sidebar.open {
+    transform: none;
+  }
+  .nav-scrim.open {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 75;
+    background: rgba(8, 14, 30, 0.4);
+  }
+  .mobile-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    padding: 12px 18px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--line);
+  }
+  .mobile-bar .brand {
+    padding: 0;
+    font-size: 20px;
+  }
+  .main {
+    padding: 20px 18px 48px;
+  }
+  .rail {
+    padding: 0 18px 48px;
+  }
+  .action-bar {
+    flex-wrap: wrap;
+  }
+  .action-bar .page-title {
+    width: 100%;
+    margin-right: 0;
+  }
+}

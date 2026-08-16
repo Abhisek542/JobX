@@ -1,0 +1,117 @@
+/* Watchlist management page. Same panel/token vocabulary as the rail's health
+   card, with room for the per-company actions the rail has no space for. */
+
+.wl-list {
+  display: flex;
+  flex-direction: column;
+}
+.wl-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 0;
+  border-top: 1px solid var(--line-soft);
+  flex-wrap: wrap;
+}
+.wl-row:first-child {
+  border-top: 0;
+}
+.wl-id {
+  flex: 1;
+  min-width: 180px;
+}
+.wl-id .nm {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14.5px;
+  font-weight: 680;
+  letter-spacing: -0.015em;
+}
+.wl-id .sub {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+  margin-top: 3px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.wl-id .sub code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+  background: var(--panel-3);
+  padding: 1px 6px;
+  border-radius: 4px;
+  color: var(--text-2);
+}
+.wl-id .sub .bad {
+  color: var(--bad);
+}
+.wl-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.wl-confirm {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: var(--bad);
+  font-weight: 600;
+}
+
+.stat-strip {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 15px;
+}
+.stat {
+  flex: 1;
+  min-width: 132px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 12px 14px;
+}
+.stat .v {
+  font-size: 21px;
+  font-weight: 760;
+  letter-spacing: -0.03em;
+}
+.stat .l {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 1px;
+}
+.stat.warn .v {
+  color: var(--warn);
+}
+.stat.bad .v {
+  color: var(--bad);
+}
+.stat.good .v {
+  color: var(--good);
+}
+
+.kw-list {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+.pill-static {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  font-size: 13px;
+  color: var(--text-2);
+}

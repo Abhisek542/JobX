@@ -1,0 +1,88 @@
+/* ============================================================================
+   Design tokens — ported verbatim from docs/jobx-focused-feed-mockup.html.
+   The mockup is frozen; these values are the spec.
+
+   RULE (uiux_plan.md §2): never hardcode a colour in a component. Every colour,
+   radius, shadow and elevation in the app resolves through one of these
+   custom properties so the light/dark toggle can never miss a surface.
+   ========================================================================== */
+
+:root {
+  /* surfaces */
+  --bg: #f5f7fc;
+  --panel: #ffffff;
+  --panel-2: #f7f9fd;
+  --panel-3: #eef2f9;
+  --line: #e4e9f2;
+  --line-soft: #eef1f7;
+
+  /* type */
+  --text: #0a1020;
+  --text-2: #33405a;
+  --muted: #5f6c84;
+  --faint: #95a1b6;
+
+  /* brand + status */
+  --brand: #2455f4;
+  --brand-strong: #1a44d6;
+  --brand-wash: #eaf0ff;
+  --brand-line: #c9d8ff;
+
+  --good: #0f9d63;
+  --good-wash: #e6f7ef;
+  --lime: #3f9b3a;
+  --lime-wash: #ecf7ea;
+  --warn: #c07806;
+  --warn-wash: #fdf3e2;
+  --bad: #d1483c;
+  --bad-wash: #fdeceb;
+
+  --track: #e7ebf3;
+
+  /* elevation */
+  --sh-1: 0 1px 2px rgba(11, 22, 48, 0.05);
+  --sh-2: 0 2px 4px rgba(11, 22, 48, 0.05), 0 8px 20px rgba(11, 22, 48, 0.06);
+  --sh-3: 0 12px 32px rgba(11, 22, 48, 0.12), 0 2px 8px rgba(11, 22, 48, 0.08);
+  --sh-pop: 0 24px 60px rgba(8, 17, 40, 0.22);
+  --ring: 0 0 0 3px rgba(36, 85, 244, 0.28);
+
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+}
+
+:root[data-theme='dark'] {
+  --bg: #080c14;
+  --panel: #111926;
+  --panel-2: #172232;
+  --panel-3: #1e2b3d;
+  --line: #25334a;
+  --line-soft: #1c2839;
+
+  --text: #eef3fb;
+  --text-2: #c3cfe1;
+  --muted: #94a3ba;
+  --faint: #6c7c95;
+
+  --brand: #7b98ff;
+  --brand-strong: #95adff;
+  --brand-wash: #18244a;
+  --brand-line: #2c3d6d;
+
+  --good: #3ecf9a;
+  --good-wash: #102e26;
+  --lime: #8fd04f;
+  --lime-wash: #1a2a17;
+  --warn: #f2b452;
+  --warn-wash: #302413;
+  --bad: #f0736a;
+  --bad-wash: #33191a;
+
+  --track: #22303f;
+
+  --sh-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --sh-2: 0 2px 4px rgba(0, 0, 0, 0.35), 0 8px 20px rgba(0, 0, 0, 0.35);
+  --sh-3: 0 12px 32px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.4);
+  --sh-pop: 0 24px 60px rgba(0, 0, 0, 0.65);
+  --ring: 0 0 0 3px rgba(123, 152, 255, 0.35);
+}

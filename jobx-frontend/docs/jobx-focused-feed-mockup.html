@@ -1,0 +1,1788 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jobx — Focused Feed</title>
+<style>
+/* ============================================================================
+   Jobx — Focused Feed demo
+   ----------------------------------------------------------------------------
+   Visual reference: docs/mockup-images/focused-feed.png
+   Every value below is a token. The Angular build should port these as CSS
+   custom properties on :root / [data-theme] — do NOT hardcode colors in
+   components (UIUX_guide.md §5).
+
+   Mock data at the bottom of this file is shaped EXACTLY like the backend DTOs
+   (MatchResponse / WatchedCompanyResponse / FilterProfileResponse) so the same
+   objects can be dropped into an Angular service with no reshaping.
+   ========================================================================== */
+
+/* ---------------------------------------------------------------- tokens -- */
+:root{
+  /* surfaces */
+  --bg:#f5f7fc;
+  --panel:#ffffff;
+  --panel-2:#f7f9fd;
+  --panel-3:#eef2f9;
+  --line:#e4e9f2;
+  --line-soft:#eef1f7;
+
+  /* type */
+  --text:#0a1020;
+  --text-2:#33405a;
+  --muted:#5f6c84;
+  --faint:#95a1b6;
+
+  /* brand + status */
+  --brand:#2455f4;
+  --brand-strong:#1a44d6;
+  --brand-wash:#eaf0ff;
+  --brand-line:#c9d8ff;
+
+  --good:#0f9d63;
+  --good-wash:#e6f7ef;
+  --lime:#3f9b3a;
+  --lime-wash:#ecf7ea;
+  --warn:#c07806;
+  --warn-wash:#fdf3e2;
+  --bad:#d1483c;
+  --bad-wash:#fdeceb;
+
+  --track:#e7ebf3;
+
+  /* elevation */
+  --sh-1:0 1px 2px rgba(11,22,48,.05);
+  --sh-2:0 2px 4px rgba(11,22,48,.05), 0 8px 20px rgba(11,22,48,.06);
+  --sh-3:0 12px 32px rgba(11,22,48,.12), 0 2px 8px rgba(11,22,48,.08);
+  --sh-pop:0 24px 60px rgba(8,17,40,.22);
+  --ring:0 0 0 3px rgba(36,85,244,.28);
+
+  --r-sm:8px;
+  --r-md:12px;
+  --r-lg:16px;
+}
+
+:root[data-theme="dark"]{
+  --bg:#080c14;
+  --panel:#111926;
+  --panel-2:#172232;
+  --panel-3:#1e2b3d;
+  --line:#25334a;
+  --line-soft:#1c2839;
+
+  --text:#eef3fb;
+  --text-2:#c3cfe1;
+  --muted:#94a3ba;
+  --faint:#6c7c95;
+
+  --brand:#7b98ff;
+  --brand-strong:#95adff;
+  --brand-wash:#18244a;
+  --brand-line:#2c3d6d;
+
+  --good:#3ecf9a;
+  --good-wash:#102e26;
+  --lime:#8fd04f;
+  --lime-wash:#1a2a17;
+  --warn:#f2b452;
+  --warn-wash:#302413;
+  --bad:#f0736a;
+  --bad-wash:#33191a;
+
+  --track:#22303f;
+
+  --sh-1:0 1px 2px rgba(0,0,0,.4);
+  --sh-2:0 2px 4px rgba(0,0,0,.35), 0 8px 20px rgba(0,0,0,.35);
+  --sh-3:0 12px 32px rgba(0,0,0,.55), 0 2px 8px rgba(0,0,0,.4);
+  --sh-pop:0 24px 60px rgba(0,0,0,.65);
+  --ring:0 0 0 3px rgba(123,152,255,.35);
+}
+
+/* --------------------------------------------------------------- base ---- */
+*{box-sizing:border-box;}
+html,body{height:100%;}
+body{
+  margin:0;
+  font-family:Inter,-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  background:var(--bg);
+  color:var(--text);
+  font-size:14px;
+  line-height:1.45;
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+}
+button{font:inherit;color:inherit;}
+:focus-visible{outline:none;box-shadow:var(--ring);border-radius:6px;}
+::selection{background:var(--brand-wash);color:var(--text);}
+
+.icon{width:18px;height:18px;flex:none;stroke-width:1.9;}
+.icon-sm{width:15px;height:15px;flex:none;stroke-width:2;}
+.icon-xs{width:13px;height:13px;flex:none;stroke-width:2.4;}
+
+/* --------------------------------------------------------------- shell --- */
+.app{
+  display:grid;
+  grid-template-columns:var(--nav-w,248px) minmax(0,1fr) 328px;
+  min-height:100vh;
+  transition:grid-template-columns .22s ease;
+}
+.app.nav-collapsed{--nav-w:76px;}
+
+/* ------------------------------------------------------------- sidebar --- */
+.sidebar{
+  position:sticky;
+  top:0;
+  height:100vh;
+  display:flex;
+  flex-direction:column;
+  background:var(--panel);
+  border-right:1px solid var(--line);
+  padding:20px 14px 16px;
+  overflow:hidden;
+}
+.brand{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:4px 8px 22px;
+  font-size:25px;
+  font-weight:800;
+  letter-spacing:-.035em;
+  color:var(--text);
+  white-space:nowrap;
+}
+.brand .x{color:var(--brand);}
+.brand-mark{
+  width:30px;height:30px;flex:none;
+  border-radius:9px;
+  background:linear-gradient(150deg,var(--brand),#5c82ff);
+  color:#fff;
+  display:none;
+  align-items:center;justify-content:center;
+  font-size:16px;font-weight:800;letter-spacing:-.04em;
+}
+
+.nav{display:flex;flex-direction:column;gap:2px;}
+.nav-item{
+  position:relative;
+  display:flex;align-items:center;gap:12px;
+  padding:10px 12px;
+  border:0;background:none;
+  border-radius:var(--r-sm);
+  color:var(--text-2);
+  font-size:14.5px;font-weight:500;
+  cursor:pointer;
+  text-align:left;
+  white-space:nowrap;
+  transition:background .14s ease,color .14s ease;
+}
+.nav-item:hover{background:var(--panel-3);color:var(--text);}
+.nav-item.active{background:var(--brand-wash);color:var(--brand);font-weight:650;}
+.nav-item.active::before{
+  content:"";position:absolute;left:-14px;top:9px;bottom:9px;width:3px;
+  border-radius:0 3px 3px 0;background:var(--brand);
+}
+.nav-item .count{
+  margin-left:auto;
+  font-size:11.5px;font-weight:700;
+  padding:1px 7px;border-radius:999px;
+  background:var(--brand);color:#fff;
+}
+.nav-item.active .count{background:var(--brand);}
+.nav-item:not(.active) .count{background:var(--panel-3);color:var(--muted);}
+
+.side-foot{margin-top:auto;display:flex;flex-direction:column;gap:6px;}
+.upsell{
+  border:1px solid var(--line);
+  background:var(--panel-2);
+  border-radius:var(--r-md);
+  padding:13px 14px;
+  margin-bottom:6px;
+}
+.upsell h4{margin:0 0 4px;font-size:13px;font-weight:700;letter-spacing:-.01em;}
+.upsell p{margin:0 0 10px;font-size:12px;color:var(--muted);line-height:1.45;}
+
+.account{
+  display:flex;align-items:center;gap:10px;
+  padding:10px 8px;
+  border-top:1px solid var(--line-soft);
+  border-radius:var(--r-sm);
+  cursor:pointer;
+  white-space:nowrap;
+}
+.account:hover{background:var(--panel-2);}
+.avatar{
+  width:32px;height:32px;flex:none;
+  border-radius:50%;
+  background:linear-gradient(150deg,var(--brand),#5c82ff);
+  color:#fff;
+  display:flex;align-items:center;justify-content:center;
+  font-size:12.5px;font-weight:700;
+}
+.account-id{min-width:0;flex:1;}
+.account-id .nm{font-size:13.5px;font-weight:650;line-height:1.2;}
+.account-id .em{font-size:11.5px;color:var(--faint);overflow:hidden;text-overflow:ellipsis;}
+
+.collapse-btn{
+  display:flex;align-items:center;gap:12px;
+  width:100%;padding:9px 12px;
+  border:0;background:none;border-radius:var(--r-sm);
+  color:var(--faint);font-size:13px;font-weight:500;
+  cursor:pointer;white-space:nowrap;
+}
+.collapse-btn:hover{background:var(--panel-3);color:var(--text-2);}
+
+.app.nav-collapsed .brand{font-size:0;gap:0;justify-content:center;padding-left:0;padding-right:0;}
+.app.nav-collapsed .brand-mark{display:flex;}
+.app.nav-collapsed .nav-item{justify-content:center;padding-left:0;padding-right:0;}
+.app.nav-collapsed .nav-item span,
+.app.nav-collapsed .nav-item .count,
+.app.nav-collapsed .account-id,
+.app.nav-collapsed .account svg,
+.app.nav-collapsed .upsell,
+.app.nav-collapsed .collapse-btn span{display:none;}
+.app.nav-collapsed .account{justify-content:center;}
+.app.nav-collapsed .collapse-btn{justify-content:center;}
+.app.nav-collapsed .collapse-btn .icon{transform:rotate(180deg);}
+
+/* -------------------------------------------------------------- header --- */
+.main{padding:26px 30px 56px;min-width:0;}
+.pagehead{
+  display:flex;align-items:flex-start;gap:18px;
+  margin-bottom:22px;
+}
+.pagehead h1{
+  margin:0 0 5px;
+  font-size:28px;font-weight:750;letter-spacing:-.03em;line-height:1.15;
+}
+.pagehead p{margin:0;color:var(--muted);font-size:14.5px;}
+.head-actions{margin-left:auto;display:flex;align-items:center;gap:10px;}
+
+.demo-chip{
+  display:inline-flex;align-items:center;gap:6px;
+  margin-left:10px;vertical-align:6px;
+  padding:3px 9px;border-radius:999px;
+  border:1px dashed var(--line);
+  background:var(--panel-2);
+  font-size:11px;font-weight:650;letter-spacing:.02em;
+  color:var(--faint);text-transform:uppercase;
+}
+
+/* -------------------------------------------------------------- buttons -- */
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:7px;
+  border-radius:var(--r-sm);
+  border:1px solid transparent;
+  font-size:13.5px;font-weight:650;
+  padding:10px 16px;
+  cursor:pointer;
+  white-space:nowrap;
+  transition:background .14s ease,border-color .14s ease,transform .1s ease,box-shadow .14s ease;
+}
+.btn:active{transform:translateY(1px);}
+.btn-primary{background:var(--brand);color:#fff;box-shadow:0 1px 2px rgba(20,45,120,.28);}
+.btn-primary:hover{background:var(--brand-strong);}
+.btn-ghost{background:var(--panel);border-color:var(--line);color:var(--text-2);}
+.btn-ghost:hover{background:var(--panel-2);border-color:var(--brand-line);color:var(--text);}
+.btn-outline{background:transparent;border-color:var(--brand-line);color:var(--brand);width:100%;}
+.btn-outline:hover{background:var(--brand-wash);}
+.btn-sm{padding:7px 12px;font-size:12.5px;}
+.btn-icon{padding:0;width:38px;height:38px;}
+.btn[disabled]{opacity:.5;cursor:not-allowed;transform:none;}
+
+/* ------------------------------------------------------------- toolbar --- */
+.toolbar{display:flex;flex-direction:column;gap:13px;margin-bottom:20px;}
+.search{
+  display:flex;align-items:center;gap:11px;
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-radius:var(--r-md);
+  padding:0 14px;
+  height:46px;
+  box-shadow:var(--sh-1);
+  transition:border-color .14s ease,box-shadow .14s ease;
+}
+.search:focus-within{border-color:var(--brand);box-shadow:var(--ring);}
+.search svg{color:var(--faint);}
+.search input{
+  flex:1;min-width:0;
+  border:0;outline:none;background:transparent;
+  font:inherit;font-size:14.5px;color:var(--text);
+}
+.search input::placeholder{color:var(--faint);}
+.search .clear{
+  border:0;background:var(--panel-3);color:var(--muted);
+  width:22px;height:22px;border-radius:50%;
+  display:none;align-items:center;justify-content:center;cursor:pointer;
+}
+.search.has-value .clear{display:flex;}
+
+.filter-row{display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
+.pills{display:flex;gap:8px;flex-wrap:wrap;}
+.pill{
+  display:inline-flex;align-items:center;gap:7px;
+  padding:8px 15px;
+  border-radius:999px;
+  border:1px solid var(--line);
+  background:var(--panel);
+  color:var(--text-2);
+  font-size:13.5px;font-weight:550;
+  cursor:pointer;
+  transition:all .14s ease;
+}
+.pill:hover{border-color:var(--brand-line);color:var(--text);}
+.pill.active{
+  border-color:var(--brand);
+  background:var(--brand-wash);
+  color:var(--brand);
+  font-weight:680;
+}
+.pill .n{
+  font-size:11.5px;font-weight:700;
+  padding:0 6px;border-radius:999px;
+  background:var(--panel-3);color:var(--muted);
+}
+.pill.active .n{background:var(--brand);color:#fff;}
+
+.sort-wrap{margin-left:auto;position:relative;display:flex;align-items:center;}
+.sort-wrap svg{position:absolute;right:11px;pointer-events:none;color:var(--faint);}
+select.sort{
+  appearance:none;-webkit-appearance:none;
+  border:1px solid var(--line);
+  background:var(--panel);
+  color:var(--text-2);
+  border-radius:var(--r-sm);
+  padding:9px 32px 9px 13px;
+  font:inherit;font-size:13.5px;font-weight:550;
+  cursor:pointer;
+}
+select.sort:hover{border-color:var(--brand-line);}
+
+/* ------------------------------------------------------------ feed head -- */
+.feed-head{
+  display:flex;align-items:baseline;gap:10px;
+  margin:0 2px 13px;
+}
+.feed-head h2{margin:0;font-size:17px;font-weight:730;letter-spacing:-.02em;}
+.feed-head .sub{font-size:13px;color:var(--faint);}
+
+/* ---------------------------------------------------------------- card --- */
+.cards{display:flex;flex-direction:column;gap:13px;}
+.card{
+  position:relative;
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-radius:var(--r-lg);
+  box-shadow:var(--sh-1);
+  overflow:hidden;
+  transition:box-shadow .18s ease,border-color .18s ease,transform .18s ease;
+  animation:rise .28s cubic-bezier(.2,.7,.3,1) backwards;
+}
+@keyframes rise{from{opacity:0;transform:translateY(7px);}to{opacity:1;transform:none;}}
+.card:hover{box-shadow:var(--sh-2);border-color:var(--brand-line);transform:translateY(-1px);}
+.card.is-new::before{
+  content:"";position:absolute;left:0;top:0;bottom:0;width:3px;
+  background:linear-gradient(180deg,var(--brand),#6f90ff);
+}
+.card.is-dismissed{opacity:.55;}
+.card.is-applied{border-color:color-mix(in srgb,var(--good) 40%,var(--line));}
+
+.card-top{display:flex;align-items:flex-start;gap:16px;padding:17px 20px 15px;}
+
+.logo{
+  width:52px;height:52px;flex:none;
+  border-radius:12px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:17px;font-weight:750;letter-spacing:-.02em;
+  color:#fff;
+  box-shadow:inset 0 -1px 0 rgba(0,0,0,.12);
+}
+
+.card-info{flex:1;min-width:0;}
+.title-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:2px;}
+.job-title{
+  font-size:16px;font-weight:700;letter-spacing:-.015em;
+  color:var(--brand);
+  cursor:pointer;
+}
+.job-title:hover{text-decoration:underline;}
+.tag{
+  font-size:10.5px;font-weight:750;letter-spacing:.04em;text-transform:uppercase;
+  padding:2.5px 8px;border-radius:999px;
+}
+.tag-new{background:var(--brand-wash);color:var(--brand);}
+.tag-applied{background:var(--good-wash);color:var(--good);}
+.tag-dismissed{background:var(--panel-3);color:var(--faint);}
+.tag-seen{background:var(--panel-3);color:var(--muted);}
+
+.meta{
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  color:var(--muted);font-size:13px;margin-bottom:11px;
+}
+.meta .dot{width:3px;height:3px;border-radius:50%;background:var(--faint);flex:none;}
+
+.skills{display:flex;gap:7px;flex-wrap:wrap;}
+.skill{
+  background:var(--good-wash);color:var(--good);
+  font-size:12px;font-weight:640;
+  padding:4px 10px;border-radius:7px;
+  border:1px solid color-mix(in srgb,var(--good) 18%,transparent);
+}
+.skill.more{background:var(--panel-3);color:var(--muted);border-color:transparent;}
+
+.match{display:flex;align-items:center;gap:13px;flex:none;padding-top:2px;}
+.ring{position:relative;width:62px;height:62px;}
+.ring svg{transform:rotate(-90deg);display:block;}
+.ring .track{stroke:var(--track);}
+.ring .fill{
+  stroke-linecap:round;
+  transition:stroke-dashoffset .7s cubic-bezier(.3,.8,.3,1);
+}
+.ring .pct{
+  position:absolute;inset:0;
+  display:flex;align-items:center;justify-content:center;
+  font-size:14.5px;font-weight:750;letter-spacing:-.03em;
+}
+.match-label .lvl{font-size:13.5px;font-weight:700;letter-spacing:-.01em;}
+.match-label .why{font-size:12px;color:var(--faint);margin-top:1px;}
+
+.card-actions{
+  display:flex;align-items:center;gap:4px;
+  padding:9px 14px 9px 18px;
+  border-top:1px solid var(--line-soft);
+  background:var(--panel-2);
+}
+.act{
+  display:inline-flex;align-items:center;gap:7px;
+  border:0;background:none;
+  padding:7px 11px;border-radius:var(--r-sm);
+  color:var(--text-2);font-size:13px;font-weight:550;
+  cursor:pointer;
+  transition:background .13s ease,color .13s ease;
+}
+.act svg{color:var(--faint);transition:color .13s ease;}
+.act:hover{background:var(--panel-3);color:var(--text);}
+.act:hover svg{color:var(--text-2);}
+.act.on{color:var(--brand);background:var(--brand-wash);}
+.act.on svg{color:var(--brand);fill:currentColor;}
+.act.applied.on{color:var(--good);background:var(--good-wash);}
+.act.applied.on svg{color:var(--good);fill:none;}
+.act.dismiss:hover{color:var(--bad);}
+.act.dismiss:hover svg{color:var(--bad);}
+.act-spacer{flex:1;}
+.act.details{color:var(--brand);font-weight:650;}
+.act.details svg{color:var(--brand);}
+
+/* --------------------------------------------------------- empty state --- */
+.empty{
+  display:none;
+  flex-direction:column;align-items:center;
+  text-align:center;
+  padding:56px 24px;
+  background:var(--panel);
+  border:1px dashed var(--line);
+  border-radius:var(--r-lg);
+}
+.empty.show{display:flex;}
+.empty .glyph{
+  width:56px;height:56px;border-radius:16px;
+  background:var(--brand-wash);color:var(--brand);
+  display:flex;align-items:center;justify-content:center;
+  margin-bottom:14px;
+}
+.empty .glyph svg{width:26px;height:26px;stroke-width:1.8;}
+.empty h3{margin:0 0 6px;font-size:16.5px;font-weight:700;letter-spacing:-.02em;}
+.empty p{margin:0 0 16px;color:var(--muted);font-size:14px;max-width:400px;line-height:1.5;}
+
+/* ------------------------------------------------------------ feed foot -- */
+.feed-foot{
+  margin-top:16px;text-align:center;
+  color:var(--faint);font-size:12.5px;
+}
+
+/* ----------------------------------------------------------------- rail -- */
+.rail{
+  padding:26px 26px 56px 0;
+  display:flex;flex-direction:column;gap:15px;
+  min-width:0;
+}
+.panel{
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-radius:var(--r-lg);
+  box-shadow:var(--sh-1);
+  overflow:hidden;
+}
+.panel-head{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:15px 17px 12px;
+}
+.panel-head h3{margin:0;font-size:14.5px;font-weight:730;letter-spacing:-.015em;}
+.link{
+  border:0;background:none;padding:0;
+  color:var(--brand);font-size:12.5px;font-weight:650;cursor:pointer;
+}
+.link:hover{text-decoration:underline;}
+.panel-body{padding:0 17px 15px;}
+
+/* preferences */
+.pref{
+  display:flex;align-items:flex-start;gap:12px;
+  padding:11px 0;
+  border-top:1px solid var(--line-soft);
+  cursor:pointer;
+}
+.pref:first-child{border-top:0;padding-top:2px;}
+.pref > svg:first-child{color:var(--faint);margin-top:1px;}
+.pref-text{flex:1;min-width:0;}
+.pref-text .lb{font-size:12px;color:var(--faint);margin-bottom:3px;font-weight:550;}
+.pref-text .vl{font-size:13.5px;font-weight:620;color:var(--text);line-height:1.4;}
+.pref-text .vl.exclude{color:var(--muted);font-weight:550;}
+.pref .chev{color:var(--faint);margin-top:8px;}
+.pref:hover .chev{color:var(--brand);}
+
+/* watchlist health */
+.health-top{display:flex;align-items:center;gap:15px;padding-bottom:14px;}
+.health-ring{position:relative;width:64px;height:64px;flex:none;}
+.health-ring svg{transform:rotate(-90deg);display:block;}
+.health-ring .num{
+  position:absolute;inset:0;
+  display:flex;align-items:center;justify-content:center;
+  font-size:14px;font-weight:750;letter-spacing:-.03em;
+}
+.health-text .st{font-size:14.5px;font-weight:730;letter-spacing:-.015em;}
+.health-text .dt{font-size:12.5px;color:var(--muted);line-height:1.5;margin-top:2px;}
+
+.company-row{
+  display:flex;align-items:center;gap:10px;
+  padding:9px 0;
+  border-top:1px solid var(--line-soft);
+}
+.status-dot{width:7px;height:7px;border-radius:50%;flex:none;}
+.status-dot.ok{background:var(--good);box-shadow:0 0 0 3px var(--good-wash);}
+.status-dot.warn{background:var(--warn);box-shadow:0 0 0 3px var(--warn-wash);}
+.status-dot.bad{background:var(--bad);box-shadow:0 0 0 3px var(--bad-wash);}
+.status-dot.idle{background:var(--faint);box-shadow:0 0 0 3px var(--panel-3);}
+.company-row .cn{flex:1;min-width:0;}
+.company-row .cn b{display:block;font-size:13px;font-weight:640;letter-spacing:-.01em;}
+.company-row .cn i{
+  display:block;font-style:normal;
+  font-size:11.5px;color:var(--faint);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.company-row .cn i.bad{color:var(--bad);}
+.check-btn{
+  border:1px solid var(--line);background:var(--panel);
+  color:var(--text-2);
+  font-size:11.5px;font-weight:650;
+  padding:5px 9px;border-radius:7px;cursor:pointer;flex:none;
+  transition:all .14s ease;
+}
+.check-btn:hover:not([disabled]){border-color:var(--brand);color:var(--brand);background:var(--brand-wash);}
+.check-btn[disabled]{opacity:.5;cursor:not-allowed;}
+
+.panel-foot{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:12px 17px;
+  border-top:1px solid var(--line-soft);
+  background:var(--panel-2);
+  color:var(--brand);font-size:13px;font-weight:650;
+  cursor:pointer;border-radius:0;
+  width:100%;border-left:0;border-right:0;border-bottom:0;
+}
+.panel-foot:hover{background:var(--panel-3);}
+
+.cta p{margin:0 0 12px;font-size:12.5px;color:var(--muted);line-height:1.5;}
+.illus{display:flex;justify-content:center;margin:2px 0 14px;}
+
+/* --------------------------------------------------------------- modal --- */
+.scrim{
+  position:fixed;inset:0;z-index:60;
+  background:rgba(8,14,30,.5);
+  backdrop-filter:blur(3px);
+  display:flex;align-items:center;justify-content:center;
+  padding:24px;
+  opacity:0;pointer-events:none;
+  transition:opacity .18s ease;
+}
+.scrim.open{opacity:1;pointer-events:auto;}
+.modal{
+  width:100%;max-width:456px;
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-radius:var(--r-lg);
+  box-shadow:var(--sh-pop);
+  transform:translateY(10px) scale(.985);
+  transition:transform .2s cubic-bezier(.2,.7,.3,1);
+  max-height:calc(100vh - 48px);
+  display:flex;flex-direction:column;
+}
+.scrim.open .modal{transform:none;}
+.modal-head{
+  display:flex;align-items:flex-start;gap:12px;
+  padding:20px 22px 14px;
+}
+.modal-head h3{margin:0 0 3px;font-size:17px;font-weight:730;letter-spacing:-.02em;}
+.modal-head p{margin:0;font-size:13px;color:var(--muted);}
+.x-btn{
+  margin-left:auto;border:0;background:none;
+  color:var(--faint);cursor:pointer;padding:4px;border-radius:6px;
+}
+.x-btn:hover{background:var(--panel-3);color:var(--text);}
+.modal-body{padding:0 22px 6px;overflow:auto;}
+.modal-foot{
+  display:flex;gap:10px;justify-content:flex-end;
+  padding:16px 22px 20px;
+}
+
+.field{margin-bottom:15px;}
+.field label{display:block;font-size:12.5px;font-weight:650;margin-bottom:6px;color:var(--text-2);}
+.field input,.field select,.field textarea{
+  width:100%;
+  border:1px solid var(--line);
+  background:var(--panel-2);
+  color:var(--text);
+  border-radius:var(--r-sm);
+  padding:10px 12px;
+  font:inherit;font-size:14px;
+  outline:none;
+  transition:border-color .14s ease,box-shadow .14s ease;
+}
+.field input:focus,.field select:focus,.field textarea:focus{
+  border-color:var(--brand);box-shadow:var(--ring);background:var(--panel);
+}
+.field .hint{margin:6px 0 0;font-size:11.5px;color:var(--faint);line-height:1.45;}
+.field .hint code{
+  background:var(--panel-3);padding:1px 5px;border-radius:4px;
+  font-size:11px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+
+/* --------------------------------------------------------------- drawer -- */
+.drawer{
+  position:fixed;top:0;right:0;bottom:0;z-index:70;
+  width:min(468px,100%);
+  background:var(--panel);
+  border-left:1px solid var(--line);
+  box-shadow:var(--sh-pop);
+  transform:translateX(100%);
+  transition:transform .26s cubic-bezier(.2,.7,.3,1);
+  display:flex;flex-direction:column;
+}
+.scrim.open .drawer{transform:none;}
+.drawer-head{display:flex;align-items:flex-start;gap:14px;padding:22px 22px 16px;border-bottom:1px solid var(--line-soft);}
+.drawer-body{padding:20px 22px;overflow:auto;flex:1;}
+.drawer-foot{display:flex;gap:10px;padding:16px 22px;border-top:1px solid var(--line-soft);background:var(--panel-2);}
+
+.dsec{margin-bottom:22px;}
+.dsec h4{
+  margin:0 0 9px;font-size:11.5px;font-weight:700;
+  letter-spacing:.06em;text-transform:uppercase;color:var(--faint);
+}
+.kv{display:flex;justify-content:space-between;gap:14px;padding:7px 0;border-top:1px solid var(--line-soft);font-size:13.5px;}
+.kv:first-of-type{border-top:0;}
+.kv span{color:var(--muted);}
+.kv b{font-weight:640;text-align:right;}
+.note{
+  display:flex;gap:9px;
+  background:var(--panel-2);
+  border:1px dashed var(--line);
+  border-radius:var(--r-sm);
+  padding:11px 13px;
+  font-size:12.5px;color:var(--muted);line-height:1.5;
+}
+.note svg{color:var(--faint);margin-top:1px;}
+
+.score-bar{height:8px;border-radius:999px;background:var(--track);overflow:hidden;margin:10px 0 6px;}
+.score-bar i{display:block;height:100%;border-radius:999px;transition:width .6s ease;}
+
+/* --------------------------------------------------------------- toast --- */
+.toasts{
+  position:fixed;left:50%;bottom:26px;z-index:90;
+  transform:translateX(-50%);
+  display:flex;flex-direction:column;gap:9px;align-items:center;
+  pointer-events:none;
+}
+.toast{
+  display:flex;align-items:center;gap:11px;
+  background:var(--text);color:var(--bg);
+  border-radius:999px;
+  padding:10px 12px 10px 17px;
+  font-size:13.5px;font-weight:550;
+  box-shadow:var(--sh-3);
+  pointer-events:auto;
+  animation:pop .24s cubic-bezier(.2,.7,.3,1);
+}
+@keyframes pop{from{opacity:0;transform:translateY(10px) scale(.96);}to{opacity:1;transform:none;}}
+.toast.out{animation:fade .2s ease forwards;}
+@keyframes fade{to{opacity:0;transform:translateY(6px);}}
+.toast .undo{
+  border:0;background:rgba(127,127,127,.28);color:inherit;
+  border-radius:999px;padding:5px 12px;
+  font-size:12.5px;font-weight:700;cursor:pointer;
+}
+.toast .undo:hover{background:rgba(127,127,127,.45);}
+.toast.err{background:var(--bad);color:#fff;}
+.toast.ok{background:var(--good);color:#04231a;}
+
+/* ---------------------------------------------------------- responsive --- */
+.mobile-bar{display:none;}
+
+@media (max-width:1280px){
+  .app{grid-template-columns:var(--nav-w,248px) minmax(0,1fr);}
+  .rail{
+    grid-column:1 / -1;
+    padding:0 30px 56px;
+    display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
+    align-items:start;
+  }
+}
+@media (max-width:900px){
+  .app{grid-template-columns:1fr;}
+  .sidebar{
+    position:fixed;z-index:80;left:0;top:0;width:264px;
+    transform:translateX(-100%);
+    transition:transform .24s cubic-bezier(.2,.7,.3,1);
+    box-shadow:var(--sh-pop);
+  }
+  .sidebar.open{transform:none;}
+  .mobile-bar{
+    display:flex;align-items:center;gap:12px;
+    position:sticky;top:0;z-index:50;
+    padding:12px 18px;
+    background:var(--panel);
+    border-bottom:1px solid var(--line);
+  }
+  .main{padding:20px 18px 48px;}
+  .rail{padding:0 18px 48px;}
+  .pagehead{flex-direction:column;}
+  .head-actions{margin-left:0;width:100%;}
+  .head-actions .btn-primary{flex:1;}
+  .card-top{flex-wrap:wrap;}
+  .match{width:100%;justify-content:flex-start;padding-left:68px;}
+  .card-actions{flex-wrap:wrap;}
+  .act-spacer{display:none;}
+  .drawer{width:100%;}
+}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms !important;transition-duration:.01ms !important;}
+}
+</style>
+</head>
+<body>
+
+<div class="app" id="app">
+
+  <!-- ══════════════════════════════════════════════════════════ SIDEBAR ══ -->
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <span class="brand-mark">j</span><span>Job<span class="x">x</span></span>
+    </div>
+
+    <nav class="nav">
+      <button class="nav-item active">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg>
+        <span>Dashboard</span>
+      </button>
+      <button class="nav-item">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+        <span>Matches</span>
+        <span class="count" id="navNewCount">3</span>
+      </button>
+      <button class="nav-item">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        <span>Watchlist</span>
+      </button>
+      <button class="nav-item">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        <span>Profile</span>
+      </button>
+    </nav>
+
+    <div class="side-foot">
+      <div class="upsell">
+        <h4>Watching 6 boards</h4>
+        <p>More boards means more first-look roles before they reach the aggregators.</p>
+        <button class="btn btn-outline btn-sm" data-open-add>
+          <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+          Add company
+        </button>
+      </div>
+
+      <button class="collapse-btn" id="collapseBtn">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+        <span>Collapse</span>
+      </button>
+
+      <div class="account">
+        <div class="avatar" id="avatarInitials">AM</div>
+        <div class="account-id">
+          <div class="nm" id="accountName">Arjun</div>
+          <div class="em" id="accountEmail">arjun.mehta@example.com</div>
+        </div>
+        <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" style="color:var(--faint)"><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ═════════════════════════════════════════════════════════════ MAIN ══ -->
+  <main class="main">
+
+    <div class="mobile-bar">
+      <button class="btn btn-ghost btn-icon" id="navToggle" aria-label="Open navigation">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+      </button>
+      <div class="brand" style="padding:0;font-size:20px;">Job<span class="x">x</span></div>
+    </div>
+
+    <div class="pagehead">
+      <div>
+        <h1><span id="greeting">Good morning</span>, <span id="firstName">Arjun</span><span class="demo-chip">Demo data</span></h1>
+        <p>Here are your top job matches from companies you're watching.</p>
+      </div>
+      <div class="head-actions">
+        <button class="btn btn-ghost btn-icon" id="themeBtn" aria-label="Toggle theme" title="Toggle light / dark">
+          <svg class="icon" id="themeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"></svg>
+        </button>
+        <button class="btn btn-primary" data-open-add>
+          <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+          Add company
+        </button>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <div class="search" id="searchWrap">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <input id="searchInput" type="text" placeholder="Search matches by title, company or keyword" autocomplete="off">
+        <button class="clear" id="clearSearch" aria-label="Clear search">
+          <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <div class="filter-row">
+        <div class="pills" id="pills">
+          <button class="pill active" data-filter="ALL">All matches <span class="n" data-n="ALL">0</span></button>
+          <button class="pill" data-filter="NEW">New <span class="n" data-n="NEW">0</span></button>
+          <button class="pill" data-filter="SEEN">Saved <span class="n" data-n="SEEN">0</span></button>
+          <button class="pill" data-filter="APPLIED">Applied <span class="n" data-n="APPLIED">0</span></button>
+          <button class="pill" data-filter="DISMISSED">Dismissed <span class="n" data-n="DISMISSED">0</span></button>
+        </div>
+        <div class="sort-wrap">
+          <select class="sort" id="sortSelect" aria-label="Sort matches">
+            <option value="score">Sort by: Best match</option>
+            <option value="newest">Sort by: Newest</option>
+            <option value="company">Sort by: Company</option>
+          </select>
+          <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+      </div>
+    </div>
+
+    <div class="feed-head">
+      <h2 id="feedTitle">Top matches</h2>
+      <span class="sub" id="feedSub"></span>
+    </div>
+
+    <div class="cards" id="cards"></div>
+
+    <div class="empty" id="emptyState">
+      <div class="glyph">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      </div>
+      <h3 id="emptyTitle">No matching roles yet</h3>
+      <p id="emptyBody">Nothing matches this view right now. Try clearing the search, or widen your keywords — matching is OR-based, so extra keywords only add reach.</p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;">
+        <button class="btn btn-ghost" id="emptyReset">Clear filters</button>
+        <button class="btn btn-primary" data-open-prefs>Edit keywords</button>
+      </div>
+    </div>
+
+    <div class="feed-foot" id="feedFoot"></div>
+  </main>
+
+  <!-- ═════════════════════════════════════════════════════════════ RAIL ══ -->
+  <aside class="rail">
+
+    <!-- Search preferences ------------------------------------------------ -->
+    <section class="panel">
+      <div class="panel-head">
+        <h3>Search preferences</h3>
+        <button class="link" data-open-prefs>Edit</button>
+      </div>
+      <div class="panel-body">
+        <div class="pref" data-open-prefs>
+          <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41 11 3.83A2 2 0 0 0 9.59 3.24H4a1 1 0 0 0-1 1v5.59a2 2 0 0 0 .59 1.41l9.58 9.59a2 2 0 0 0 2.83 0l4.59-4.59a2 2 0 0 0 0-2.83Z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg>
+          <div class="pref-text">
+            <div class="lb">Keywords · any one can match</div>
+            <div class="vl" id="prefKeywords">—</div>
+          </div>
+          <svg class="chev icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        </div>
+
+        <div class="pref" data-open-prefs>
+          <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></svg>
+          <div class="pref-text">
+            <div class="lb">Exclude words · removes the role entirely</div>
+            <div class="vl exclude" id="prefExclude">—</div>
+          </div>
+          <svg class="chev icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        </div>
+
+        <div class="pref" data-open-prefs>
+          <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          <div class="pref-text">
+            <div class="lb">Experience · nudges the score, never filters</div>
+            <div class="vl" id="prefExp">—</div>
+          </div>
+          <svg class="chev icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        </div>
+      </div>
+    </section>
+
+    <!-- Watchlist health -------------------------------------------------- -->
+    <section class="panel">
+      <div class="panel-head">
+        <h3>Watchlist health</h3>
+        <button class="link">View all</button>
+      </div>
+      <div class="panel-body">
+        <div class="health-top">
+          <div class="health-ring">
+            <svg width="64" height="64" viewBox="0 0 64 64">
+              <circle class="track" cx="32" cy="32" r="27" fill="none" stroke="var(--track)" stroke-width="6"/>
+              <circle id="healthFill" cx="32" cy="32" r="27" fill="none" stroke="var(--good)" stroke-width="6"
+                      stroke-linecap="round" stroke-dasharray="169.6" stroke-dashoffset="169.6"
+                      style="transition:stroke-dashoffset .7s cubic-bezier(.3,.8,.3,1)"/>
+            </svg>
+            <div class="num" id="healthNum">—</div>
+          </div>
+          <div class="health-text">
+            <div class="st" id="healthStatus">—</div>
+            <div class="dt" id="healthDetail"></div>
+          </div>
+        </div>
+        <div id="companyList"></div>
+      </div>
+      <button class="panel-foot">
+        Manage watchlist
+        <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>
+    </section>
+
+    <!-- Add more companies ------------------------------------------------ -->
+    <section class="panel cta">
+      <div class="panel-head"><h3>Add more companies</h3></div>
+      <div class="panel-body">
+        <p>Jobx only sees boards you're watching. Each new company is another feed you read before LinkedIn does.</p>
+        <div class="illus">
+          <svg width="150" height="78" viewBox="0 0 120 70" fill="none" aria-hidden="true">
+            <rect x="8" y="26" width="6" height="8" fill="var(--brand-wash)"/>
+            <path d="M11 26 L14 20 L17 26 Z" fill="var(--brand-line)"/>
+            <rect x="24" y="14" width="28" height="46" rx="2" fill="var(--brand-wash)" stroke="var(--brand-line)"/>
+            <rect x="30" y="20" width="6" height="6" fill="var(--brand-line)"/><rect x="40" y="20" width="6" height="6" fill="var(--brand-line)"/>
+            <rect x="30" y="30" width="6" height="6" fill="var(--brand-line)"/><rect x="40" y="30" width="6" height="6" fill="var(--brand-line)"/>
+            <rect x="30" y="40" width="6" height="6" fill="var(--brand-line)"/><rect x="40" y="40" width="6" height="6" fill="var(--brand-line)"/>
+            <rect x="34" y="50" width="8" height="10" fill="var(--brand)" opacity=".55"/>
+            <rect x="56" y="4" width="34" height="56" rx="2" fill="var(--brand-wash)" stroke="var(--brand-line)"/>
+            <rect x="62" y="12" width="6" height="6" fill="var(--brand)" opacity=".45"/><rect x="72" y="12" width="6" height="6" fill="var(--brand)" opacity=".45"/><rect x="80" y="12" width="6" height="6" fill="var(--brand)" opacity=".45"/>
+            <rect x="62" y="22" width="6" height="6" fill="var(--brand)" opacity=".45"/><rect x="72" y="22" width="6" height="6" fill="var(--brand)" opacity=".45"/><rect x="80" y="22" width="6" height="6" fill="var(--brand)" opacity=".45"/>
+            <rect x="62" y="32" width="6" height="6" fill="var(--brand)" opacity=".45"/><rect x="72" y="32" width="6" height="6" fill="var(--brand)" opacity=".45"/><rect x="80" y="32" width="6" height="6" fill="var(--brand)" opacity=".45"/>
+            <rect x="70" y="46" width="10" height="14" fill="var(--brand)" opacity=".75"/>
+            <rect x="96" y="30" width="18" height="30" rx="2" fill="var(--brand-wash)" stroke="var(--brand-line)"/>
+            <rect x="100" y="36" width="4" height="4" fill="var(--brand-line)"/><rect x="108" y="36" width="4" height="4" fill="var(--brand-line)"/>
+            <rect x="100" y="44" width="4" height="4" fill="var(--brand-line)"/><rect x="108" y="44" width="4" height="4" fill="var(--brand-line)"/>
+            <circle cx="18" cy="16" r="5" fill="var(--good)" opacity=".35"/>
+            <rect x="16.5" y="16" width="3" height="10" fill="var(--good)" opacity=".45"/>
+          </svg>
+        </div>
+        <button class="btn btn-outline" data-open-add>
+          <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+          Add company
+        </button>
+      </div>
+    </section>
+  </aside>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ ADD COMPANY ══ -->
+<div class="scrim" id="addScrim">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="addTitle">
+    <div class="modal-head">
+      <div>
+        <h3 id="addTitle">Add a company</h3>
+        <p>Jobx reads the company's own ATS board — no scraping, no aggregators.</p>
+      </div>
+      <button class="x-btn" data-close-modal aria-label="Close">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label for="acName">Company name</label>
+        <input id="acName" type="text" placeholder="e.g. Razorpay">
+      </div>
+      <div class="field">
+        <label for="acPlatform">ATS platform</label>
+        <select id="acPlatform">
+          <option value="GREENHOUSE">Greenhouse</option>
+          <option value="LEVER">Lever</option>
+          <option value="ASHBY">Ashby</option>
+          <option value="WORKABLE">Workable</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="acToken">Board token</label>
+        <input id="acToken" type="text" placeholder="razorpaysoftwareprivatelimited">
+        <p class="hint" id="acHint">Take it straight from the careers URL — don't guess it.<br>
+          <code>boards.greenhouse.io/<b>razorpay</b></code></p>
+      </div>
+      <div class="note" style="margin-bottom:6px;">
+        <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+        <div>Boards on Workday, Rippling or BambooHR have no public API. Jobx marks those <b>unsupported</b> rather than pretending to watch them.</div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" data-close-modal>Cancel</button>
+      <button class="btn btn-primary" id="acSubmit">Add &amp; check now</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════ PREFERENCES ══ -->
+<div class="scrim" id="prefScrim">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="prefTitle">
+    <div class="modal-head">
+      <div>
+        <h3 id="prefTitle">Search preferences</h3>
+        <p>These three rules are the entire matching engine. Nothing hidden.</p>
+      </div>
+      <button class="x-btn" data-close-modal aria-label="Close">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label for="pfKeywords">Keywords</label>
+        <textarea id="pfKeywords" rows="2"></textarea>
+        <p class="hint">Comma-separated. A role needs <b>at least one</b> — not all. A hit in the title counts double.</p>
+      </div>
+      <div class="field">
+        <label for="pfExclude">Exclude words</label>
+        <textarea id="pfExclude" rows="2"></textarea>
+        <p class="hint">Any hit anywhere in the title or description drops the role completely. Whole words only — <code>lead</code> won't strike out <code>leading</code>.</p>
+      </div>
+      <div class="field" style="display:flex;gap:12px;">
+        <div style="flex:1">
+          <label for="pfMin">Experience min</label>
+          <input id="pfMin" type="number" min="0" max="40">
+        </div>
+        <div style="flex:1">
+          <label for="pfMax">Experience max</label>
+          <input id="pfMax" type="number" min="0" max="40">
+        </div>
+      </div>
+      <div class="note" style="margin-bottom:6px;">
+        <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+        <div>Experience is a <b>soft</b> signal worth up to 30 of the 100 points. A role outside your range still shows up — it just scores lower.</div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" data-close-modal>Cancel</button>
+      <button class="btn btn-primary" id="pfSubmit">Save preferences</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ DRAWER ══ -->
+<div class="scrim" id="drawerScrim" style="justify-content:flex-end;padding:0;">
+  <aside class="drawer" id="drawer" role="dialog" aria-modal="true">
+    <div class="drawer-head">
+      <div class="logo" id="dwLogo" style="width:46px;height:46px;font-size:15px;">—</div>
+      <div style="flex:1;min-width:0;">
+        <h3 style="margin:0 0 3px;font-size:17px;font-weight:730;letter-spacing:-.02em;" id="dwTitle">—</h3>
+        <div style="color:var(--muted);font-size:13.5px;" id="dwCompany">—</div>
+      </div>
+      <button class="x-btn" data-close-modal aria-label="Close">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+
+    <div class="drawer-body">
+      <div class="dsec">
+        <h4>Match score</h4>
+        <div style="display:flex;align-items:baseline;gap:8px;">
+          <span style="font-size:32px;font-weight:780;letter-spacing:-.04em;" id="dwScore">—</span>
+          <span style="font-size:14px;font-weight:650;" id="dwBand">—</span>
+        </div>
+        <div class="score-bar"><i id="dwBar" style="width:0"></i></div>
+        <div style="font-size:12.5px;color:var(--faint);">Up to 70 points from keyword overlap, up to 30 from how close the experience range sits to yours.</div>
+      </div>
+
+      <div class="dsec">
+        <h4>Matched keywords</h4>
+        <div class="skills" id="dwSkills"></div>
+      </div>
+
+      <div class="dsec">
+        <h4>Details</h4>
+        <div class="kv"><span>Status</span><b id="dwStatus">—</b></div>
+        <div class="kv"><span>Found by Jobx</span><b id="dwCreated">—</b></div>
+        <div class="kv"><span>Match ID</span><b id="dwId" style="font-family:ui-monospace,monospace;font-size:12px;">—</b></div>
+      </div>
+
+      <div class="note">
+        <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+        <div>Full description, location and the employer's own posting date aren't shown here — <code style="font-size:11px;background:var(--panel-3);padding:1px 4px;border-radius:4px;">GET /matches</code> doesn't return them yet. Apply link opens the real posting.</div>
+      </div>
+    </div>
+
+    <div class="drawer-foot">
+      <button class="btn btn-ghost" style="flex:1" id="dwApplied">Mark applied</button>
+      <a class="btn btn-primary" style="flex:1;text-decoration:none" id="dwApply" href="#" target="_blank" rel="noopener">
+        Open posting
+        <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6M10 14 21 3"/></svg>
+      </a>
+    </div>
+  </aside>
+</div>
+
+<div class="toasts" id="toasts"></div>
+
+<script>
+/* ============================================================================
+   MOCK DATA — shaped exactly like the backend DTOs.
+   Swap these three consts for HTTP calls and nothing else has to change:
+     matches  -> GET /matches            (MatchResponse[])
+     watchlist-> GET /watchlist          (WatchedCompanyResponse[])
+     filter   -> GET /profile/filter     (FilterProfileResponse)
+   ========================================================================== */
+
+const now = Date.now();
+const ago = (mins) => new Date(now - mins * 60000).toISOString();
+
+/** @type {{id:string,jobId:string,jobTitle:string,companyName:string,applyUrl:string,
+ *          score:number,matchedKeywords:string[],
+ *          status:'NEW'|'SEEN'|'APPLIED'|'DISMISSED',createdAt:string}[]} */
+let matches = [
+  { id:'8f3a-01', jobId:'j-01', jobTitle:'Backend Engineer', companyName:'Razorpay',
+    applyUrl:'https://boards.greenhouse.io/razorpay/jobs/1',
+    score:94, matchedKeywords:['Spring Boot','PostgreSQL','REST API','Microservices','Java'],
+    status:'NEW', createdAt:ago(48) },
+
+  { id:'8f3a-02', jobId:'j-02', jobTitle:'Senior Backend Engineer — Payments', companyName:'PhonePe',
+    applyUrl:'https://boards.greenhouse.io/phonepe/jobs/2',
+    score:88, matchedKeywords:['Spring Boot','PostgreSQL','Kafka','Java'],
+    status:'NEW', createdAt:ago(190) },
+
+  { id:'8f3a-03', jobId:'j-03', jobTitle:'Platform Engineer (Backend)', companyName:'Sprinto',
+    applyUrl:'https://jobs.ashbyhq.com/sprinto/3',
+    score:81, matchedKeywords:['REST API','PostgreSQL','Docker'],
+    status:'NEW', createdAt:ago(320) },
+
+  { id:'8f3a-04', jobId:'j-04', jobTitle:'Backend Engineer II', companyName:'FamPay',
+    applyUrl:'https://jobs.lever.co/fampay/4',
+    score:76, matchedKeywords:['Java','Spring Boot','Microservices'],
+    status:'SEEN', createdAt:ago(1450) },
+
+  { id:'8f3a-05', jobId:'j-05', jobTitle:'Software Engineer — Infrastructure', companyName:'Aspora',
+    applyUrl:'https://jobs.ashbyhq.com/aspora/5',
+    score:68, matchedKeywords:['Docker','PostgreSQL'],
+    status:'SEEN', createdAt:ago(2900) },
+
+  { id:'8f3a-06', jobId:'j-06', jobTitle:'Backend Developer — Core Services', companyName:'Apna',
+    applyUrl:'https://apply.workable.com/apna/j/6',
+    score:72, matchedKeywords:['Java','REST API','Kafka'],
+    status:'APPLIED', createdAt:ago(4300) },
+
+  { id:'8f3a-07', jobId:'j-07', jobTitle:'Engineering Manager — Backend', companyName:'Razorpay',
+    applyUrl:'https://boards.greenhouse.io/razorpay/jobs/7',
+    score:57, matchedKeywords:['Java','Spring Boot'],
+    status:'DISMISSED', createdAt:ago(5600) },
+
+  { id:'8f3a-08', jobId:'j-08', jobTitle:'Backend Engineer — Growth', companyName:'PhonePe',
+    applyUrl:'https://boards.greenhouse.io/phonepe/jobs/8',
+    score:64, matchedKeywords:['REST API','PostgreSQL'],
+    status:'SEEN', createdAt:ago(7200) }
+];
+
+/** @type {{id:string,companyName:string,atsPlatform:string,boardToken:string,
+ *          status:'ACTIVE'|'PAUSED'|'UNSUPPORTED',
+ *          lastFetchedAt:string|null,lastFetchStatus:'SUCCESS'|'FAILED'|null,
+ *          createdAt:string}[]} */
+let watchlist = [
+  { id:'w-1', companyName:'Razorpay', atsPlatform:'GREENHOUSE', boardToken:'razorpay',
+    status:'ACTIVE', lastFetchedAt:ago(22), lastFetchStatus:'SUCCESS', createdAt:ago(40000) },
+  { id:'w-2', companyName:'PhonePe', atsPlatform:'GREENHOUSE', boardToken:'phonepe',
+    status:'ACTIVE', lastFetchedAt:ago(22), lastFetchStatus:'SUCCESS', createdAt:ago(40000) },
+  { id:'w-3', companyName:'Sprinto', atsPlatform:'ASHBY', boardToken:'sprinto',
+    status:'ACTIVE', lastFetchedAt:ago(24), lastFetchStatus:'SUCCESS', createdAt:ago(20000) },
+  { id:'w-4', companyName:'FamPay', atsPlatform:'LEVER', boardToken:'fampay',
+    status:'ACTIVE', lastFetchedAt:ago(1500), lastFetchStatus:'FAILED', createdAt:ago(20000) },
+  { id:'w-5', companyName:'Apna', atsPlatform:'WORKABLE', boardToken:'apna',
+    status:'ACTIVE', lastFetchedAt:null, lastFetchStatus:null, createdAt:ago(90) },
+  { id:'w-6', companyName:'Zolve', atsPlatform:'UNSUPPORTED', boardToken:'zolve',
+    status:'UNSUPPORTED', lastFetchedAt:null, lastFetchStatus:null, createdAt:ago(30000) }
+];
+
+/** @type {{id:string,keywords:string[],excludeWords:string[],
+ *          expMin:number|null,expMax:number|null,updatedAt:string}} */
+let filter = {
+  id:'f-1',
+  keywords:['Java','Spring Boot','PostgreSQL','REST API','Microservices','Kafka','Docker'],
+  excludeWords:['intern','sales','support','staffing'],
+  expMin:3, expMax:6,
+  updatedAt:ago(6000)
+};
+
+/* AuthResponse has email but no display name — derive it (frontend_constraints §5). */
+const session = { email:'arjun.mehta@example.com' };
+
+/* ========================================================== small helpers = */
+const $  = (s, r=document) => r.querySelector(s);
+const $$ = (s, r=document) => [...r.querySelectorAll(s)];
+const esc = (s) => String(s).replace(/[&<>"']/g, c =>
+  ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+function displayName(email){
+  const local = email.split('@')[0].split(/[._-]/)[0];
+  return local.charAt(0).toUpperCase() + local.slice(1);
+}
+function initials(email){
+  return email.split('@')[0].split(/[._-]/).slice(0,2)
+    .map(p => p.charAt(0).toUpperCase()).join('');
+}
+function relTime(iso){
+  const mins = Math.round((Date.now() - new Date(iso)) / 60000);
+  if (mins < 1)  return 'just now';
+  if (mins < 60) return mins + 'm ago';
+  const h = Math.round(mins/60);
+  if (h < 24) return h + 'h ago';
+  const d = Math.round(h/24);
+  return d === 1 ? 'yesterday' : d + 'd ago';
+}
+/* Deterministic logo colour — no logo URL exists in the API
+   (frontend_constraints §12), so initials + a stable hue. */
+function logoStyle(name){
+  let h = 0;
+  for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) % 360;
+  return `background:linear-gradient(148deg,hsl(${h} 62% 52%),hsl(${(h+26)%360} 68% 42%))`;
+}
+function logoText(name){
+  const parts = name.trim().split(/\s+/);
+  return (parts.length > 1 ? parts[0][0] + parts[1][0] : name.slice(0,2)).toUpperCase();
+}
+/* Score bands. Kept in one place so the ring, the label and the drawer agree. */
+function band(score){
+  if (score >= 85) return { label:'Strong match', color:'var(--good)',
+                            why:'Most of your keywords, right seniority' };
+  if (score >= 70) return { label:'Good match', color:'var(--lime)',
+                            why:'Solid keyword overlap' };
+  if (score >= 55) return { label:'Fair match', color:'var(--warn)',
+                            why:'Partial overlap or experience gap' };
+  return { label:'Weak match', color:'var(--faint)', why:'One or two keywords only' };
+}
+const STATUS_TAG = {
+  NEW:      ['tag-new','New'],
+  APPLIED:  ['tag-applied','Applied'],
+  DISMISSED:['tag-dismissed','Dismissed'],
+  SEEN:     null
+};
+
+/* ================================================================= toasts = */
+function toast(msg, opts = {}){
+  const el = document.createElement('div');
+  el.className = 'toast' + (opts.kind ? ' ' + opts.kind : '');
+  el.innerHTML = `<span>${esc(msg)}</span>`;
+  if (opts.undo){
+    const b = document.createElement('button');
+    b.className = 'undo';
+    b.textContent = 'Undo';
+    b.onclick = () => { opts.undo(); dismiss(); };
+    el.appendChild(b);
+  }
+  $('#toasts').appendChild(el);
+  const t = setTimeout(dismiss, opts.undo ? 6000 : 3200);
+  function dismiss(){
+    clearTimeout(t);
+    el.classList.add('out');
+    setTimeout(() => el.remove(), 200);
+  }
+}
+
+/* ================================================================== theme = */
+const SUN = '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M6.3 17.7l-1.4 1.4M19.1 4.9l-1.4 1.4"/>';
+const MOON = '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/>';
+
+function applyTheme(t){
+  document.documentElement.dataset.theme = t;
+  $('#themeIcon').innerHTML = t === 'dark' ? SUN : MOON;
+  try { localStorage.setItem('jobx-theme', t); } catch(e){}
+}
+applyTheme(
+  (() => { try { return localStorage.getItem('jobx-theme'); } catch(e){ return null; } })()
+  || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+);
+$('#themeBtn').onclick = () =>
+  applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
+
+/* ============================================================== view state = */
+let view = { filter:'ALL', query:'', sort:'score' };
+
+function visible(){
+  const q = view.query.trim().toLowerCase();
+  return matches
+    .filter(m => view.filter === 'ALL' ? m.status !== 'DISMISSED' : m.status === view.filter)
+    .filter(m => !q
+      || m.jobTitle.toLowerCase().includes(q)
+      || m.companyName.toLowerCase().includes(q)
+      || m.matchedKeywords.some(k => k.toLowerCase().includes(q)))
+    .sort((a,b) =>
+      view.sort === 'score'  ? b.score - a.score
+    : view.sort === 'newest' ? new Date(b.createdAt) - new Date(a.createdAt)
+    : a.companyName.localeCompare(b.companyName) || b.score - a.score);
+}
+
+/* ================================================================ rendering = */
+function cardHTML(m, i){
+  const b = band(m.score);
+  const C = 2 * Math.PI * 27;
+  const tag = STATUS_TAG[m.status];
+  const shown = m.matchedKeywords.slice(0,3);
+  const extra = m.matchedKeywords.length - shown.length;
+
+  return `
+  <article class="card ${m.status==='NEW'?'is-new':''} ${m.status==='DISMISSED'?'is-dismissed':''} ${m.status==='APPLIED'?'is-applied':''}"
+           style="animation-delay:${Math.min(i,8)*28}ms" data-id="${m.id}">
+    <div class="card-top">
+      <div class="logo" style="${logoStyle(m.companyName)}">${esc(logoText(m.companyName))}</div>
+
+      <div class="card-info">
+        <div class="title-row">
+          <span class="job-title" data-act="details">${esc(m.jobTitle)}</span>
+          ${tag ? `<span class="tag ${tag[0]}">${tag[1]}</span>` : ''}
+        </div>
+        <div class="meta">
+          <span>${esc(m.companyName)}</span>
+          <span class="dot"></span>
+          <span>Found ${relTime(m.createdAt)}</span>
+        </div>
+        <div class="skills">
+          ${shown.map(k => `<span class="skill">${esc(k)}</span>`).join('')}
+          ${extra > 0 ? `<span class="skill more">+${extra} more</span>` : ''}
+        </div>
+      </div>
+
+      <div class="match">
+        <div class="ring">
+          <svg width="62" height="62" viewBox="0 0 62 62">
+            <circle class="track" cx="31" cy="31" r="27" fill="none" stroke="var(--track)" stroke-width="6"/>
+            <circle class="fill" cx="31" cy="31" r="27" fill="none" stroke="${b.color}" stroke-width="6"
+                    stroke-dasharray="${C.toFixed(1)}"
+                    stroke-dashoffset="${(C * (1 - m.score/100)).toFixed(1)}"/>
+          </svg>
+          <div class="pct">${m.score}%</div>
+        </div>
+        <div class="match-label">
+          <div class="lvl" style="color:${b.color}">${b.label}</div>
+          <div class="why">${b.why}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card-actions">
+      <button class="act seen ${m.status==='SEEN'?'on':''}" data-act="seen">
+        <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+        ${m.status==='SEEN' ? 'Saved' : 'Save'}
+      </button>
+      <button class="act applied ${m.status==='APPLIED'?'on':''}" data-act="applied">
+        <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+        ${m.status==='APPLIED' ? 'Applied' : 'Mark applied'}
+      </button>
+      <button class="act dismiss" data-act="dismiss">
+        <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></svg>
+        ${m.status==='DISMISSED' ? 'Restore' : 'Dismiss'}
+      </button>
+      <span class="act-spacer"></span>
+      <button class="act details" data-act="details">
+        View details
+        <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>
+    </div>
+  </article>`;
+}
+
+function renderFeed(){
+  const list = visible();
+  $('#cards').innerHTML = list.map(cardHTML).join('');
+
+  const isSearching = view.query.trim() !== '';
+  $('#emptyState').classList.toggle('show', list.length === 0);
+  if (list.length === 0){
+    const t = {
+      NEW:'Nothing new since the last check',
+      SEEN:'You haven’t saved anything yet',
+      APPLIED:'No applications tracked yet',
+      DISMISSED:'Nothing dismissed'
+    };
+    $('#emptyTitle').textContent = isSearching
+      ? `No matches for “${view.query.trim()}”`
+      : (t[view.filter] || 'No matching roles yet');
+    $('#emptyBody').textContent = isSearching
+      ? 'Search looks at job title, company and matched keywords only.'
+      : 'Jobx checks every watched board on a 30-minute cycle. New roles land here as soon as they appear.';
+  }
+
+  /* counts */
+  const counts = {
+    ALL: matches.filter(m => m.status !== 'DISMISSED').length,
+    NEW: matches.filter(m => m.status === 'NEW').length,
+    SEEN: matches.filter(m => m.status === 'SEEN').length,
+    APPLIED: matches.filter(m => m.status === 'APPLIED').length,
+    DISMISSED: matches.filter(m => m.status === 'DISMISSED').length
+  };
+  $$('.pill .n').forEach(n => n.textContent = counts[n.dataset.n]);
+  $('#navNewCount').textContent = counts.NEW;
+  $('#navNewCount').style.display = counts.NEW ? '' : 'none';
+
+  const label = { ALL:'Top matches', NEW:'New matches', SEEN:'Saved for later',
+                  APPLIED:'Applied', DISMISSED:'Dismissed' }[view.filter];
+  $('#feedTitle').textContent = label;
+  $('#feedSub').textContent = list.length
+    ? `${list.length} role${list.length>1?'s':''}${isSearching ? ' matching your search' : ''}`
+    : '';
+  $('#feedFoot').textContent = list.length
+    ? 'Boards last checked ' + relTime(watchlist[0].lastFetchedAt) + ' · next automatic check in ~8 min'
+    : '';
+}
+
+function renderPrefs(){
+  $('#prefKeywords').textContent = filter.keywords.join(', ') || 'No keywords set';
+  $('#prefExclude').textContent  = filter.excludeWords.join(', ') || 'None';
+  $('#prefExp').textContent =
+    filter.expMin == null && filter.expMax == null
+      ? 'Any experience'
+      : `${filter.expMin ?? 0}–${filter.expMax ?? '∞'} years`;
+}
+
+function renderWatchlist(){
+  /* Health is computed client-side — the backend returns no health value
+     (frontend_constraints §7). Concrete counts, no fake precision. */
+  const active   = watchlist.filter(c => c.status === 'ACTIVE');
+  const failing  = active.filter(c => c.lastFetchStatus === 'FAILED');
+  const pending  = active.filter(c => c.lastFetchStatus === null);
+  const healthy  = active.filter(c => c.lastFetchStatus === 'SUCCESS');
+  const unsup    = watchlist.filter(c => c.status === 'UNSUPPORTED');
+  const paused   = watchlist.filter(c => c.status === 'PAUSED');
+
+  const C = 2 * Math.PI * 27;
+  const ratio = active.length ? healthy.length / active.length : 0;
+  const fill = $('#healthFill');
+  fill.setAttribute('stroke-dashoffset', (C * (1 - ratio)).toFixed(1));
+  fill.setAttribute('stroke', failing.length ? 'var(--warn)' : 'var(--good)');
+
+  $('#healthNum').textContent = `${healthy.length}/${active.length}`;
+  $('#healthStatus').textContent = failing.length ? 'Needs attention' : 'Healthy';
+  $('#healthStatus').style.color = failing.length ? 'var(--warn)' : 'var(--good)';
+
+  const bits = [`${healthy.length} checking fine`];
+  if (failing.length) bits.push(`${failing.length} refresh issue`);
+  if (pending.length) bits.push(`${pending.length} awaiting first check`);
+  if (paused.length)  bits.push(`${paused.length} paused`);
+  if (unsup.length)   bits.push(`${unsup.length} unsupported board`);
+  $('#healthDetail').textContent = bits.join(' · ');
+
+  $('#companyList').innerHTML = watchlist.map(c => {
+    let dot = 'ok', line = 'Checked ' + relTime(c.lastFetchedAt), bad = false;
+    if (c.status === 'UNSUPPORTED'){
+      dot = 'idle'; line = 'Board has no public API';
+    } else if (c.status === 'PAUSED'){
+      dot = 'idle'; line = 'Paused';
+    } else if (c.lastFetchStatus === 'FAILED'){
+      dot = 'bad'; bad = true;
+      line = 'Refresh issue · last worked ' + relTime(c.lastFetchedAt);
+    } else if (c.lastFetchStatus === null){
+      dot = 'warn'; line = 'Waiting for first check';
+    }
+    const canCheck = c.status === 'ACTIVE';
+    return `
+      <div class="company-row" data-cid="${c.id}">
+        <span class="status-dot ${dot}"></span>
+        <span class="cn">
+          <b>${esc(c.companyName)}</b>
+          <i class="${bad?'bad':''}">${esc(line)}</i>
+        </span>
+        ${canCheck ? `<button class="check-btn" data-check="${c.id}">Check now</button>` : ''}
+      </div>`;
+  }).join('');
+}
+
+function renderAll(){ renderFeed(); renderPrefs(); renderWatchlist(); }
+
+/* =============================================================== identity = */
+(function identity(){
+  const name = displayName(session.email);
+  $('#firstName').textContent = name;
+  $('#accountName').textContent = name;
+  $('#accountEmail').textContent = session.email;
+  $('#avatarInitials').textContent = initials(session.email);
+  const h = new Date().getHours();
+  $('#greeting').textContent =
+    h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+})();
+
+/* ============================================================ interactions = */
+
+/* status change -> PATCH /matches/{id} { status } */
+function setStatus(id, status){
+  const m = matches.find(x => x.id === id);
+  if (!m) return;
+  const prev = m.status;
+  m.status = status;
+  renderFeed();
+  const copy = {
+    SEEN:'Saved for later', APPLIED:'Marked as applied',
+    DISMISSED:'Dismissed', NEW:'Restored'
+  };
+  toast(`${copy[status]} · ${m.jobTitle}`, {
+    undo: () => { m.status = prev; renderFeed(); }
+  });
+}
+
+$('#cards').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-act]');
+  if (!btn) return;
+  const id = btn.closest('.card').dataset.id;
+  const m  = matches.find(x => x.id === id);
+  switch (btn.dataset.act){
+    case 'seen':    setStatus(id, m.status === 'SEEN' ? 'NEW' : 'SEEN'); break;
+    case 'applied': setStatus(id, m.status === 'APPLIED' ? 'SEEN' : 'APPLIED'); break;
+    case 'dismiss': setStatus(id, m.status === 'DISMISSED' ? 'NEW' : 'DISMISSED'); break;
+    case 'details': openDrawer(id); break;
+  }
+});
+
+/* pills / search / sort */
+$('#pills').addEventListener('click', (e) => {
+  const p = e.target.closest('.pill');
+  if (!p) return;
+  $$('.pill').forEach(x => x.classList.toggle('active', x === p));
+  view.filter = p.dataset.filter;
+  renderFeed();
+});
+$('#searchInput').addEventListener('input', (e) => {
+  view.query = e.target.value;
+  $('#searchWrap').classList.toggle('has-value', view.query !== '');
+  renderFeed();
+});
+$('#clearSearch').onclick = () => {
+  $('#searchInput').value = ''; view.query = '';
+  $('#searchWrap').classList.remove('has-value');
+  renderFeed(); $('#searchInput').focus();
+};
+$('#sortSelect').addEventListener('change', (e) => {
+  view.sort = e.target.value; renderFeed();
+});
+$('#emptyReset').onclick = () => {
+  view = { filter:'ALL', query:'', sort:view.sort };
+  $('#searchInput').value = '';
+  $('#searchWrap').classList.remove('has-value');
+  $$('.pill').forEach(x => x.classList.toggle('active', x.dataset.filter === 'ALL'));
+  renderFeed();
+};
+
+/* sidebar */
+$('#collapseBtn').onclick = () => $('#app').classList.toggle('nav-collapsed');
+$('#navToggle').onclick = () => $('#sidebar').classList.toggle('open');
+$$('.nav-item').forEach(b => b.onclick = () => {
+  $$('.nav-item').forEach(x => x.classList.remove('active'));
+  b.classList.add('active');
+  $('#sidebar').classList.remove('open');
+  const label = b.querySelector('span').textContent;
+  if (label !== 'Dashboard') toast(`${label} is a separate route in the Angular build`);
+});
+
+/* ---- modals ---- */
+function openScrim(sel){ $(sel).classList.add('open'); }
+function closeScrims(){ $$('.scrim').forEach(s => s.classList.remove('open')); }
+$$('[data-close-modal]').forEach(b => b.onclick = closeScrims);
+$$('.scrim').forEach(s => s.addEventListener('click', e => {
+  if (e.target === s) closeScrims();
+}));
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeScrims(); });
+
+/* add company */
+const TOKEN_HINTS = {
+  GREENHOUSE:['razorpay','boards.greenhouse.io/<b>razorpay</b>'],
+  LEVER:     ['fampay','jobs.lever.co/<b>fampay</b>'],
+  ASHBY:     ['sprinto','jobs.ashbyhq.com/<b>sprinto</b>'],
+  WORKABLE:  ['apna','apply.workable.com/<b>apna</b>']
+};
+function syncHint(){
+  const [ph, url] = TOKEN_HINTS[$('#acPlatform').value];
+  $('#acToken').placeholder = ph;
+  $('#acHint').innerHTML =
+    `Take it straight from the careers URL — don't guess it.<br><code>${url}</code>`;
+}
+$('#acPlatform').addEventListener('change', syncHint);
+syncHint();
+
+$$('[data-open-add]').forEach(b => b.onclick = () => {
+  $('#acName').value = ''; $('#acToken').value = '';
+  openScrim('#addScrim');
+  setTimeout(() => $('#acName').focus(), 120);
+});
+
+$('#acSubmit').onclick = () => {
+  const name  = $('#acName').value.trim();
+  const token = $('#acToken').value.trim();
+  if (!name || !token){
+    toast('Company name and board token are both required', { kind:'err' });
+    return;
+  }
+  watchlist.push({
+    id:'w-' + (watchlist.length + 1),
+    companyName:name,
+    atsPlatform:$('#acPlatform').value,
+    boardToken:token,
+    status:'ACTIVE',
+    lastFetchedAt:null,
+    lastFetchStatus:null,
+    createdAt:new Date().toISOString()
+  });
+  closeScrims();
+  renderWatchlist();
+  toast(`${name} added · first check running now`, { kind:'ok' });
+};
+
+/* preferences */
+$$('[data-open-prefs]').forEach(b => b.onclick = () => {
+  $('#pfKeywords').value = filter.keywords.join(', ');
+  $('#pfExclude').value  = filter.excludeWords.join(', ');
+  $('#pfMin').value = filter.expMin ?? '';
+  $('#pfMax').value = filter.expMax ?? '';
+  openScrim('#prefScrim');
+});
+$('#pfSubmit').onclick = () => {
+  /* TextLists trims + dedupes case-insensitively server-side; mirror it here. */
+  const split = s => {
+    const out = [], seen = new Set();
+    for (const raw of s.split(',')){
+      const v = raw.trim();
+      if (!v || seen.has(v.toLowerCase())) continue;
+      seen.add(v.toLowerCase());
+      out.push(v);
+    }
+    return out;
+  };
+  const kw = split($('#pfKeywords').value);
+  if (!kw.length){ toast('At least one keyword is required', { kind:'err' }); return; }
+  const min = $('#pfMin').value === '' ? null : +$('#pfMin').value;
+  const max = $('#pfMax').value === '' ? null : +$('#pfMax').value;
+  if (min != null && max != null && min > max){
+    toast('Minimum experience cannot exceed the maximum', { kind:'err' });
+    return;
+  }
+  filter = { ...filter, keywords:kw, excludeWords:split($('#pfExclude').value),
+             expMin:min, expMax:max, updatedAt:new Date().toISOString() };
+  closeScrims(); renderPrefs();
+  toast('Preferences saved · scores update on the next check', { kind:'ok' });
+};
+
+/* manual fetch -> POST /watchlist/{id}/fetch  (200 / 409 / 429 / 502) */
+const cooldown = new Set();
+$('#companyList').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-check]');
+  if (!btn) return;
+  const c = watchlist.find(x => x.id === btn.dataset.check);
+
+  if (cooldown.has(c.id)){                       // 429
+    toast(`Checked recently · try ${c.companyName} again in a few minutes`, { kind:'err' });
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = 'Checking…';
+  cooldown.add(c.id);
+  setTimeout(() => cooldown.delete(c.id), 20000);
+
+  setTimeout(() => {
+    /* FamPay is wired to keep failing so the 502 / "Refresh issue" state is visible. */
+    if (c.id === 'w-4'){                          // 502
+      c.lastFetchStatus = 'FAILED';
+      renderWatchlist();
+      toast(`${c.companyName}'s board is unreachable — Jobx will retry automatically`, { kind:'err' });
+      return;
+    }
+    const found = Math.random() < .45 ? 1 + Math.floor(Math.random() * 2) : 0;
+    c.lastFetchedAt = new Date().toISOString();
+    c.lastFetchStatus = 'SUCCESS';
+    if (found){
+      matches.unshift({
+        id:'new-' + Math.random().toString(36).slice(2,7),
+        jobId:'j-' + Math.random().toString(36).slice(2,7),
+        jobTitle:'Backend Engineer — Platform',
+        companyName:c.companyName,
+        applyUrl:'https://example.com/apply',
+        score:70 + Math.floor(Math.random() * 25),
+        matchedKeywords:['Java','Spring Boot','PostgreSQL'],
+        status:'NEW',
+        createdAt:new Date().toISOString()
+      });
+    }
+    renderAll();
+    toast(found
+      ? `Checked just now · ${found} new match${found>1?'es':''} at ${c.companyName}`
+      : `Checked just now · no new roles at ${c.companyName}`,
+      { kind: found ? 'ok' : undefined });
+  }, 900);
+});
+
+/* ---- drawer ---- */
+let drawerId = null;
+function openDrawer(id){
+  const m = matches.find(x => x.id === id);
+  if (!m) return;
+  drawerId = id;
+  const b = band(m.score);
+
+  /* NOTE — deliberate deviation from UIUX_guide §8 ("opening a match can mark
+     it SEEN"). There is no SAVED status in the backend (frontend_constraints
+     §1), so this demo maps the Save button to SEEN. If opening a card ALSO set
+     SEEN, everything you merely looked at would pile into the "Saved" bucket
+     and the filter would be a lie. So: opening a match does not mutate status.
+     SEEN means "the user chose to keep this". Revisit if the backend gains a
+     real `bookmarked` flag — then auto-mark-seen becomes safe again. */
+
+  $('#dwLogo').textContent = logoText(m.companyName);
+  $('#dwLogo').style.cssText =
+    'width:46px;height:46px;font-size:15px;' + logoStyle(m.companyName);
+  $('#dwTitle').textContent   = m.jobTitle;
+  $('#dwCompany').textContent = m.companyName;
+  $('#dwScore').textContent   = m.score + '%';
+  $('#dwBand').textContent    = b.label;
+  $('#dwBand').style.color    = b.color;
+  $('#dwBar').style.background = b.color;
+  $('#dwBar').style.width      = m.score + '%';
+  $('#dwSkills').innerHTML =
+    m.matchedKeywords.map(k => `<span class="skill">${esc(k)}</span>`).join('');
+  $('#dwStatus').textContent  = m.status;
+  $('#dwCreated').textContent = relTime(m.createdAt);
+  $('#dwId').textContent      = m.id;
+  $('#dwApply').href          = m.applyUrl;
+  $('#dwApplied').textContent = m.status === 'APPLIED' ? 'Applied ✓' : 'Mark applied';
+
+  openScrim('#drawerScrim');
+}
+$('#dwApplied').onclick = () => {
+  if (!drawerId) return;
+  setStatus(drawerId, 'APPLIED');
+  $('#dwApplied').textContent = 'Applied ✓';
+};
+$('#dwApply').addEventListener('click', () => {
+  toast('Opening the company posting — Jobx never applies for you');
+});
+
+renderAll();
+</script>
+</body>
+</html>
