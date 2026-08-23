@@ -12,7 +12,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * Match creation — the one place a Match row is ever born.
@@ -63,9 +68,9 @@ public class MatchingService {
      * immediately instead of only from postings that appear later.
      *
      * A user with no FilterProfile yet gets nothing here — same rule as the
-     * fan-out above. (That they also aren't rescored when a profile is later
-     * created/edited is the pre-existing "PUT /profile/filter doesn't rescore"
-     * gap, unchanged by V4.)
+     * fan-out above. (Since 2026-08-23 that's no longer a dead end: saving the
+     * profile later triggers {@link #rescoreForWatcher}, which reconciles the
+     * whole feed against jobs that already exist.)
      *
      * Returns the number of matches created.
      */
@@ -96,6 +101,78 @@ public class MatchingService {
         MatchScorer.ScoredJob result = matchScorer.score(profile, job);
         if (result.excluded()) return false;
 
+        saveNewMatch(user, job, result);
+        return true;
+    }
+
+    public record RescoreResult(int created, int updated, int removed) {
+        public boolean changedAnything() { return created + updated + removed > 0; }
+    }
+
+    /**
+     * Reconcile one user's entire feed against a just-saved FilterProfile —
+     * closes the "PUT /profile/filter doesn't rescore" gap: a profile created
+     * or edited after a board was already fetched used to leave the feed
+     * frozen forever, because matching only ran on NEW jobs and on watch-add
+     * backfill (found live 2026-08-23: two Razorpay roles that plainly matched
+     * sat unscored because the profile arrived three minutes after the fetch).
+     *
+     * Per job of each ACTIVE watch:
+     *  - passes now, no match yet   → create (same as backfill)
+     *  - passes now, match exists   → refresh score + matchedKeywords, keep
+     *                                 status and createdAt
+     *  - fails now, match is NEW    → delete; the user never engaged with it,
+     *                                 and keeping it would show a role the
+     *                                 profile now excludes
+     *  - fails now, user touched it → keep untouched (stale score and all):
+     *                                 SEEN/APPLIED/DISMISSED rows are the
+     *                                 user's own history, not ours to erase
+     *
+     * PAUSED watches are skipped entirely — same rule as the fetch fan-out.
+     */
+    @Transactional
+    public RescoreResult rescoreForWatcher(User user, FilterProfile profile) {
+        int created = 0, updated = 0, removed = 0;
+
+        for (WatchedCompany watch : watchedCompanyRepository.findByUser(user)) {
+            if (watch.getStatus() != WatchedCompany.CompanyStatus.ACTIVE) continue;
+            Company company = watch.getCompany();
+
+            Map<UUID, Match> existingByJobId =
+                    matchRepository.findByUserAndJob_Company(user, company).stream()
+                            .collect(Collectors.toMap(m -> m.getJob().getId(), Function.identity()));
+
+            for (Job job : jobRepository.findByCompany(company)) {
+                MatchScorer.ScoredJob result = matchScorer.score(profile, job);
+                Match match = existingByJobId.get(job.getId());
+
+                if (result.excluded()) {
+                    if (match != null && match.getStatus() == Match.MatchStatus.NEW) {
+                        matchRepository.delete(match);
+                        removed++;
+                    }
+                } else if (match == null) {
+                    saveNewMatch(user, job, result);
+                    created++;
+                } else if (!Objects.equals(match.getScore(), result.score())
+                        || !Objects.equals(match.getMatchedKeywords(), result.matchedKeywords())) {
+                    match.setScore(result.score());
+                    match.setMatchedKeywords(result.matchedKeywords());
+                    matchRepository.save(match);
+                    updated++;
+                }
+            }
+        }
+
+        RescoreResult result = new RescoreResult(created, updated, removed);
+        if (result.changedAnything()) {
+            log.info("Rescored feed for {} after profile save: {} created, {} updated, {} removed",
+                    user.getEmail(), created, updated, removed);
+        }
+        return result;
+    }
+
+    private void saveNewMatch(User user, Job job, MatchScorer.ScoredJob result) {
         Match match = new Match();
         match.setUser(user);
         match.setJob(job);
@@ -103,6 +180,5 @@ public class MatchingService {
         match.setMatchedKeywords(result.matchedKeywords());
         match.setStatus(Match.MatchStatus.NEW);
         matchRepository.save(match);
-        return true;
     }
 }

@@ -163,4 +163,129 @@ class MatchingServiceTest {
         assertEquals(0, service.backfillForWatcher(userB, company));
         verifyNoInteractions(jobRepository, matchRepository);
     }
+
+    // ── rescoreForWatcher: the profile-save reconcile ────────────────────────
+    // Closes the "PUT /profile/filter doesn't rescore" gap: found live
+    // 2026-08-23, a profile saved minutes after a board's first fetch left the
+    // feed at zero forever because scoring only ran on NEW jobs and watch-add.
+
+    private WatchedCompany watch(User owner, WatchedCompany.CompanyStatus status) {
+        WatchedCompany watch = new WatchedCompany();
+        watch.setUser(owner);
+        watch.setCompany(company);
+        watch.setStatus(status);
+        return watch;
+    }
+
+    private Match match(User owner, Job matchedJob, Match.MatchStatus status,
+                        int score, List<String> matchedKeywords) {
+        Match match = new Match();
+        match.setUser(owner);
+        match.setJob(matchedJob);
+        match.setStatus(status);
+        match.setScore(score);
+        match.setMatchedKeywords(matchedKeywords);
+        return match;
+    }
+
+    @Test
+    void rescoreCreatesMatchesForJobsFetchedBeforeTheProfileExisted() {
+        when(watchedCompanyRepository.findByUser(userA))
+                .thenReturn(List.of(watch(userA, WatchedCompany.CompanyStatus.ACTIVE)));
+        when(matchRepository.findByUserAndJob_Company(userA, company)).thenReturn(List.of());
+        when(jobRepository.findByCompany(company)).thenReturn(List.of(job));
+
+        MatchingService.RescoreResult result =
+                service.rescoreForWatcher(userA, profile(userA, "java"));
+
+        assertEquals(new MatchingService.RescoreResult(1, 0, 0), result);
+        ArgumentCaptor<Match> captor = ArgumentCaptor.forClass(Match.class);
+        verify(matchRepository).save(captor.capture());
+        assertEquals(job, captor.getValue().getJob());
+        assertEquals(Match.MatchStatus.NEW, captor.getValue().getStatus());
+        // "java" in title (70) + no experience data (full 30)
+        assertEquals(100, captor.getValue().getScore());
+    }
+
+    @Test
+    void rescoreDeletesNewMatchesTheProfileNowExcludes() {
+        Match stale = match(userA, job, Match.MatchStatus.NEW, 100, List.of("java"));
+        when(watchedCompanyRepository.findByUser(userA))
+                .thenReturn(List.of(watch(userA, WatchedCompany.CompanyStatus.ACTIVE)));
+        when(matchRepository.findByUserAndJob_Company(userA, company)).thenReturn(List.of(stale));
+        when(jobRepository.findByCompany(company)).thenReturn(List.of(job));
+
+        MatchingService.RescoreResult result =
+                service.rescoreForWatcher(userA, profile(userA, "python"));
+
+        assertEquals(new MatchingService.RescoreResult(0, 0, 1), result);
+        verify(matchRepository).delete(stale);
+        verify(matchRepository, never()).save(any());
+    }
+
+    @Test
+    void rescoreKeepsUserTouchedMatchesEvenWhenTheyNoLongerPass() {
+        // An APPLIED row is the user's own application record — a profile edit
+        // must never erase it, even though the job no longer matches.
+        Match applied = match(userA, job, Match.MatchStatus.APPLIED, 100, List.of("java"));
+        when(watchedCompanyRepository.findByUser(userA))
+                .thenReturn(List.of(watch(userA, WatchedCompany.CompanyStatus.ACTIVE)));
+        when(matchRepository.findByUserAndJob_Company(userA, company)).thenReturn(List.of(applied));
+        when(jobRepository.findByCompany(company)).thenReturn(List.of(job));
+
+        MatchingService.RescoreResult result =
+                service.rescoreForWatcher(userA, profile(userA, "python"));
+
+        assertEquals(new MatchingService.RescoreResult(0, 0, 0), result);
+        verify(matchRepository, never()).delete(any());
+        verify(matchRepository, never()).save(any());
+        assertEquals(100, applied.getScore());
+    }
+
+    @Test
+    void rescoreRefreshesScoreAndKeywordsWhenTheProfileChanged() {
+        Match existing = match(userA, job, Match.MatchStatus.SEEN, 100, List.of("java"));
+        when(watchedCompanyRepository.findByUser(userA))
+                .thenReturn(List.of(watch(userA, WatchedCompany.CompanyStatus.ACTIVE)));
+        when(matchRepository.findByUserAndJob_Company(userA, company)).thenReturn(List.of(existing));
+        when(jobRepository.findByCompany(company)).thenReturn(List.of(job));
+
+        // Two keywords, only "java" hits the title: 70 * (2/4) = 35, + 30 exp
+        MatchingService.RescoreResult result =
+                service.rescoreForWatcher(userA, profile(userA, "java", "kubernetes"));
+
+        assertEquals(new MatchingService.RescoreResult(0, 1, 0), result);
+        assertEquals(65, existing.getScore());
+        assertEquals(List.of("java"), existing.getMatchedKeywords());
+        assertEquals(Match.MatchStatus.SEEN, existing.getStatus());
+        verify(matchRepository).save(existing);
+    }
+
+    @Test
+    void rescoreLeavesAnUnchangedMatchUntouched() {
+        Match unchanged = match(userA, job, Match.MatchStatus.NEW, 100, List.of("java"));
+        when(watchedCompanyRepository.findByUser(userA))
+                .thenReturn(List.of(watch(userA, WatchedCompany.CompanyStatus.ACTIVE)));
+        when(matchRepository.findByUserAndJob_Company(userA, company)).thenReturn(List.of(unchanged));
+        when(jobRepository.findByCompany(company)).thenReturn(List.of(job));
+
+        MatchingService.RescoreResult result =
+                service.rescoreForWatcher(userA, profile(userA, "java"));
+
+        assertEquals(new MatchingService.RescoreResult(0, 0, 0), result);
+        verify(matchRepository, never()).save(any());
+        verify(matchRepository, never()).delete(any());
+    }
+
+    @Test
+    void rescoreSkipsPausedWatches() {
+        when(watchedCompanyRepository.findByUser(userA))
+                .thenReturn(List.of(watch(userA, WatchedCompany.CompanyStatus.PAUSED)));
+
+        MatchingService.RescoreResult result =
+                service.rescoreForWatcher(userA, profile(userA, "java"));
+
+        assertEquals(new MatchingService.RescoreResult(0, 0, 0), result);
+        verifyNoInteractions(jobRepository, matchRepository);
+    }
 }

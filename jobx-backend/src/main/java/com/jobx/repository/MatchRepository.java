@@ -17,6 +17,9 @@ public interface MatchRepository extends JpaRepository<Match, UUID> {
     List<Match> findByUserOrderByCreatedAtDesc(User user);
     boolean existsByUserAndJob_Id(User user, UUID jobId);
 
+    /** One user's matches on one board — loaded up front by the profile-save rescore. */
+    List<Match> findByUserAndJob_Company(User user, Company company);
+
     /**
      * Unwatch cleanup (V4): jobs outlive any single watcher now, so removing a
      * watch must delete the user's own matches explicitly — the pre-V4 schema

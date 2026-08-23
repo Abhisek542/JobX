@@ -128,7 +128,11 @@ public class WatchlistController {
 
         Instant lastFetched = company.getLastFetchedAt();
         if (lastFetched != null) {
-            long sinceMs = Duration.between(lastFetched, Instant.now()).toMillis();
+
+
+           long sinceMs = Duration.between(lastFetched, Instant.now()).toMillis();
+            //@todo-> remove the comment after final testing
+           /*
             if (sinceMs < manualCooldownMs) {
                 // Someone (any watcher, or the scheduler) checked this board
                 // moments ago. If that check succeeded, "checked just now, no
@@ -142,7 +146,14 @@ public class WatchlistController {
                 long retryInSeconds = (manualCooldownMs - sinceMs + 999) / 1000;
                 throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,
                         "checked recently — try again in " + retryInSeconds + "s");
+            }*/
+            if (company.getLastFetchStatus() == Company.FetchStatus.SUCCESS) {
+                return new ManualFetchResponse(watch.getId(), company.getDisplayName(),
+                        lastFetched, 0, 0);
             }
+            long retryInSeconds = (manualCooldownMs - sinceMs + 999) / 1000;
+            throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,
+                    "checked recently — try again in " + retryInSeconds + "s");
         }
 
         FetchScheduler.FetchResult result = fetchScheduler.fetchCompany(company, user);

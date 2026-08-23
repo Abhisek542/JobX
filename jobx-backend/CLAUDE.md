@@ -296,8 +296,33 @@ restarts against the existing schema with no re-migration. A `pg_dump` was taken
 first, but it lives in a session scratchpad outside the repo — treat it as gone.
 Every row count quoted anywhere in this file is now historical.
 
+**Profile-save rescore done and live-verified 2026-08-23** — closes the
+"PUT /profile/filter doesn't rescore" gap, found live the same day: user
+`test1@pilot.com` had 352 jobs, a valid profile and **0 matches**, because the
+profile was saved 3 minutes *after* Razorpay/Phonepe were first fetched and
+matching only ever ran on new jobs and on watch-add backfill (the third
+silent-zero-feed bug, same shape as 07-18 and the C++ one). Two parts:
+- `MatchingService.rescoreForWatcher(user, profile)` (`@Transactional`), called
+  from `FilterProfileController.upsert` after every save. Per job of each
+  **ACTIVE** watch: passes+no match → create NEW; passes+match → refresh
+  `score`/`matchedKeywords` keeping status and `createdAt`; fails+NEW → delete;
+  fails+SEEN/APPLIED/DISMISSED → **kept untouched** (user history, stale score
+  and all). PAUSED watches skipped, same rule as the fetch fan-out. New derived
+  query `MatchRepository.findByUserAndJob_Company`. PUT's response shape is
+  unchanged — counts are only logged.
+- Live-verified on 8081 against the dev DB: fresh user → watch Razorpay (0
+  matches, bug reproduced) → PUT profile → **4 matches instantly**, no fetch;
+  narrowed the profile → 3 stale NEW matches deleted, survivor's score
+  refreshed 65 → 100. Test suite 93 → 102 (6 rescore tests in
+  `MatchingServiceTest`, new `FilterProfileControllerTest`).
+- The same investigation showed the exclude words `lead`/`sales`/`support`
+  hard-excluded **345 of 352** real jobs ("support" alone appears in 326
+  descriptions) — working as designed, but generic English excludes gut the
+  feed; a UX warning for high-kill excludes may be worth a future P2.
+
 **CURRENT FOCUS (2026-08-23): the shared-companies rework (fix B) is done and
-live-verified — see the FIXED 2026-08-23 entry above. Nothing is mid-flight.**
+live-verified — see the FIXED 2026-08-23 entry above. The profile-save rescore
+(above) is also done. Nothing is mid-flight.**
 What remains are backend items the dashboard currently works around. None are
 started; all are pending Abhisek's call:
 - Backend gaps the frontend deliberately papers over, each recorded in

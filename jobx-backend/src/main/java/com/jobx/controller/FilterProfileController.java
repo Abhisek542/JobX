@@ -5,6 +5,7 @@ import com.jobx.dto.FilterProfileResponse;
 import com.jobx.entity.FilterProfile;
 import com.jobx.entity.User;
 import com.jobx.repository.FilterProfileRepository;
+import com.jobx.service.MatchingService;
 import com.jobx.util.TextLists;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +31,7 @@ import java.util.List;
 public class FilterProfileController {
 
     private final FilterProfileRepository filterProfileRepository;
+    private final MatchingService matchingService;
 
     @GetMapping
     public FilterProfileResponse get(@AuthenticationPrincipal User user) {
@@ -65,7 +67,14 @@ public class FilterProfileController {
         profile.setExpMax(request.expMax());
         profile.setUpdatedAt(Instant.now());
 
-        return FilterProfileResponse.from(filterProfileRepository.save(profile));
+        FilterProfile saved = filterProfileRepository.save(profile);
+
+        // Reconcile the existing feed against the new rules — without this, a
+        // profile created after a board was already fetched leaves the feed
+        // empty until the board happens to post something new.
+        matchingService.rescoreForWatcher(user, saved);
+
+        return FilterProfileResponse.from(saved);
     }
 
     @DeleteMapping
