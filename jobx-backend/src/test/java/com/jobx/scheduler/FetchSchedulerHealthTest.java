@@ -1,17 +1,14 @@
 package com.jobx.scheduler;
 
+import com.jobx.entity.Company;
 import com.jobx.entity.Job;
-import com.jobx.entity.User;
-import com.jobx.entity.WatchedCompany;
 import com.jobx.enums.AtsPlatform;
 import com.jobx.fetcher.AtsFetchException;
 import com.jobx.fetcher.AtsFetcher;
 import com.jobx.fetcher.FetcherRegistry;
-import com.jobx.repository.FilterProfileRepository;
+import com.jobx.repository.CompanyRepository;
 import com.jobx.repository.JobRepository;
-import com.jobx.repository.MatchRepository;
-import com.jobx.repository.WatchedCompanyRepository;
-import com.jobx.scorer.MatchScorer;
+import com.jobx.service.MatchingService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
@@ -30,46 +27,42 @@ import static org.mockito.Mockito.*;
  * Before this, every fetcher swallowed its own exception and returned an empty
  * list, so the scheduler stamped last_fetched_at and the watchlist reported a
  * dead board as "checked just now, nothing new".
+ *
+ * Since V4 the unit under test polls Company rows (one per board), not
+ * per-user watch rows — health now lives on Company.
  */
 class FetchSchedulerHealthTest {
 
-    private WatchedCompanyRepository watchedCompanyRepository;
+    private CompanyRepository companyRepository;
     private FetcherRegistry fetcherRegistry;
     private AtsFetcher fetcher;
+    private MatchingService matchingService;
     private FetchScheduler scheduler;
 
-    private User owner;
-    private WatchedCompany company;
+    private Company company;
 
     @BeforeEach
     @SuppressWarnings("unchecked")
     void setUp() {
-        watchedCompanyRepository = mock(WatchedCompanyRepository.class);
+        companyRepository = mock(CompanyRepository.class);
         JobRepository jobRepository = mock(JobRepository.class);
-        FilterProfileRepository filterProfileRepository = mock(FilterProfileRepository.class);
-        MatchRepository matchRepository = mock(MatchRepository.class);
+        matchingService = mock(MatchingService.class);
         fetcherRegistry = mock(FetcherRegistry.class);
         fetcher = mock(AtsFetcher.class);
 
         ObjectProvider<FetchScheduler> self = mock(ObjectProvider.class);
 
-        scheduler = new FetchScheduler(watchedCompanyRepository, jobRepository,
-                filterProfileRepository, matchRepository, fetcherRegistry, new MatchScorer(), self);
+        scheduler = new FetchScheduler(companyRepository, jobRepository,
+                fetcherRegistry, matchingService, self);
         when(self.getObject()).thenReturn(scheduler);
 
-        owner = new User();
-        owner.setId(UUID.randomUUID());
-
-        company = new WatchedCompany();
+        company = new Company();
         company.setId(UUID.randomUUID());
-        company.setUser(owner);
-        company.setCompanyName("Apna");
+        company.setDisplayName("Apna");
         company.setAtsPlatform(AtsPlatform.WORKABLE);
         company.setBoardToken("apna");
-        company.setStatus(WatchedCompany.CompanyStatus.ACTIVE);
 
         when(fetcherRegistry.getFetcher(AtsPlatform.WORKABLE)).thenReturn(Optional.of(fetcher));
-        when(watchedCompanyRepository.findAll()).thenReturn(List.of(company));
     }
 
     @Test
@@ -77,15 +70,15 @@ class FetchSchedulerHealthTest {
         when(fetcher.fetch(company)).thenThrow(new AtsFetchException("board request failed",
                 new RuntimeException("Connection refused")));
 
-        FetchScheduler.FetchResult result = scheduler.fetchCompany(company);
+        FetchScheduler.FetchResult result = scheduler.fetchCompany(company, null);
 
         assertTrue(result.failed());
         assertEquals(0, result.newJobs());
-        assertEquals(WatchedCompany.FetchStatus.FAILED, company.getLastFetchStatus());
+        assertEquals(Company.FetchStatus.FAILED, company.getLastFetchStatus());
         assertNotNull(company.getLastFetchError());
         // Cooldown still applies to failures, so "Check now" can't hammer a dead board
         assertNotNull(company.getLastFetchedAt());
-        verify(watchedCompanyRepository).save(company);
+        verify(companyRepository).save(company);
     }
 
     @Test
@@ -93,22 +86,22 @@ class FetchSchedulerHealthTest {
         // The whole point of the split: nothing new is a perfectly good outcome
         when(fetcher.fetch(company)).thenReturn(List.of());
 
-        FetchScheduler.FetchResult result = scheduler.fetchCompany(company);
+        FetchScheduler.FetchResult result = scheduler.fetchCompany(company, null);
 
         assertFalse(result.failed());
-        assertEquals(WatchedCompany.FetchStatus.SUCCESS, company.getLastFetchStatus());
+        assertEquals(Company.FetchStatus.SUCCESS, company.getLastFetchStatus());
         assertNull(company.getLastFetchError());
     }
 
     @Test
     void successClearsAPreviousFailure() {
-        company.setLastFetchStatus(WatchedCompany.FetchStatus.FAILED);
+        company.setLastFetchStatus(Company.FetchStatus.FAILED);
         company.setLastFetchError("404 Not Found");
         when(fetcher.fetch(company)).thenReturn(List.of());
 
-        scheduler.fetchCompany(company);
+        scheduler.fetchCompany(company, null);
 
-        assertEquals(WatchedCompany.FetchStatus.SUCCESS, company.getLastFetchStatus());
+        assertEquals(Company.FetchStatus.SUCCESS, company.getLastFetchStatus());
         assertNull(company.getLastFetchError());
     }
 
@@ -117,7 +110,7 @@ class FetchSchedulerHealthTest {
         when(fetcher.fetch(company))
                 .thenThrow(new AtsFetchException("x".repeat(5000), new RuntimeException("y".repeat(5000))));
 
-        scheduler.fetchCompany(company);
+        scheduler.fetchCompany(company, null);
 
         assertTrue(company.getLastFetchError().length() <= 500);
         assertFalse(company.getLastFetchError().contains("at com.jobx"));
@@ -129,21 +122,19 @@ class FetchSchedulerHealthTest {
         // logged a warning every cycle and looked identical to a healthy board.
         when(fetcherRegistry.getFetcher(AtsPlatform.WORKABLE)).thenReturn(Optional.empty());
 
-        FetchScheduler.FetchResult result = scheduler.fetchCompany(company);
+        FetchScheduler.FetchResult result = scheduler.fetchCompany(company, null);
 
         assertTrue(result.failed());
-        assertEquals(WatchedCompany.FetchStatus.FAILED, company.getLastFetchStatus());
+        assertEquals(Company.FetchStatus.FAILED, company.getLastFetchStatus());
     }
 
     @Test
     void oneCompanysFailureNeverStopsTheNext() {
-        WatchedCompany healthy = new WatchedCompany();
+        Company healthy = new Company();
         healthy.setId(UUID.randomUUID());
-        healthy.setUser(owner);
-        healthy.setCompanyName("Aspora");
+        healthy.setDisplayName("Aspora");
         healthy.setAtsPlatform(AtsPlatform.ASHBY);
         healthy.setBoardToken("aspora");
-        healthy.setStatus(WatchedCompany.CompanyStatus.ACTIVE);
 
         AtsFetcher ashby = mock(AtsFetcher.class);
         when(fetcherRegistry.getFetcher(AtsPlatform.ASHBY)).thenReturn(Optional.of(ashby));
@@ -151,26 +142,23 @@ class FetchSchedulerHealthTest {
 
         // The broken one is first in the cycle, and fails hard
         when(fetcher.fetch(company)).thenThrow(new AtsFetchException("board is down"));
-        when(watchedCompanyRepository.findByStatus(WatchedCompany.CompanyStatus.ACTIVE))
-                .thenReturn(List.of(company, healthy));
+        when(companyRepository.findAllWithActiveWatchers()).thenReturn(List.of(company, healthy));
 
         scheduler.fetchAllCompanies();
 
         // The healthy board that came after it was still polled
         verify(ashby).fetch(healthy);
-        assertEquals(WatchedCompany.FetchStatus.FAILED, company.getLastFetchStatus());
-        assertEquals(WatchedCompany.FetchStatus.SUCCESS, healthy.getLastFetchStatus());
+        assertEquals(Company.FetchStatus.FAILED, company.getLastFetchStatus());
+        assertEquals(Company.FetchStatus.SUCCESS, healthy.getLastFetchStatus());
     }
 
     @Test
     void anUnexpectedErrorMidCycleStillLetsLaterCompaniesRun() {
-        WatchedCompany healthy = new WatchedCompany();
+        Company healthy = new Company();
         healthy.setId(UUID.randomUUID());
-        healthy.setUser(owner);
-        healthy.setCompanyName("Aspora");
+        healthy.setDisplayName("Aspora");
         healthy.setAtsPlatform(AtsPlatform.ASHBY);
         healthy.setBoardToken("aspora");
-        healthy.setStatus(WatchedCompany.CompanyStatus.ACTIVE);
 
         AtsFetcher ashby = mock(AtsFetcher.class);
         when(fetcherRegistry.getFetcher(AtsPlatform.ASHBY)).thenReturn(Optional.of(ashby));
@@ -179,9 +167,8 @@ class FetchSchedulerHealthTest {
         // Not an AtsFetchException — something the fetch contract didn't anticipate,
         // e.g. a DB error while saving. The cycle must still continue.
         when(fetcher.fetch(company)).thenReturn(List.of(new Job()));
-        when(watchedCompanyRepository.save(company)).thenThrow(new RuntimeException("db down"));
-        when(watchedCompanyRepository.findByStatus(WatchedCompany.CompanyStatus.ACTIVE))
-                .thenReturn(List.of(company, healthy));
+        when(companyRepository.save(company)).thenThrow(new RuntimeException("db down"));
+        when(companyRepository.findAllWithActiveWatchers()).thenReturn(List.of(company, healthy));
 
         assertDoesNotThrow(() -> scheduler.fetchAllCompanies());
         verify(ashby).fetch(healthy);
@@ -191,10 +178,11 @@ class FetchSchedulerHealthTest {
     void jobsFromAFailedFetchAreNeverScored() {
         when(fetcher.fetch(company)).thenThrow(new AtsFetchException("board is down"));
 
-        scheduler.fetchCompany(company);
+        scheduler.fetchCompany(company, null);
 
         verify(fetcherRegistry).getFetcher(any());
         // No job lookups happened at all — we bailed before the persist loop
         verifyNoMoreInteractions(fetcherRegistry);
+        verifyNoInteractions(matchingService);
     }
 }

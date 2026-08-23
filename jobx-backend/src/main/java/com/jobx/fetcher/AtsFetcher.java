@@ -1,7 +1,7 @@
 package com.jobx.fetcher;
 
 import com.jobx.entity.Job;
-import com.jobx.entity.WatchedCompany;
+import com.jobx.entity.Company;
 import com.jobx.enums.AtsPlatform;
 
 import java.util.List;
@@ -34,5 +34,5 @@ public interface AtsFetcher {
      * FetchScheduler isolates the failure; one board's outage never stops the
      * next company from being processed.
      */
-    List<Job> fetch(WatchedCompany company);
+    List<Job> fetch(Company company);
 }

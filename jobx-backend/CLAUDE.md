@@ -3,10 +3,10 @@
 
 Handoff doc from design work in claude.ai. Captures *decisions*, not just ideas —
 read before writing code, don't re-litigate items marked DECIDED unless explicitly
-asked to revisit. Detailed per-ATS API field notes live in `docs/ats-api-reference.md`
+asked to revisit. Detailed per-ATS API field notes live in `jobx-backend/docs/ats-api-reference.md`
 (not loaded by default) — check that file before touching Lever/Ashby/Workable code.
 
-## Implementation status (updated 2026-08-15)
+## Implementation status (updated 2026-08-22)
 
 Read this first — reflects actual verified backend progress, not design intent.
 
@@ -16,7 +16,10 @@ Read this first — reflects actual verified backend progress, not design intent
 - `GreenhouseFetcher` fully implemented and verified against live Razorpay + PhonePe boards — real jobs fetched and deduped correctly.
 - `FetchScheduler` runs every 30 min via `@Scheduled`, dedupes by `company_id + external_id`.
 - `MatchScorer` ported to a Spring `@Service`, confirmed correct in isolation (test job scored 79 correctly via a temporary `/dev/test-score` endpoint).
-- Real test data in place: FilterProfile for user `e373e792-5d4a-458f-98c1-3183eac63366`, watching Razorpay + PhonePe.
+- Real test data drove every verification below (FilterProfile for user
+  `e373e792-5d4a-458f-98c1-3183eac63366`, watching Razorpay + PhonePe). **The dev
+  database was truncated 2026-08-22** (see "Dev database reset" below) — every row
+  count quoted in this file is historical; the DB is now empty.
 - **Match-creation bug (below) fixed and verified 2026-07-18** — `/dev/backfill-matches` now correctly populates the `matches` table.
 - **Phase 4 auth done and verified 2026-07-30** — JWT access-token-only (no refresh token, 7-day
   expiry), `POST /auth/register` + `POST /auth/login`, `BCryptPasswordEncoder`, no
@@ -67,7 +70,7 @@ against live boards (Aspora 18 jobs / FamPay 14 / Sprinto 29 / Apna 96 after
 shortcode dedup; 124 real matches scored for the `phase3-verify@jobx.dev` test user,
 zero duplicates on re-fetch). Workable needs a two-call list+detail design — full
 field notes and quirks (Lever's multi-field description assembly, Workable's
-duplicate-shortcode list rows, dead Postman board) are in `docs/ats-api-reference.md`.
+duplicate-shortcode list rows, dead Postman board) are in `jobx-backend/docs/ats-api-reference.md`.
 `parseExperience` was hoisted out of `GreenhouseFetcher` into the shared
 `ExperienceParser`. First unit tests added: fixture-based mapping tests per fetcher
 under `src/test/java/com/jobx/fetcher/`, real captured API responses in
@@ -159,24 +162,66 @@ shape as the 07-18 match-creation bug.
   (never checked yet).
 - `FetchScheduler.FetchResult` is now `(newJobs, newMatchesForOwner, failed)` —
   construct via `FetchResult.success(...)` / `FetchResult.failure()`.
+- **V4 (2026-08-23):** response JSON shapes are unchanged, but `POST
+  /watchlist/{id}/fetch` inside the (now board-wide) cooldown returns **200
+  `{newJobs: 0, newMatches: 0}`** after a recent successful check instead of 429
+  (429 still fires after a recent FAILED attempt) — the dashboard's existing
+  "no new roles" rendering already covers it. `companyName` everywhere is the
+  canonical shared name (first adder's), not necessarily what this user typed.
+  Adding a watch on a board another user already watches yields matches
+  immediately (backfill) — no fetch needed first.
 
-**OPEN DEFECT — decide before a second user is onboarded.** `jobs.company_id`
-references `watched_companies(id)`, so jobs are keyed per *watch row*, not per
-company — while `scoreForAllWatchers` fans each new job out to every user watching
-the same platform + token. With two users watching Razorpay, every posting is
-stored twice and **each user gets two matches for it**. Invisible so far only
-because all verification used a single user. Note this contradicts the "Job rows
-are shared/global per company" line in the Data model section below: that line
-describes the intent, the schema does something else. Two candidate fixes:
-- **A (contained, ~10 lines, no migration):** drop the cross-user fan-out — each
-  watch row scores only for its own owner. Fixes the duplicate feed completely;
-  leaves N watchers = N stored copies of a board and N fetches per cycle.
-- **B (structural):** a real `companies` table keyed by `(ats_platform,
-  board_token)`, `jobs` hanging off it, `watched_companies` referencing it. Matches
-  the documented model, also removes the redundant fetching and the cascade where
-  one user deleting their watch wipes jobs another user's matches point at. Needs a
-  migration that collapses existing duplicate jobs and repoints their matches.
-Recommendation on the table is **B**; not started, pending Abhisek's call.
+**FIXED (2026-08-23) — the shared-companies rework (fix B), migration `V4__companies_table.sql`.**
+The former OPEN DEFECT: `jobs.company_id` referenced `watched_companies(id)`, so
+jobs were keyed per *watch row* while `scoreForAllWatchers` fanned each new job
+out to every user watching the same platform + token — N watchers meant N fetches
+per cycle, N stored copies of every posting, N² matches, and one user's unwatch
+cascading away other users' matches (APPLIED state included). Abhisek chose
+**fix B (structural)** over fix A, with three sub-decisions: canonical company
+display name (first adder's name wins, later names discarded), manual "Check now"
+during a shared cooldown returns **200 with zeros** after a recent SUCCESS (429
+only after a recent FAILED), and an **additive V4** migration rather than a V1
+rewrite. What changed:
+- New `Company` entity/table keyed `UNIQUE (ats_platform, board_token)`; `jobs`
+  re-parented onto it; `watched_companies` slimmed to a pure join row
+  (user, company, status) with `UNIQUE (user_id, company_id)`. Fetch health
+  (`last_fetched_at`/`last_fetch_status`/`last_fetch_error`) moved to `companies` —
+  fetching is a board property now, shared by all watchers.
+- `FetchScheduler` iterates `CompanyRepository.findAllWithActiveWatchers()` (one
+  fetch per board per cycle) and `fetchCompany(Company, User requester)` counts
+  owner matches for the manual endpoint. Scoring extracted to **`MatchingService`**
+  (`scoreForActiveWatchers` / `backfillForWatcher` / `scoreAndSave`) — the only
+  place Match rows are created. The watcher query is ACTIVE-only, which finally
+  makes PAUSED actually pause (pre-V4 the `findAll()` fan-out ignored status).
+- `POST /watchlist` get-or-creates the shared Company and **backfills** the new
+  watcher against jobs the board already has (pre-V4 that happened by accident via
+  per-row re-fetch; without explicit backfill a second watcher's feed stays empty).
+  `DELETE /watchlist/{id}` deletes only the caller's matches explicitly
+  (`MatchRepository.deleteByUserAndCompany`) — nothing cascades from a watch row
+  any more. Orphaned companies (all watchers gone) are deliberately kept: the
+  scheduler skips them, and re-adding starts with a warm job history.
+- V4's collapse logic dedupes existing job copies (survivor = earliest
+  `first_seen_at`) and collapses each user's matches across copies keeping the
+  highest-precedence status (APPLIED > SEEN > DISMISSED > NEW). The migration
+  needs a transaction (ON COMMIT DROP temp tables) — Flyway provides one; use
+  `psql -1` when applying by hand.
+- **Verified three ways**: (1) dry-run against a scratch copy of the real dev DB —
+  the defect was live (2 users on the Razorpay board, all 25 postings stored
+  twice): 643 → 618 jobs, all 158 matches survived, zero orphans; (2) the seeded
+  collision fixture `db/seed/migration-collapse-fixture.sql` (APPLIED-vs-NEW on
+  duplicate copies) — every expectation in that file held; (3) live E2E on the
+  migrated dev DB: cycle logs "13 companies" for 14 watch rows, a third user
+  watching Razorpay under a different typed name got the canonical name + an
+  instantly backfilled feed with zero re-fetch, "Check now" inside the shared
+  cooldown returned 200-with-zeros, and their unwatch removed only their own
+  matches (other users' 158 intact, jobs still 618). Pre-migration `pg_dump` is in
+  a session scratchpad (`jobx-pre-v4-backup.sql`) — treat as ephemeral.
+- Test suite 77 → 93 (`FetchSchedulerSharedJobsTest`, `MatchingServiceTest`,
+  `WatchlistControllerSharedCompanyTest`, reworked health/fetch tests). Gotcha
+  worth remembering: Hibernate rejected `@Query` enum literals written as
+  `com.jobx.entity.WatchedCompany.CompanyStatus.ACTIVE` at *startup*, not in unit
+  tests (mocked repos never validate JPQL) — status enums are now bound as
+  parameters behind `default` methods. JPQL mistakes only surface on app start.
 
 **Known gaps found 2026-08-15, deliberately not fixed** (recorded so they aren't
 re-discovered): `MatchStatus` has no `SAVED`, but the mockup has a "Saved" filter
@@ -188,15 +233,79 @@ distinguishes registered emails; `POST /watchlist` accepts
 `atsPlatform: UNSUPPORTED` and sets it ACTIVE; fetchers use `asText("")` for the
 NOT NULL `title`/`apply_url` columns rather than skipping malformed records.
 
-**CURRENT FOCUS (2026-08-02): step 5, Angular dashboard** — next up now that step 3
-and the backend P0 slice are closed. The remaining P0 items in `V1_IMPROVEMENTS.md`
-(empty/error states, feed search/sort/filter, save-apply flow) are Angular work —
-treat them as step 5's acceptance criteria. **Mockup ambiguity resolved 2026-08-02:**
-the canonical UX target is now a mockup image (referred to as `MockUp`, not committed
-to this repo — shared via claude.ai chat/project knowledge). It replaces both
-`dashboard-mockup.html` and `v1-improvements-wireframes.html` as the visual/layout
-reference. **Theme decision also made 2026-08-02:** build both a light and a dark
-theme, user-toggleable — see "UI reference" below.
+**Step 5 (Angular dashboard) built and live-verified 2026-08-15** — lives in the
+sibling `jobx-frontend/` module, committed as `implementing-frontend` (ee1bcfb).
+Closes the P0 Angular items from `V1_IMPROVEMENTS.md` (empty/error states, feed
+search/sort/filter, save-apply flow).
+
+- **Stack**: Angular 21, standalone components, signals + `OnPush`, **no NgRx**.
+  Routes lazy-load behind `authGuard`; `guestGuard` keeps a signed-in user off
+  login/register. `authInterceptor` attaches the bearer token on the way out,
+  `errorInterceptor` maps the `ApiError` shape on the way back.
+- **Layout**: `core/` (api clients · DTO models · interceptors · guards · stores) ·
+  `features/` (dashboard · matches · watchlist · profile · auth) · `shared/`
+  (layout · feed · rail · overlays · ui) · `styles/` (token SCSS).
+- **One source of truth for the feed**: a single `signal` holds it, while filtered,
+  searched, sorted, paged and the pill counts are all `computed`
+  (`features/dashboard/feed.store.ts` + `feed-logic.ts`), so no two views of the
+  feed can drift. Fixed order of operations: filter → search → sort → paginate.
+  Pill counts always reflect the whole feed, never the current page.
+- **Theme mechanics — the two items flagged "unspecified" in UI reference are now
+  settled**: `data-theme` on `<html>`, toggled from the action bar, persisted to
+  `localStorage` under `jobx-theme`, defaulting to `prefers-color-scheme` until
+  the user chooses. Device-local, no backend field. Every colour resolves through
+  a custom property in `styles/_tokens.scss` — a hardcoded colour in a component
+  is a bug, and that rule is what makes the toggle total.
+- **Pagination is client-side**, 10/page, URL-backed (`/dashboard?page=3`), resets
+  to page 1 on any search/filter/sort change, and clamps when the list shrinks so
+  dismissing the last card never lands on an empty page. It has to be client-side:
+  `GET /matches` takes no query parameters. Don't build UI implying the server
+  paginates until `GET /matches?page=&size=` actually exists.
+- **`SEEN` means "the user explicitly saved this"; opening a card does NOT mutate
+  status.** This resolves the "`MatchStatus` has no `SAVED`" gap listed above —
+  Save maps to `SEEN`, and auto-marking on open would quietly pack the "Saved"
+  filter with every role merely glanced at, making that filter a lie. Revisit if
+  the backend ever gains a real bookmark flag.
+- **Tests**: 37 pure-logic unit tests under **Vitest** — not Karma, which is
+  deprecated in Angular 21 and no longer the `ng new` default. No DOM tests.
+- **Verified live against the running backend**, not mocked: register → set filter
+  profile → watch four real boards → fetch → 99 real matches scored. Confirmed
+  save/applied/dismissed persist across a reload · `?page=N` survives refresh and
+  resets on filter change · manual "Check now" renders 200 / 429 / 502 distinctly ·
+  a duplicate company surfaces the 409 · a brand-new account gets the onboarding
+  state rather than an error from the `GET /profile/filter` 404. **Not** visually
+  verified: the ≤1280px and ≤900px breakpoints — the automation browser window
+  could not be resized, so those media queries are ported verbatim from the mockup
+  and have never been seen rendered.
+- **Honesty constraints are enforced in the UI** (`jobx-frontend/docs/uiux_plan.md`
+  §7) — the dashboard never invents data the API cannot back: no location, no
+  description excerpt, no employer posting date, no verified badge, because
+  `MatchResponse` carries none of them. "Found 3h ago" is `createdAt`, i.e. when
+  *Jobx* first saw the role, and is never labelled as the employer's posting date.
+  Company logos are initials on a hue derived from the name — no logo service is
+  called. A failed board reads "Refresh issue · last tried 12m ago", not "last
+  worked", because `FetchScheduler.recordFailure` stamps `lastFetchedAt` on failed
+  attempts too, making that timestamp the last *attempt*.
+
+**Dev database reset 2026-08-22** — `TRUNCATE users CASCADE` wiped all five test
+accounts (17 watches, 648 jobs, 566 matches) to re-run the app end-to-end from a
+clean slate. The cascade behaved exactly as `V1__create_schema.sql` declares:
+`users` → `filter_profiles` / `matches` / `watched_companies` → `jobs`.
+`flyway_schema_history` was deliberately left alone (3 migrations), so the app
+restarts against the existing schema with no re-migration. A `pg_dump` was taken
+first, but it lives in a session scratchpad outside the repo — treat it as gone.
+Every row count quoted anywhere in this file is now historical.
+
+**CURRENT FOCUS (2026-08-23): the shared-companies rework (fix B) is done and
+live-verified — see the FIXED 2026-08-23 entry above. Nothing is mid-flight.**
+What remains are backend items the dashboard currently works around. None are
+started; all are pending Abhisek's call:
+- Backend gaps the frontend deliberately papers over, each recorded in
+  `jobx-frontend/docs/uiux_plan.md` §12: no `GET /matches/{id}` detail endpoint
+  (the drawer admits this on screen), no `location`/`platformPostedAt` on
+  `MatchResponse`, `GET /matches` returning `DISMISSED` rows unpaginated, and no
+  real `SAVED` status.
+- Step 6 (tailoring) is still the next *feature* in the build order.
 
 ## What this is
 
@@ -235,7 +344,7 @@ Detect ATS from careers URL, hit that platform's public job API directly:
 
 **All four platforms are now implemented and live-verified (2026-08-02).** Verified
 field-level details (JSON shapes, date formats, Workable's two-call design, per-board
-quirks, dead board tokens) are in `docs/ats-api-reference.md` — read that file before
+quirks, dead board tokens) are in `jobx-backend/docs/ats-api-reference.md` — read that file before
 touching any fetcher code, not this one.
 
 ## The matching engine — VERIFIED, port this logic, don't redesign it
@@ -268,9 +377,11 @@ you; that suite is the guard against a third silent-matching bug.
 ```
 User            (id, email, password_hash, role, created_at)
 FilterProfile   (id, user_id, keywords[], exclude_words[], exp_min, exp_max)
-WatchedCompany  (id, user_id, company_name, ats_platform, board_token/url, status)
-Job             (id, company_id, external_id, title, description, location,
-                 exp_min, exp_max, apply_url, posted_at, ats_platform)
+Company         (id, ats_platform, board_token, display_name,        ← since V4
+                 last_fetched_at, last_fetch_status, last_fetch_error)
+WatchedCompany  (id, user_id, company_id, status)   ← join row since V4
+Job             (id, company_id → companies, external_id, title, description,
+                 location, exp_min, exp_max, apply_url, posted_at, ats_platform)
 Match           (id, user_id, job_id, score, matched_keywords[], created_at,
                  status: new/seen/applied/dismissed)
 ```
@@ -278,64 +389,69 @@ Match           (id, user_id, job_id, score, matched_keywords[], created_at,
 Actual implemented `jobs` schema differs slightly: `platform_posted_at` (ATS's own
 timestamp, display only) vs `first_seen_at` (when Jobx first observed the job — the
 real sort/alert field). `raw_json` jsonb escape hatch. `Job.company` is a real
-`@ManyToOne` to `WatchedCompany` (this link was double-checked against the DB while
-fixing the match-creation bug above — it's correct).
+`@ManyToOne` — to `Company` since V4 (pre-V4 it pointed at `WatchedCompany`).
 
-**Intent:** `Job` rows are shared/global per company; `Match` rows are the per-user
-scored view, recomputed by running each user's `FilterProfile` against new `Job`
-rows after each poll.
-
-**⚠️ The implementation does NOT do this (found 2026-08-15, still open).**
-`jobs.company_id` references `watched_companies(id)`, so a Job belongs to one
-user's watch row, not to a company — while `FetchScheduler.scoreForAllWatchers`
-still fans each new job out to every user watching the same platform + token. Two
-users watching the same board therefore get duplicate Job rows and duplicate
-Matches. Don't trust the "shared/global" line above when reading fetch/scoring
-code until this is reconciled; see the OPEN DEFECT entry in Implementation status
-for the two candidate fixes.
+`Job` rows are shared/global per company (`companies` keyed
+`(ats_platform, board_token)`); `Match` rows are the per-user scored view,
+created by `MatchingService` when a poll finds a new job (scored for every
+ACTIVE watcher) or when a user adds a watch on an already-populated board
+(backfill). Since 2026-08-23 the implementation actually does this — the
+per-watch-row jobs defect found 2026-08-15 was fixed by the V4 shared-companies
+rework; see the FIXED 2026-08-23 entry in Implementation status for the full
+story and verification.
 
 Given per-company `metadata` inconsistency on Greenhouse, don't add strongly-typed
 columns for ATS-specific fields — store as unstructured `raw_metadata` JSON if kept at
 all, and don't feed it into `MatchScorer` (which only needs title, description,
 location, experience range).
 
-## UI reference (updated 2026-08-02 — supersedes prior mockup references, DECIDED)
+## UI reference (updated 2026-08-22 — supersedes the 2026-08-02 image reference, DECIDED)
 
-**Canonical mockup is now a single static image, not code.** Shared directly in
-chat/project knowledge, filename `MockUp`, not checked into this repo. It shows the
-light-theme version and depicts:
+**The canonical mockup is committed code again, not a static image.** The approved
+visual spec is `jobx-frontend/docs/jobx-focused-feed-mockup.html`, and it is
+**frozen** — do not edit it to match the app. It supersedes the `MockUp` image this
+section pointed at on 2026-08-02, which had in turn superseded
+`dashboard-mockup.html` and `v1-improvements-wireframes.html`.
 
-- Left sidebar: `jobx` wordmark, nav items Dashboard / Matches / Watchlist / Profile,
-  collapse control.
-- Header: "Good morning, {name}" greeting + subhead, "Add company" primary button,
-  user avatar menu.
-- Search/filter bar: free-text search, view-mode pills (All matches / New / Saved /
-  Applied), sort dropdown ("Newest").
-- "Top matches" feed: cards per job with company logo, job title, company name +
-  verified badge, location/work-mode tag, skill-tag chips, a circular match-% ring
-  (color shifts green→yellow as score drops, e.g. 94/89/82), a "Matched key skills"
-  line, "View details" link, and a Save / Mark applied / Dismiss action row.
-- Right rail: "Your search preferences" panel (Roles, Keywords, Experience) with an
-  Edit affordance; a profile-completeness ring; a "Watchlist health" panel listing
-  watched companies with last-checked status (including a "Refresh issue" warning
-  state); an "Add more companies" CTA card.
+The build plan derived from it is `jobx-frontend/docs/uiux_plan.md` — read that
+before touching dashboard code. It holds the locked design decisions, the verified
+API contract, the empty/error-state matrix and the honesty constraints.
+`jobx-frontend/README.md` records what was actually built and where it deviates
+from the plan.
 
-**Theme: DECIDED 2026-08-02 — ship both light and dark, user-toggleable.** The
-`MockUp` image is the light-theme spec for the layout/components above.
-`dashboard-mockup.html` (dark theme; also the file whose `<script>` has the proven JS
-port of `MatchScorer.java` — that scoring logic is still verified and should still be
-ported regardless of theme) and `jobx-dashboard.html` in project knowledge supply the
-dark-theme color tokens for the same components. Practical implications for the
-Angular build:
-- Structure components/CSS around theme-able tokens (CSS custom properties or
-  Angular's theming approach) from the start — don't hardcode light-theme colors and
-  retrofit dark later.
-- Toggle mechanism (header icon vs. profile-menu setting vs. system-preference
-  detection) is not yet specified — pick a default approach when building step 5 and
-  flag it here if it needs revisiting.
-- Persisting the user's theme choice (e.g. per-user preference vs. local device only)
-  is also unspecified — reasonable default is local device (localStorage), no backend
-  field needed yet.
+**Direction: focused feed**, not the Command Center v3 exploration.
+`jobx-backend/docs/UIUX_guide.md` is **stale** in §2, §3, §5, §8 and §10 — it still
+describes Command Center v3. Where it disagrees with `uiux_plan.md`, the plan wins.
+
+**Three approved deltas from the frozen mockup** (`uiux_plan.md` §0). The app is
+right and the mockup is knowingly out of date in exactly these places — if you
+find yourself "fixing" the app back toward the mockup here, stop:
+
+| # | Mockup shows | App does |
+|---|---|---|
+| 1 | Three rail panels, last an "Add more companies" CTA | **Two** panels: Search preferences, Watchlist health |
+| 2 | "Good evening, {name}" greeting + subhead + demo chip | **No greeting** — a slim right-aligned action bar (theme toggle + "Add company") |
+| 3 | Every match in one unbroken list | **Numbered pagination**, 10/page |
+
+Everything else in the mockup — layout, spacing, tokens, card anatomy, score ring,
+drawer, modals, empty states, toasts — is the spec, and its `visible()`, `band()`,
+`logoStyle()` and `relTime()` functions were ported rather than reinvented.
+
+**What the dashboard actually renders today**: a left sidebar (`Jobx` wordmark —
+dark text, blue `x`, on a white `--panel` surface in light mode) with Dashboard /
+Matches / Watchlist / Profile · the slim action bar · a search + status-pill + sort
+toolbar · the match feed (initials logo, job title, company, matched-skill chips, a
+circular score ring shifting green→yellow as the score drops, a Save / Mark applied
+/ Dismiss row, and "View details" opening a drawer) · and a two-panel right rail
+(Search preferences with an Edit affordance; Watchlist health listing each watched
+company's last-checked status, including the "Refresh issue" state). No metric
+cards — the pill counts and the rail carry the numbers.
+
+**Theme: light + dark, DECIDED 2026-08-02; mechanics settled 2026-08-15** —
+`data-theme` on `<html>`, toggle in the action bar, persisted to `localStorage`
+(`jobx-theme`), defaulting to `prefers-color-scheme`. Device-local, no backend
+field needed. Every colour, radius and shadow resolves through a custom property
+in `jobx-frontend/src/styles/_tokens.scss`.
 
 ## Build order
 
@@ -352,14 +468,16 @@ resuming multi-ATS work.
 3. More fetchers: Ashby, Workable, Lever, then harder ones if time allows. **Done and
    verified 2026-08-02** (order actually built: Ashby → Lever → Workable) — each
    verified against a live board as built, per-platform notes in
-   `docs/ats-api-reference.md`. Harder platforms (Rippling, Recruitee, Workday) still
+   `jobx-backend/docs/ats-api-reference.md`. Harder platforms (Rippling, Recruitee, Workday) still
    out of scope.
 4. Auth (Spring Security) + multi-tenant data, before handing app to other test users.
    **Done and verified 2026-07-30** — see Implementation status above for the full
    design (JWT access-token-only, `role` column added early, `/dev/**` intentionally
    still permitAll).
 5. Angular dashboard wired to the live backend, matching the mockup, with both light
-   and dark themes (see UI reference above). **🎯 CURRENT FOCUS.**
+   and dark themes (see UI reference above). **Done and verified 2026-08-15** — see
+   Implementation status above; `jobx-frontend/docs/uiux_plan.md` is the build plan
+   and records the three approved deltas from the frozen mockup.
 6. Tailoring feature (Spring AI + LLM), fast-follow after discovery validated.
 7. Astro layer for SEO/public pages, only after product validated with real users.
 

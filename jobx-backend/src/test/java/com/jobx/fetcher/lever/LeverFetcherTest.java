@@ -2,7 +2,7 @@ package com.jobx.fetcher.lever;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jobx.entity.Job;
-import com.jobx.entity.WatchedCompany;
+import com.jobx.entity.Company;
 import com.jobx.enums.AtsPlatform;
 import com.jobx.fetcher.AtsFetchException;
 import com.jobx.fetcher.FixtureSupport;
@@ -21,7 +21,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class LeverFetcherTest {
 
     private LeverFetcher fetcher;
-    private WatchedCompany company;
+    private Company company;
 
     @BeforeEach
     void setUp() {
@@ -65,7 +65,7 @@ class LeverFetcherTest {
 
     @Test
     void mapsSprintoBoardWithSameShape() throws Exception {
-        WatchedCompany sprinto = FixtureSupport.company("Sprinto", AtsPlatform.LEVER, "Sprinto");
+        Company sprinto = FixtureSupport.company("Sprinto", AtsPlatform.LEVER, "Sprinto");
 
         List<Job> jobs = fetcher.parse(FixtureSupport.fixture("lever-sprinto.json"), sprinto);
 

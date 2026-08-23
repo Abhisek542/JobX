@@ -1,10 +1,10 @@
 # Jobx UI/UX Guide
 
-Final selected direction: `mockup-command-center-v3.html`.
+Final selected direction: `jobx-focused-feed-mockup`.
 
 Reference files:
 
-- HTML prototype: `docs/mockup-command-center-v3.html`
+- HTML prototype: `docs/jobx-focused-feed-mockup`
 - Original visual reference: `MockUp.png`
 
 ## 1. Product direction

@@ -2,7 +2,7 @@ package com.jobx.fetcher.ashby;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jobx.entity.Job;
-import com.jobx.entity.WatchedCompany;
+import com.jobx.entity.Company;
 import com.jobx.enums.AtsPlatform;
 import com.jobx.fetcher.FixtureSupport;
 import org.junit.jupiter.api.BeforeEach;
@@ -20,7 +20,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class AshbyFetcherTest {
 
     private AshbyFetcher fetcher;
-    private WatchedCompany company;
+    private Company company;
 
     @BeforeEach
     void setUp() {

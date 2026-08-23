@@ -1,6 +1,6 @@
 package com.jobx.controller;
 
-import com.jobx.dto.AuthResponse;
+import com.jobx.dto.*;
 import com.jobx.dto.LoginRequest;
 import com.jobx.dto.RegisterRequest;
 import com.jobx.entity.User;

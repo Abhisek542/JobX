@@ -11,7 +11,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * Routes a WatchedCompany to the correct AtsFetcher implementation.
+ * Routes a Company to the correct AtsFetcher implementation.
  * Spring auto-discovers all AtsFetcher beans and indexes them by platform.
  * Adding a new fetcher requires zero changes here.
  */

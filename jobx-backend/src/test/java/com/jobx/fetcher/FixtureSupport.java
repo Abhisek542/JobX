@@ -1,6 +1,6 @@
 package com.jobx.fetcher;
 
-import com.jobx.entity.WatchedCompany;
+import com.jobx.entity.Company;
 import com.jobx.enums.AtsPlatform;
 
 import java.io.IOException;
@@ -27,12 +27,11 @@ public final class FixtureSupport {
         }
     }
 
-    public static WatchedCompany company(String name, AtsPlatform platform, String token) {
-        WatchedCompany company = new WatchedCompany();
-        company.setCompanyName(name);
+    public static Company company(String name, AtsPlatform platform, String token) {
+        Company company = new Company();
+        company.setDisplayName(name);
         company.setAtsPlatform(platform);
         company.setBoardToken(token);
-        company.setStatus(WatchedCompany.CompanyStatus.ACTIVE);
         return company;
     }
 }

@@ -2,7 +2,7 @@ package com.jobx.fetcher.workable;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jobx.entity.Job;
-import com.jobx.entity.WatchedCompany;
+import com.jobx.entity.Company;
 import com.jobx.enums.AtsPlatform;
 import com.jobx.fetcher.AtsFetchException;
 import com.jobx.fetcher.FixtureSupport;
@@ -26,7 +26,7 @@ import static org.mockito.Mockito.*;
  */
 class WorkableDetailFailureTest {
 
-    private WatchedCompany company;
+    private Company company;
 
     @BeforeEach
     void setUp() {

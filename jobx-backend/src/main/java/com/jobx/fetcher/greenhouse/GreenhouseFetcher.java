@@ -3,7 +3,7 @@ package com.jobx.fetcher.greenhouse;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jobx.entity.Job;
-import com.jobx.entity.WatchedCompany;
+import com.jobx.entity.Company;
 import com.jobx.enums.AtsPlatform;
 import com.jobx.fetcher.AtsFetchException;
 import com.jobx.fetcher.AtsFetcher;
@@ -51,10 +51,10 @@ public class GreenhouseFetcher implements AtsFetcher {
     }
 
     @Override
-    public List<Job> fetch(WatchedCompany company) {
+    public List<Job> fetch(Company company) {
         String token = company.getBoardToken();
         String url = BASE_URL + "/v1/boards/" + token + "/jobs?content=true";
-        log.info("Fetching Greenhouse board: {} ({})", company.getCompanyName(), token);
+        log.info("Fetching Greenhouse board: {} ({})", company.getDisplayName(), token);
 
         String responseBody;
         try {
@@ -82,7 +82,7 @@ public class GreenhouseFetcher implements AtsFetcher {
     }
 
     // Package-private seam so fixture tests can exercise the mapping without HTTP.
-    List<Job> parse(String responseBody, WatchedCompany company) throws Exception {
+    List<Job> parse(String responseBody, Company company) throws Exception {
         List<Job> results = new ArrayList<>();
 
         JsonNode root = objectMapper.readTree(responseBody);
@@ -96,7 +96,7 @@ public class GreenhouseFetcher implements AtsFetcher {
         }
 
         int total = root.path("meta").path("total").asInt(0);
-        log.info("Greenhouse returned {} jobs for {}", total, company.getCompanyName());
+        log.info("Greenhouse returned {} jobs for {}", total, company.getDisplayName());
 
         for (JsonNode node : jobs) {
 
@@ -161,7 +161,7 @@ public class GreenhouseFetcher implements AtsFetcher {
         }
 
         log.info("Translated {} real jobs (excluding prospect posts) for {}",
-                results.size(), company.getCompanyName());
+                results.size(), company.getDisplayName());
 
         return results;
     }

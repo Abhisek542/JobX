@@ -3,7 +3,7 @@ package com.jobx.fetcher.workable;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jobx.entity.Job;
-import com.jobx.entity.WatchedCompany;
+import com.jobx.entity.Company;
 import com.jobx.enums.AtsPlatform;
 import com.jobx.fetcher.AtsFetchException;
 import com.jobx.fetcher.AtsFetcher;
@@ -59,10 +59,10 @@ public class WorkableFetcher implements AtsFetcher {
     }
 
     @Override
-    public List<Job> fetch(WatchedCompany company) {
+    public List<Job> fetch(Company company) {
         String token = company.getBoardToken();
         String url = BASE_URL + "/api/v1/widget/accounts/" + token;
-        log.info("Fetching Workable board: {} ({})", company.getCompanyName(), token);
+        log.info("Fetching Workable board: {} ({})", company.getDisplayName(), token);
 
         String responseBody;
         try {
@@ -93,7 +93,7 @@ public class WorkableFetcher implements AtsFetcher {
      * Package-private seam so fixture tests can exercise the mapping without HTTP.
      * fetchDetails=false lets tests cover the list mapping in isolation.
      */
-    List<Job> parseList(String responseBody, WatchedCompany company, boolean fetchDetails) throws Exception {
+    List<Job> parseList(String responseBody, Company company, boolean fetchDetails) throws Exception {
         List<Job> results = new ArrayList<>();
 
         JsonNode root = objectMapper.readTree(responseBody);
@@ -175,14 +175,14 @@ public class WorkableFetcher implements AtsFetcher {
                     detailCalls++;
                 } catch (Exception e) {
                     log.warn("Workable detail fetch failed for {} ({}) — skipping, will retry next cycle: {}",
-                            shortcode, company.getCompanyName(), e.getMessage());
+                            shortcode, company.getDisplayName(), e.getMessage());
                     skipped++;
                     continue;
                 }
 
                 if (detailBody == null) {
                     log.warn("Workable detail was empty for {} ({}) — skipping, will retry next cycle",
-                            shortcode, company.getCompanyName());
+                            shortcode, company.getDisplayName());
                     skipped++;
                     continue;
                 }
@@ -195,7 +195,7 @@ public class WorkableFetcher implements AtsFetcher {
         }
 
         log.info("Translated {} new jobs for {} (Workable, {} detail calls, {} skipped pending retry)",
-                results.size(), company.getCompanyName(), detailCalls, skipped);
+                results.size(), company.getDisplayName(), detailCalls, skipped);
         return results;
     }
 

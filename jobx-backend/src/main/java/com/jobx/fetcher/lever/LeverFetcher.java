@@ -3,7 +3,7 @@ package com.jobx.fetcher.lever;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jobx.entity.Job;
-import com.jobx.entity.WatchedCompany;
+import com.jobx.entity.Company;
 import com.jobx.enums.AtsPlatform;
 import com.jobx.fetcher.AtsFetchException;
 import com.jobx.fetcher.AtsFetcher;
@@ -51,10 +51,10 @@ public class LeverFetcher implements AtsFetcher {
     }
 
     @Override
-    public List<Job> fetch(WatchedCompany company) {
+    public List<Job> fetch(Company company) {
         String token = company.getBoardToken();
         String url = BASE_URL + "/v0/postings/" + token + "?mode=json";
-        log.info("Fetching Lever board: {} ({})", company.getCompanyName(), token);
+        log.info("Fetching Lever board: {} ({})", company.getDisplayName(), token);
 
         String responseBody;
         try {
@@ -82,7 +82,7 @@ public class LeverFetcher implements AtsFetcher {
     }
 
     // Package-private seam so fixture tests can exercise the mapping without HTTP.
-    List<Job> parse(String responseBody, WatchedCompany company) throws Exception {
+    List<Job> parse(String responseBody, Company company) throws Exception {
         List<Job> results = new ArrayList<>();
 
         JsonNode root = objectMapper.readTree(responseBody);
@@ -128,7 +128,7 @@ public class LeverFetcher implements AtsFetcher {
             results.add(job);
         }
 
-        log.info("Translated {} jobs for {} (Lever)", results.size(), company.getCompanyName());
+        log.info("Translated {} jobs for {} (Lever)", results.size(), company.getDisplayName());
         return results;
     }
 

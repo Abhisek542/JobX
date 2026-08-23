@@ -1,5 +1,6 @@
 package com.jobx.dto;
 
+import com.jobx.entity.Company;
 import com.jobx.entity.WatchedCompany;
 import com.jobx.enums.AtsPlatform;
 
@@ -11,6 +12,10 @@ import java.util.UUID;
  * SUCCESS = "last checked {lastFetchedAt}", FAILED = the "Refresh issue"
  * warning state. The stored last_fetch_error is intentionally NOT exposed —
  * V1_IMPROVEMENTS.md keeps the raw cause server-side.
+ *
+ * JSON shape is unchanged by V4 — the Angular app needs no changes — but the
+ * fields now resolve through the shared Company: companyName is the canonical
+ * displayName, and the fetch-health trio is board-wide, not per-watch-row.
  */
 public record WatchedCompanyResponse(
         UUID id,
@@ -19,19 +24,20 @@ public record WatchedCompanyResponse(
         String boardToken,
         WatchedCompany.CompanyStatus status,
         Instant lastFetchedAt,
-        WatchedCompany.FetchStatus lastFetchStatus,
+        Company.FetchStatus lastFetchStatus,
         Instant createdAt
 ) {
-    public static WatchedCompanyResponse from(WatchedCompany company) {
+    public static WatchedCompanyResponse from(WatchedCompany watch) {
+        Company company = watch.getCompany();
         return new WatchedCompanyResponse(
-                company.getId(),
-                company.getCompanyName(),
+                watch.getId(),
+                company.getDisplayName(),
                 company.getAtsPlatform(),
                 company.getBoardToken(),
-                company.getStatus(),
+                watch.getStatus(),
                 company.getLastFetchedAt(),
                 company.getLastFetchStatus(),
-                company.getCreatedAt()
+                watch.getCreatedAt()
         );
     }
 }

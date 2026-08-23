@@ -28,7 +28,7 @@ public record MatchResponse(
                 match.getId(),
                 job.getId(),
                 job.getTitle(),
-                job.getCompany().getCompanyName(),
+                job.getCompany().getDisplayName(),
                 job.getApplyUrl(),
                 match.getScore(),
                 match.getMatchedKeywords(),

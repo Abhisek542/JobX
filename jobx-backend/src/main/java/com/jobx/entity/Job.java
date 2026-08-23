@@ -36,7 +36,7 @@ public class Job {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "company_id", nullable = false)
-    private WatchedCompany company;
+    private Company company;
 
     // The ATS's own job ID — used for dedup on re-fetch
     // Greenhouse: integer job id (stored as String for cross-ATS consistency)
