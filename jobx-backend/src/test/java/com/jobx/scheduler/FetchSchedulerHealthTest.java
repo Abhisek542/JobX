@@ -7,6 +7,7 @@ import com.jobx.fetcher.AtsFetchException;
 import com.jobx.fetcher.AtsFetcher;
 import com.jobx.fetcher.FetcherRegistry;
 import com.jobx.repository.CompanyRepository;
+import com.jobx.repository.ExpiredJobRepository;
 import com.jobx.repository.JobRepository;
 import com.jobx.service.MatchingService;
 import org.junit.jupiter.api.BeforeEach;
@@ -49,10 +50,12 @@ class FetchSchedulerHealthTest {
         matchingService = mock(MatchingService.class);
         fetcherRegistry = mock(FetcherRegistry.class);
         fetcher = mock(AtsFetcher.class);
+        ExpiredJobRepository expiredJobRepository = mock(ExpiredJobRepository.class);
+        when(expiredJobRepository.findExternalIdsByCompany(any())).thenReturn(java.util.Set.of());
 
         ObjectProvider<FetchScheduler> self = mock(ObjectProvider.class);
 
-        scheduler = new FetchScheduler(companyRepository, jobRepository,
+        scheduler = new FetchScheduler(companyRepository, jobRepository, expiredJobRepository,
                 fetcherRegistry, matchingService, self);
         when(self.getObject()).thenReturn(scheduler);
 

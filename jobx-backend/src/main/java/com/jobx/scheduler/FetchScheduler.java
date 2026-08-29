@@ -6,6 +6,7 @@ import com.jobx.entity.User;
 import com.jobx.fetcher.AtsFetcher;
 import com.jobx.fetcher.FetcherRegistry;
 import com.jobx.repository.CompanyRepository;
+import com.jobx.repository.ExpiredJobRepository;
 import com.jobx.repository.JobRepository;
 import com.jobx.service.MatchingService;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Core polling loop — the engine of Jobx Discovery.
@@ -41,6 +43,7 @@ public class FetchScheduler {
 
     private final CompanyRepository companyRepository;
     private final JobRepository jobRepository;
+    private final ExpiredJobRepository expiredJobRepository;
     private final FetcherRegistry fetcherRegistry;
     private final MatchingService matchingService;
     /** Own proxy, so fetchAllCompanies gets a real transaction per company. */
@@ -129,11 +132,24 @@ public class FetchScheduler {
         int newCount = 0;
         int requesterMatches = 0;
 
+        // Postings we deliberately dropped on age (V5). Loaded once per board
+        // rather than per job — a board the size of Bosch is thousands of
+        // postings, and this is the same question asked once instead of N times.
+        Set<String> tombstoned = expiredJobRepository.findExternalIdsByCompany(company);
+
         for (Job job : fetchedJobs) {
             // Dedup: skip if we've seen this external_id for this company before.
             // Post-V4 this is board-wide, not per-watch-row — the second user
             // watching a board no longer re-inserts every posting.
             if (jobRepository.existsByCompanyAndExternalId(company, job.getExternalId())) {
+                continue;
+            }
+
+            // Expired on purpose. Boards keep stale postings listed long after
+            // they stop being worth applying to, so without this the retention
+            // sweep and this loop would fight: deleted each night, re-added as
+            // "new" each morning, re-notifying every watcher forever.
+            if (tombstoned.contains(job.getExternalId())) {
                 continue;
             }
 

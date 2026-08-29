@@ -51,6 +51,14 @@ const STATUS_TAG: Record<MatchStatus, { cls: string; text: string } | null> = {
             <span>{{ match().companyName }}</span>
             <span class="dot"></span>
             <span>Found {{ found() }}</span>
+            @if (expired(); as gone) {
+              <!-- Jobx stopped tracking this posting after six days. It is kept
+                   only because you saved or applied to it, and the apply link
+                   very likely 404s now — say so rather than letting a dead
+                   listing sit in the feed looking live (uiux_plan.md §7). -->
+              <span class="dot"></span>
+              <span class="expired">No longer listed · closed {{ gone }}</span>
+            }
           </div>
 
           <div class="skills">
@@ -93,6 +101,11 @@ export class MatchCard {
   protected readonly scoreBand = computed(() => band(this.match().score));
   protected readonly tag = computed(() => STATUS_TAG[this.match().status]);
   protected readonly found = computed(() => relTime(this.match().createdAt));
+  /** Set once the backend's six-day TTL has swept the posting away. */
+  protected readonly expired = computed(() => {
+    const expiredAt = this.match().expiredAt;
+    return expiredAt ? relTime(expiredAt) : null;
+  });
   protected readonly shownKeywords = computed(() => this.match().matchedKeywords.slice(0, 3));
   protected readonly extraKeywords = computed(
     () => this.match().matchedKeywords.length - this.shownKeywords().length,

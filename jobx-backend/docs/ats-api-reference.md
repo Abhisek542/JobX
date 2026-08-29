@@ -87,9 +87,60 @@ the fetcher makes two kinds of calls:
 Zerodha's careers page is custom-built, not Workable-hosted — Apna (`apna`) is the
 confirmed working target.
 
+## SmartRecruiters — VERIFIED (fetcher built + live-tested 2026-08-29); TWO-CALL DESIGN
+
+Added because **PhonePe migrated here off Greenhouse**. Their old token `phonepe`
+now 404s at both `boards-api.greenhouse.io` and `job-boards.greenhouse.io` (their
+individual job pages 404 too, even ones still in Google's index), while their
+careers feed at `phonepe.com/apollo/job-postings/latest.json` links every live
+role to `jobs.smartrecruiters.com/PHONEPELIMITED/...`. Verified live against
+PhonePe (`PHONEPELIMITED`, 6 postings) and Bosch (`BoschGroup`, 4,774 postings —
+the pagination target).
+
+- **List:** `GET api.smartrecruiters.com/v1/companies/{token}/postings?limit=100&offset=N`
+  → `{ offset, limit, totalFound, content: [] }`. Items carry `id` → `external_id`,
+  `name` → `title` (not `title`), `releasedDate` (full ISO with millis,
+  `2026-08-28T11:20:45.290Z`) → `platform_posted_at`, `location.fullLocation` →
+  `location` (falls back to `location.city`), plus `experienceLevel`, `function`,
+  `typeOfEmployment`, `ref`.
+- **PAGINATION IS MANDATORY — `limit` is silently capped at 100.** Asking for 500
+  returns 100 rows with `"limit":100` echoed back, and no error. A single call
+  against Bosch would quietly return the first 2% of the board and look completely
+  successful. The fetcher pages on `offset` until a short or empty page arrives,
+  rather than trusting `totalFound`, which can shift mid-pagination.
+- **A BOGUS TOKEN RETURNS `200 {"totalFound":0,"content":[]}`, NOT 404.** Verified
+  against a nonsense company id. This is unique among the five platforms and it
+  breaks the `AtsFetcher` contract's assumption that an empty list means the board
+  is genuinely empty — a typo'd token would look perfectly healthy and simply never
+  produce a job, the same silent-empty-feed shape as the 07-18 and C++ bugs.
+  Handled by `AtsFetcher.validateBoard` (default no-op, overridden here), called
+  from `POST /watchlist` only when creating a company nobody watches yet; it
+  rejects with **400** naming the token. Deliberately NOT enforced inside `fetch`,
+  so a real board that has zero openings this week keeps working.
+- **There is no company-metadata endpoint to validate against** —
+  `GET /v1/companies/{token}` 404s for valid and invalid ids alike. The postings
+  list is the only probe available.
+- **Detail:** `GET api.smartrecruiters.com/v1/companies/{token}/postings/{id}` —
+  needed because the list carries **neither a description nor an apply URL**.
+  Gives `postingUrl` → `apply_url` (preferred; `applyUrl` is the same page with an
+  `?oga=true` tracking param), and `jobAd.sections.{companyDescription,
+  jobDescription, qualifications, additionalInformation}` — each an HTML blob with
+  a `.text`, stripped and concatenated in that order, the way Lever's multi-field
+  body is assembled.
+- **N+1 guard:** as with Workable, detail is fetched only for ids not already in
+  the DB. On Bosch that is the difference between ~2 calls and 4,774 per cycle. A
+  failed detail call SKIPS the job, same reasoning as Workable — a row persisted
+  without a description would never be revisited, because the guard keys off row
+  existence.
+- `experienceLevel` is a seniority label (`director`, `mid_senior_level`), NOT
+  years — ignored, exactly like Workable's. Years come from description text via
+  `ExperienceParser`.
+
 ## Test fixtures
 
-Real captured responses (2026-08-02) live in `src/test/resources/fixtures/` and back
-the fetcher unit tests: `ashby-aspora.json`, `lever-fampay.json`, `lever-sprinto.json`,
-`workable-apna.json` (list), `workable-v2-job.json` (detail). If a board's live shape
-drifts, re-capture with curl and update both fixture and mapping.
+Real captured responses live in `src/test/resources/fixtures/` and back the fetcher
+unit tests: `ashby-aspora.json`, `lever-fampay.json`, `lever-sprinto.json`,
+`workable-apna.json` (list), `workable-v2-job.json` (detail) — all 2026-08-02 — plus
+`smartrecruiters-phonepe.json` (list) and `smartrecruiters-phonepe-detail.json`
+(detail), captured 2026-08-29. If a board's live shape drifts, re-capture with curl
+and update both fixture and mapping.

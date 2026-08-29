@@ -162,9 +162,24 @@ export class AddCompanyModal {
       });
       this.added.emit(company);
       this.closed.emit();
-      this.toasts.ok(`${company.companyName} added · running the first check now`);
+
+      // lastFetchStatus === null means Jobx has never checked this board, so
+      // "the first check" is literally true. A board someone else already
+      // watches has been checked before — and the add just backfilled this
+      // user's matches from its stored jobs — so promising a first check there
+      // would be a lie about where the roles about to appear came from.
+      const neverChecked = company.lastFetchStatus === null;
+      this.toasts.ok(
+        neverChecked
+          ? `${company.companyName} added · running the first check now`
+          : `${company.companyName} added · scoring the roles already on that board`,
+      );
+
       // "Add & check now" — the first scheduled cycle can be up to 30 min away.
-      this.store.checkNow(company);
+      // Stays quiet about "no new roles": for an already-watched board the
+      // shared cooldown answers 200-with-zeros, which would contradict the
+      // backfilled matches landing in the feed at the same moment.
+      this.store.checkNow(company, { quietWhenNothingNew: !neverChecked });
     } catch (error) {
       const appError = error as AppError;
       this.saving.set(false);

@@ -1,5 +1,11 @@
 /** Mirrors com.jobx.dto.WatchedCompanyResponse / WatchedCompanyRequest. */
-export type AtsPlatform = 'GREENHOUSE' | 'LEVER' | 'ASHBY' | 'WORKABLE' | 'UNSUPPORTED';
+export type AtsPlatform =
+  | 'GREENHOUSE'
+  | 'LEVER'
+  | 'ASHBY'
+  | 'WORKABLE'
+  | 'SMARTRECRUITERS'
+  | 'UNSUPPORTED';
 export type CompanyStatus = 'ACTIVE' | 'PAUSED' | 'UNSUPPORTED';
 export type FetchStatus = 'SUCCESS' | 'FAILED';
 
@@ -33,12 +39,13 @@ export interface ManualFetchResponse {
   newMatches: number;
 }
 
-/** The four platforms with a real public API. UNSUPPORTED is never offered. */
+/** The platforms with a real public API. UNSUPPORTED is never offered. */
 export const SUPPORTED_PLATFORMS: readonly AtsPlatform[] = [
   'GREENHOUSE',
   'LEVER',
   'ASHBY',
   'WORKABLE',
+  'SMARTRECRUITERS',
 ];
 
 export const PLATFORM_LABEL: Record<AtsPlatform, string> = {
@@ -46,6 +53,7 @@ export const PLATFORM_LABEL: Record<AtsPlatform, string> = {
   LEVER: 'Lever',
   ASHBY: 'Ashby',
   WORKABLE: 'Workable',
+  SMARTRECRUITERS: 'SmartRecruiters',
   UNSUPPORTED: 'Unsupported board',
 };
 
@@ -55,4 +63,10 @@ export const TOKEN_HINTS: Record<string, { placeholder: string; url: string; tok
   LEVER: { placeholder: 'fampay', url: 'jobs.lever.co/', token: 'fampay' },
   ASHBY: { placeholder: 'sprinto', url: 'jobs.ashbyhq.com/', token: 'sprinto' },
   WORKABLE: { placeholder: 'apna', url: 'apply.workable.com/', token: 'apna' },
+  // SmartRecruiters company IDs are usually upper-case and unspaced (PHONEPELIMITED).
+  SMARTRECRUITERS: {
+    placeholder: 'PHONEPELIMITED',
+    url: 'jobs.smartrecruiters.com/',
+    token: 'PHONEPELIMITED',
+  },
 };

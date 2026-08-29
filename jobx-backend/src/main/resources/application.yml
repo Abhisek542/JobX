@@ -31,6 +31,13 @@ jobx:
   fetch:
     interval-ms: 1800000    # 30 minutes — override to 60000 for local dev testing
     manual-cooldown-ms: 300000   # 5 min between manual "Check now" fetches per company
+  retention:
+    # Jobx is about applying before the aggregators pick a role up. Past this
+    # window that race is lost, so the posting is deleted and tombstoned (the
+    # tombstone is what stops the next fetch re-adding it — see V5__job_ttl.sql).
+    # Clock is the ATS's own posting date, falling back to first_seen_at.
+    job-ttl-days: 6
+    sweep-interval-ms: 86400000   # daily
   http:
     # Timeouts for outbound ATS calls. Without these a board that accepts the
     # connection and never replies parks the scheduler thread forever and no

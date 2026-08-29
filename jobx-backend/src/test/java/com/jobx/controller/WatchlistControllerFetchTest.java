@@ -8,6 +8,7 @@ import com.jobx.enums.AtsPlatform;
 import com.jobx.repository.CompanyRepository;
 import com.jobx.repository.MatchRepository;
 import com.jobx.repository.WatchedCompanyRepository;
+import com.jobx.fetcher.FetcherRegistry;
 import com.jobx.scheduler.FetchScheduler;
 import com.jobx.service.MatchingService;
 import org.junit.jupiter.api.BeforeEach;
@@ -48,9 +49,11 @@ class WatchlistControllerFetchTest {
     void setUp() {
         repository = mock(WatchedCompanyRepository.class);
         fetchScheduler = mock(FetchScheduler.class);
+        FetcherRegistry fetcherRegistry = mock(FetcherRegistry.class);
+        when(fetcherRegistry.getFetcher(any())).thenReturn(Optional.empty());
         controller = new WatchlistController(repository, mock(CompanyRepository.class),
                 mock(MatchRepository.class), mock(MatchingService.class),
-                fetchScheduler, COOLDOWN_MS);
+                fetchScheduler, fetcherRegistry, COOLDOWN_MS);
 
         owner = new User();
         owner.setId(UUID.randomUUID());

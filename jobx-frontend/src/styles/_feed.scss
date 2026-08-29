@@ -261,6 +261,13 @@ select.sort:hover {
   flex: none;
 }
 
+/* The posting is gone (six-day TTL); the card survives only as saved/applied
+   history. Warm, not alarming — nothing is wrong, the role just closed. */
+.meta .expired {
+  color: var(--warn);
+  font-weight: 600;
+}
+
 .match {
   display: flex;
   align-items: center;
