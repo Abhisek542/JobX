@@ -320,9 +320,101 @@ silent-zero-feed bug, same shape as 07-18 and the C++ one). Two parts:
   descriptions) — working as designed, but generic English excludes gut the
   feed; a UX warning for high-kill excludes may be worth a future P2.
 
-**CURRENT FOCUS (2026-08-23): the shared-companies rework (fix B) is done and
-live-verified — see the FIXED 2026-08-23 entry above. The profile-save rescore
-(above) is also done. Nothing is mid-flight.**
+**FIXED (2026-08-29) — matches created but never rendered.** Reported as "new
+user adds a company and the matching jobs never show up". The backend was
+correct all along: the DB proved `POST /watchlist` backfilled 6 matches **90 ms
+after** the watch row was created. The frontend never reloaded the feed.
+`FeedStore` is a root singleton whose `load()` no-ops once `loaded` is true, and
+the only forced reloads were unwatch, the error-retry button, and `checkNow`
+*when `newMatches > 0`* — but a backfill is not a fetch and never counts toward
+`newMatches`, so for a board another user already watches (`200` with zeros from
+the shared cooldown) nothing ever refreshed. Fixes:
+- `WatchlistStore.add()` now reloads the feed. This is the actual bug.
+- `checkNow(company, {quietWhenNothingNew})` suppresses only the "no new roles"
+  toast for the auto-check fired right after an add — it otherwise contradicts
+  the backfilled matches landing in the feed at that same moment.
+- The add-company modal branches on `lastFetchStatus === null` so it only
+  promises "running the first check now" for a board Jobx has genuinely never
+  checked.
+- `FilterProfileStore.save()` reloads too — `PUT /profile/filter` runs
+  `rescoreForWatcher` server-side and no frontend path was picking that up.
+- **Also fixed, uncommitted in the working tree at the time:** the manual-fetch
+  cooldown in `WatchlistController.fetchNow` had `if (sinceMs < manualCooldownMs)`
+  commented out with its inner branches left live, so every already-fetched board
+  returned 200-with-zeros *forever* (never re-fetching) and every FAILED board
+  threw 429 with a negative retry time. `WatchlistControllerFetchTest` was
+  catching this — it errored with the broken version and passes 7/7 with the
+  guard restored.
+
+**PhonePe left Greenhouse (found 2026-08-29).** Token `phonepe` 404s at the API
+and on the board pages; it genuinely worked on 2026-08-23 (68 jobs stored with
+`job-boards.greenhouse.io/phonepe` apply URLs). They are now on **SmartRecruiters
+as `PHONEPELIMITED`**. The dead `GREENHOUSE/phonepe` company row was deleted;
+re-add PhonePe through the UI as SMARTRECRUITERS. A board dying is normal
+attrition — the 502 + "Refresh issue" health state handled it exactly right.
+
+**Dev database jobs truncated 2026-08-29** on Abhisek's instruction: `TRUNCATE
+jobs CASCADE` (393 jobs → 0, cascading 133 matches → 0), the dead PhonePe row
+deleted (9 → 6 watch rows), and every company's fetch health cleared so boards
+refill from a clean slate. Users, profiles and watches were kept. A `pg_dump`
+was taken to a session scratchpad first — treat it as gone.
+
+**Job TTL done and live-verified 2026-08-29 (migration `V5__job_ttl.sql`).**
+Rationale is the product thesis: Jobx exists to get a user onto the careers page
+before the aggregators, so a posting past the window has already lost that race
+and storing it is waste. **Six days, clocked on the ATS's own posting date**
+(`platform_posted_at`, falling back to the NOT NULL `first_seen_at`).
+`jobx.retention.job-ttl-days: 6`, swept daily by `JobRetentionSweeper`.
+
+The naive version of this is a trap, and the design is mostly about avoiding it.
+Dedup is `existsByCompanyAndExternalId` against the jobs table, so deleting a
+posting that is **still listed on the board** means the next poll re-inserts it
+as brand new — re-scored, re-notified, swept again the next night, forever, and
+each round wiped APPLIED state through `matches.job_id ON DELETE CASCADE`. So
+expiry is two things:
+- an **`expired_jobs` tombstone** (company + external_id + posted_at, nothing
+  heavy) that outlives the job row and carries the dedup decision. `FetchScheduler`
+  loads the set once per board — not per job; Bosch is 4,774 postings — and skips
+  tombstoned ids.
+- `matches.job_id` is now **NULLABLE with ON DELETE SET NULL**. Abhisek's call:
+  NEW and DISMISSED matches are deleted with the posting; **SEEN (saved) and
+  APPLIED are kept** as the user's own history, losing only their job pointer.
+  That is why `matches` now denormalizes `company_id` (a real FK — companies
+  outlive jobs, and unwatch cleanup must still reach expired rows), `job_title`
+  and `apply_url`, and stamps `job_expired_at`. `MatchResponse` gained
+  `expiredAt` and its `jobId` can now be null; the card renders "No longer
+  listed · closed 2d ago" rather than presenting a dead posting as live.
+  **Anything reading `match.getJob()` must null-check it.**
+- Live-verified end to end: 6 jobs aged to 9 days → sweep logged "6 jobs deleted,
+  4 matches dropped, 2 kept as saved/applied history", 6 tombstones written, the
+  APPLIED and SEEN rows survived with `job_id` null and `job_expired_at` set —
+  and **re-fetching the board, all 6 postings still live on it, returned
+  `newJobs: 0`**. That last check is the one that matters.
+
+**SmartRecruiters fetcher done and live-verified 2026-08-29.** Fifth platform;
+`AtsPlatform.SMARTRECRUITERS`, registry-routed like the rest. Two-call design
+(list has neither description nor apply URL). Verified against PhonePe
+(6 postings, descriptions 2.4k–5.4k chars, experience parsed, clean
+`postingUrl`s) and Bosch (4,774, the pagination case). Two quirks drove the
+design and are written up in `docs/ats-api-reference.md`:
+- **`limit` is silently capped at 100** — ask for 500, get 100 and a cheerful
+  `"limit":100`. One call against Bosch would return 2% of the board and look
+  successful. Pages on `offset`.
+- **A bogus token returns `200 {"totalFound":0,"content":[]}`, never 404** —
+  alone among the five platforms, which breaks `AtsFetcher`'s "empty means
+  genuinely empty" contract. New `AtsFetcher.validateBoard` (default no-op,
+  overridden only here) runs from `POST /watchlist` when creating a company
+  nobody watches yet and rejects a typo with **400**; it is deliberately NOT
+  enforced in `fetch`, so a real board with no current openings keeps working.
+  Verified: `PHONEPELIMTED` → 400 with no junk company row left behind,
+  `PHONEPELIMITED` → 201 then 6 jobs / 6 matches.
+
+Test suite 102 → 120 (`JobRetentionSweeperTest`, `SmartRecruitersFetcherTest`,
+two new tombstone cases in `FetchSchedulerSharedJobsTest`).
+
+**CURRENT FOCUS (2026-08-29): nothing is mid-flight.** The feed-reload fix, the
+six-day job TTL and the SmartRecruiters fetcher are all done and live-verified
+(above).
 What remains are backend items the dashboard currently works around. None are
 started; all are pending Abhisek's call:
 - Backend gaps the frontend deliberately papers over, each recorded in
@@ -365,12 +457,19 @@ Detect ATS from careers URL, hit that platform's public job API directly:
 - Lever: `api.lever.co/v0/postings/{company}?mode=json`
 - Ashby: `api.ashbyhq.com/posting-api/job-board/{token}` (public, no-auth path — not `jobPosting.list`)
 - Workable: `apply.workable.com/api/v1/widget/accounts/{token}` (embed-widget endpoint)
+- SmartRecruiters: `api.smartrecruiters.com/v1/companies/{id}/postings` (public, two-call;
+  list is capped at 100/page and a bogus id returns an empty 200, not a 404)
 - Trickier/later: Rippling, Recruitee, BambooHR, Workday — no clean public API, mark "portal unsupported" rather than faking support
 
-**All four platforms are now implemented and live-verified (2026-08-02).** Verified
-field-level details (JSON shapes, date formats, Workable's two-call design, per-board
-quirks, dead board tokens) are in `jobx-backend/docs/ats-api-reference.md` — read that file before
-touching any fetcher code, not this one.
+**All five platforms are implemented and live-verified** (the first four 2026-08-02,
+SmartRecruiters 2026-08-29). Verified field-level details (JSON shapes, date formats,
+the two-call designs, per-board quirks, dead board tokens) are in
+`jobx-backend/docs/ats-api-reference.md` — read that file before touching any fetcher
+code, not this one.
+
+Board tokens rot: PhonePe's Greenhouse board went from 68 live jobs to a hard 404
+in six days when they moved to SmartRecruiters. Treat a sudden FAILED board as
+"check where the company's careers page points now", not as a bug in the fetcher.
 
 ## The matching engine — VERIFIED, port this logic, don't redesign it
 
@@ -407,14 +506,21 @@ Company         (id, ats_platform, board_token, display_name,        ← since V
 WatchedCompany  (id, user_id, company_id, status)   ← join row since V4
 Job             (id, company_id → companies, external_id, title, description,
                  location, exp_min, exp_max, apply_url, posted_at, ats_platform)
-Match           (id, user_id, job_id, score, matched_keywords[], created_at,
-                 status: new/seen/applied/dismissed)
+ExpiredJob      (id, company_id, external_id, posted_at, expired_at)  ← since V5
+                 tombstone: a job the TTL dropped, so a fetch can't re-add it
+Match           (id, user_id, job_id?, company_id, job_title, apply_url,
+                 score, matched_keywords[], created_at, job_expired_at?,
+                 status: new/seen/applied/dismissed)      ← job_id NULLABLE since V5
 ```
 
 Actual implemented `jobs` schema differs slightly: `platform_posted_at` (ATS's own
 timestamp, display only) vs `first_seen_at` (when Jobx first observed the job — the
 real sort/alert field). `raw_json` jsonb escape hatch. `Job.company` is a real
 `@ManyToOne` — to `Company` since V4 (pre-V4 it pointed at `WatchedCompany`).
+
+Since V5, `platform_posted_at` has a second job: it is the **clock for the six-day
+retention TTL** (falling back to `first_seen_at` when the board publishes no date).
+It is still never used for feed sorting.
 
 `Job` rows are shared/global per company (`companies` keyed
 `(ats_platform, board_token)`); `Match` rows are the per-user scored view,
@@ -424,6 +530,11 @@ ACTIVE watcher) or when a user adds a watch on an already-populated board
 per-watch-row jobs defect found 2026-08-15 was fixed by the V4 shared-companies
 rework; see the FIXED 2026-08-23 entry in Implementation status for the full
 story and verification.
+
+A `Match` can now **outlive its `Job`** (V5 TTL): `job_id` is nullable, and a
+SEEN/APPLIED match kept past its posting's expiry has `job_id = null` plus
+`job_expired_at` set. That is why `job_title`, `apply_url` and `company_id` are
+denormalized onto `matches` — null-check `match.getJob()` anywhere you touch it.
 
 Given per-company `metadata` inconsistency on Greenhouse, don't add strongly-typed
 columns for ATS-specific fields — store as unstructured `raw_metadata` JSON if kept at

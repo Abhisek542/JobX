@@ -138,8 +138,12 @@ public class MatchingService {
             if (watch.getStatus() != WatchedCompany.CompanyStatus.ACTIVE) continue;
             Company company = watch.getCompany();
 
+            // Expired matches (job already swept away) are skipped: there is no
+            // job left to rescore against, and they are kept precisely because
+            // they are the user's own saved/applied history, not live results.
             Map<UUID, Match> existingByJobId =
-                    matchRepository.findByUserAndJob_Company(user, company).stream()
+                    matchRepository.findByUserAndCompany(user, company).stream()
+                            .filter(m -> m.getJob() != null)
                             .collect(Collectors.toMap(m -> m.getJob().getId(), Function.identity()));
 
             for (Job job : jobRepository.findByCompany(company)) {
@@ -176,6 +180,13 @@ public class MatchingService {
         Match match = new Match();
         match.setUser(user);
         match.setJob(job);
+        // Denormalized at creation (V5): the six-day TTL sweep deletes the job
+        // but keeps SEEN/APPLIED matches, and a card still has to render after
+        // that. Copying three fields is cheaper than keeping whole postings
+        // alive just so their titles survive.
+        match.setCompany(job.getCompany());
+        match.setJobTitle(job.getTitle());
+        match.setApplyUrl(job.getApplyUrl());
         match.setScore(result.score());
         match.setMatchedKeywords(result.matchedKeywords());
         match.setStatus(Match.MatchStatus.NEW);

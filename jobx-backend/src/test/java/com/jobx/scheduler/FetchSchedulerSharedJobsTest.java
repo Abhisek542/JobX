@@ -7,6 +7,7 @@ import com.jobx.enums.AtsPlatform;
 import com.jobx.fetcher.AtsFetcher;
 import com.jobx.fetcher.FetcherRegistry;
 import com.jobx.repository.CompanyRepository;
+import com.jobx.repository.ExpiredJobRepository;
 import com.jobx.repository.JobRepository;
 import com.jobx.service.MatchingService;
 import org.junit.jupiter.api.BeforeEach;
@@ -15,6 +16,7 @@ import org.springframework.beans.factory.ObjectProvider;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -33,6 +35,7 @@ class FetchSchedulerSharedJobsTest {
     private JobRepository jobRepository;
     private MatchingService matchingService;
     private AtsFetcher fetcher;
+    private ExpiredJobRepository expiredJobRepository;
     private FetchScheduler scheduler;
 
     private Company company;
@@ -46,9 +49,11 @@ class FetchSchedulerSharedJobsTest {
         matchingService = mock(MatchingService.class);
         FetcherRegistry fetcherRegistry = mock(FetcherRegistry.class);
         fetcher = mock(AtsFetcher.class);
+        expiredJobRepository = mock(ExpiredJobRepository.class);
+        when(expiredJobRepository.findExternalIdsByCompany(any())).thenReturn(Set.of());
         ObjectProvider<FetchScheduler> self = mock(ObjectProvider.class);
 
-        scheduler = new FetchScheduler(companyRepository, jobRepository,
+        scheduler = new FetchScheduler(companyRepository, jobRepository, expiredJobRepository,
                 fetcherRegistry, matchingService, self);
         when(self.getObject()).thenReturn(scheduler);
 
@@ -78,6 +83,37 @@ class FetchSchedulerSharedJobsTest {
         // The fan-out happens exactly once, from the single shared row —
         // MatchingService owns per-watcher scoring
         verify(matchingService, times(1)).scoreForActiveWatchers(company, posting, null);
+    }
+
+    @Test
+    void anExpiredPostingIsNotResurrectedWhileStillLiveOnTheBoard() {
+        // The job row is gone (the TTL sweep deleted it), so the jobs-table
+        // dedup says "never seen this". Boards keep stale postings listed for
+        // weeks, so without the tombstone check this posting would be
+        // re-inserted as brand new, re-notify every watcher, and be swept again
+        // the next night — forever.
+        when(jobRepository.existsByCompanyAndExternalId(company, "4001")).thenReturn(false);
+        when(expiredJobRepository.findExternalIdsByCompany(company)).thenReturn(Set.of("4001"));
+
+        FetchScheduler.FetchResult result = scheduler.fetchCompany(company, null);
+
+        assertEquals(0, result.newJobs());
+        assertFalse(result.failed());
+        verify(jobRepository, never()).save(any(Job.class));
+        verifyNoInteractions(matchingService);
+    }
+
+    @Test
+    void aTombstoneOnlyBlocksItsOwnPosting() {
+        // The tombstone set is board-wide, so it must be matched on external id
+        // and not allowed to suppress everything else the board returns.
+        when(jobRepository.existsByCompanyAndExternalId(company, "4001")).thenReturn(false);
+        when(expiredJobRepository.findExternalIdsByCompany(company)).thenReturn(Set.of("9999"));
+
+        FetchScheduler.FetchResult result = scheduler.fetchCompany(company, null);
+
+        assertEquals(1, result.newJobs());
+        verify(jobRepository).save(posting);
     }
 
     @Test

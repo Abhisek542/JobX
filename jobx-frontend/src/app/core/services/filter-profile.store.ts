@@ -2,10 +2,12 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import { FilterProfileApi } from '../api/filter-profile.api';
 import { AppError } from '../models/api-error.model';
 import { FilterProfileRequest, FilterProfileResponse } from '../models/filter-profile.model';
+import { FeedStore } from '../../features/dashboard/feed.store';
 
 @Injectable({ providedIn: 'root' })
 export class FilterProfileStore {
   private readonly api = inject(FilterProfileApi);
+  private readonly feed = inject(FeedStore);
 
   private readonly profileSignal = signal<FilterProfileResponse | null>(null);
   private readonly loadingSignal = signal(false);
@@ -62,7 +64,16 @@ export class FilterProfileStore {
     });
   }
 
-  /** PUT upserts. Rejects with the AppError so the form can show `fieldErrors`. */
+  /**
+   * PUT upserts. Rejects with the AppError so the form can show `fieldErrors`.
+   *
+   * Every save rescores the whole feed server-side
+   * (MatchingService.rescoreForWatcher): matches are created, refreshed and
+   * deleted before the response arrives. The feed must be reloaded or the
+   * dashboard keeps rendering scores from the previous keywords — including the
+   * onboarding case, where the very first save is what turns an empty feed into
+   * a populated one.
+   */
   save(request: FilterProfileRequest): Promise<FilterProfileResponse> {
     return new Promise((resolve, reject) => {
       this.api.save(request).subscribe({
@@ -70,6 +81,7 @@ export class FilterProfileStore {
           this.profileSignal.set(profile);
           this.missingSignal.set(false);
           this.loadedSignal.set(true);
+          this.feed.reload();
           resolve(profile);
         },
         error: (error: AppError) => reject(error),

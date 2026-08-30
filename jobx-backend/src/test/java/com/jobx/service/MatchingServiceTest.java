@@ -192,7 +192,7 @@ class MatchingServiceTest {
     void rescoreCreatesMatchesForJobsFetchedBeforeTheProfileExisted() {
         when(watchedCompanyRepository.findByUser(userA))
                 .thenReturn(List.of(watch(userA, WatchedCompany.CompanyStatus.ACTIVE)));
-        when(matchRepository.findByUserAndJob_Company(userA, company)).thenReturn(List.of());
+        when(matchRepository.findByUserAndCompany(userA, company)).thenReturn(List.of());
         when(jobRepository.findByCompany(company)).thenReturn(List.of(job));
 
         MatchingService.RescoreResult result =
@@ -212,7 +212,7 @@ class MatchingServiceTest {
         Match stale = match(userA, job, Match.MatchStatus.NEW, 100, List.of("java"));
         when(watchedCompanyRepository.findByUser(userA))
                 .thenReturn(List.of(watch(userA, WatchedCompany.CompanyStatus.ACTIVE)));
-        when(matchRepository.findByUserAndJob_Company(userA, company)).thenReturn(List.of(stale));
+        when(matchRepository.findByUserAndCompany(userA, company)).thenReturn(List.of(stale));
         when(jobRepository.findByCompany(company)).thenReturn(List.of(job));
 
         MatchingService.RescoreResult result =
@@ -230,7 +230,7 @@ class MatchingServiceTest {
         Match applied = match(userA, job, Match.MatchStatus.APPLIED, 100, List.of("java"));
         when(watchedCompanyRepository.findByUser(userA))
                 .thenReturn(List.of(watch(userA, WatchedCompany.CompanyStatus.ACTIVE)));
-        when(matchRepository.findByUserAndJob_Company(userA, company)).thenReturn(List.of(applied));
+        when(matchRepository.findByUserAndCompany(userA, company)).thenReturn(List.of(applied));
         when(jobRepository.findByCompany(company)).thenReturn(List.of(job));
 
         MatchingService.RescoreResult result =
@@ -247,7 +247,7 @@ class MatchingServiceTest {
         Match existing = match(userA, job, Match.MatchStatus.SEEN, 100, List.of("java"));
         when(watchedCompanyRepository.findByUser(userA))
                 .thenReturn(List.of(watch(userA, WatchedCompany.CompanyStatus.ACTIVE)));
-        when(matchRepository.findByUserAndJob_Company(userA, company)).thenReturn(List.of(existing));
+        when(matchRepository.findByUserAndCompany(userA, company)).thenReturn(List.of(existing));
         when(jobRepository.findByCompany(company)).thenReturn(List.of(job));
 
         // Two keywords, only "java" hits the title: 70 * (2/4) = 35, + 30 exp
@@ -266,7 +266,7 @@ class MatchingServiceTest {
         Match unchanged = match(userA, job, Match.MatchStatus.NEW, 100, List.of("java"));
         when(watchedCompanyRepository.findByUser(userA))
                 .thenReturn(List.of(watch(userA, WatchedCompany.CompanyStatus.ACTIVE)));
-        when(matchRepository.findByUserAndJob_Company(userA, company)).thenReturn(List.of(unchanged));
+        when(matchRepository.findByUserAndCompany(userA, company)).thenReturn(List.of(unchanged));
         when(jobRepository.findByCompany(company)).thenReturn(List.of(job));
 
         MatchingService.RescoreResult result =

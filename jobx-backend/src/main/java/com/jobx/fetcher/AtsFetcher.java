@@ -35,4 +35,24 @@ public interface AtsFetcher {
      * next company from being processed.
      */
     List<Job> fetch(Company company);
+
+    /**
+     * Cheap one-call check that the board token actually identifies a board,
+     * run once when a user first adds it. Throws {@link AtsFetchException} if
+     * it does not; POST /watchlist turns that into a 400 naming the token.
+     *
+     * The default is to do nothing, because for Greenhouse, Lever, Ashby and
+     * Workable a bad token 404s and {@link #fetch} already reports it. It is
+     * overridden only where the API cannot tell a typo from an empty board —
+     * SmartRecruiters answers a nonsense company id with a cheerful
+     * {@code 200 {"totalFound":0,"content":[]}}, so without this a typo'd
+     * watch would look healthy forever and simply never produce a job.
+     *
+     * Deliberately separate from {@code fetch}: a real board that has zero
+     * openings this week must keep fetching normally once it is on the
+     * watchlist. The distinction is only drawable at add time.
+     */
+    default void validateBoard(Company company) {
+        // no-op: this platform's API distinguishes a bad token by itself
+    }
 }

@@ -7,12 +7,16 @@ import com.jobx.dto.WatchedCompanyResponse;
 import com.jobx.entity.Company;
 import com.jobx.entity.User;
 import com.jobx.entity.WatchedCompany;
+import com.jobx.fetcher.AtsFetchException;
+import com.jobx.fetcher.AtsFetcher;
+import com.jobx.fetcher.FetcherRegistry;
 import com.jobx.repository.CompanyRepository;
 import com.jobx.repository.MatchRepository;
 import com.jobx.repository.WatchedCompanyRepository;
 import com.jobx.scheduler.FetchScheduler;
 import com.jobx.service.MatchingService;
 import jakarta.validation.Valid;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
@@ -42,6 +46,7 @@ import java.util.UUID;
  *    ("the board really was just checked" is the honest answer); 429 is kept
  *    only for a recently FAILED attempt, so users can't hammer a broken board.
  */
+@Slf4j
 @RestController
 @RequestMapping("/watchlist")
 public class WatchlistController {
@@ -51,6 +56,7 @@ public class WatchlistController {
     private final MatchRepository matchRepository;
     private final MatchingService matchingService;
     private final FetchScheduler fetchScheduler;
+    private final FetcherRegistry fetcherRegistry;
     private final long manualCooldownMs;
 
     public WatchlistController(WatchedCompanyRepository watchedCompanyRepository,
@@ -58,12 +64,14 @@ public class WatchlistController {
                                MatchRepository matchRepository,
                                MatchingService matchingService,
                                FetchScheduler fetchScheduler,
+                               FetcherRegistry fetcherRegistry,
                                @Value("${jobx.fetch.manual-cooldown-ms:300000}") long manualCooldownMs) {
         this.watchedCompanyRepository = watchedCompanyRepository;
         this.companyRepository = companyRepository;
         this.matchRepository = matchRepository;
         this.matchingService = matchingService;
         this.fetchScheduler = fetchScheduler;
+        this.fetcherRegistry = fetcherRegistry;
         this.manualCooldownMs = manualCooldownMs;
     }
 
@@ -128,11 +136,7 @@ public class WatchlistController {
 
         Instant lastFetched = company.getLastFetchedAt();
         if (lastFetched != null) {
-
-
-           long sinceMs = Duration.between(lastFetched, Instant.now()).toMillis();
-            //@todo-> remove the comment after final testing
-           /*
+            long sinceMs = Duration.between(lastFetched, Instant.now()).toMillis();
             if (sinceMs < manualCooldownMs) {
                 // Someone (any watcher, or the scheduler) checked this board
                 // moments ago. If that check succeeded, "checked just now, no
@@ -146,14 +150,7 @@ public class WatchlistController {
                 long retryInSeconds = (manualCooldownMs - sinceMs + 999) / 1000;
                 throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,
                         "checked recently — try again in " + retryInSeconds + "s");
-            }*/
-            if (company.getLastFetchStatus() == Company.FetchStatus.SUCCESS) {
-                return new ManualFetchResponse(watch.getId(), company.getDisplayName(),
-                        lastFetched, 0, 0);
             }
-            long retryInSeconds = (manualCooldownMs - sinceMs + 999) / 1000;
-            throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,
-                    "checked recently — try again in " + retryInSeconds + "s");
         }
 
         FetchScheduler.FetchResult result = fetchScheduler.fetchCompany(company, user);
@@ -200,6 +197,15 @@ public class WatchlistController {
                     company.setAtsPlatform(request.atsPlatform());
                     company.setBoardToken(request.boardToken());
                     company.setDisplayName(request.companyName());
+
+                    // Only for a board nobody watches yet: prove the token is
+                    // real before it becomes a row. Most platforms 404 a bad
+                    // token so their fetchers no-op here, but SmartRecruiters
+                    // answers a nonsense company id with an empty 200 — without
+                    // this check a typo would sit on the watchlist looking
+                    // perfectly healthy and simply never produce a job.
+                    validateBoard(company);
+
                     // Two users adding the same brand-new board in the same
                     // instant: the loser hits the (ats_platform, board_token)
                     // unique constraint and the request fails — recovery inside
@@ -207,6 +213,27 @@ public class WatchlistController {
                     // rollback-only), and a retry simply joins the winner's row.
                     return companyRepository.saveAndFlush(company);
                 });
+    }
+
+    /**
+     * 400, not 502: at add time the likely cause is a mistyped board token in
+     * something the user just pasted, and it is the one thing they can fix. A
+     * board that breaks later still reports 502 through the fetch path.
+     */
+    private void validateBoard(Company company) {
+        AtsFetcher fetcher = fetcherRegistry.getFetcher(company.getAtsPlatform()).orElse(null);
+        if (fetcher == null) {
+            return; // UNSUPPORTED and friends — nothing to check against
+        }
+        try {
+            fetcher.validateBoard(company);
+        } catch (AtsFetchException e) {
+            log.info("Rejected watch on {} board '{}': {}",
+                    company.getAtsPlatform(), company.getBoardToken(), e.getMessage());
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "we couldn't find a " + company.getAtsPlatform() + " board called '"
+                            + company.getBoardToken() + "' — check the company ID in your careers URL");
+        }
     }
 
     private WatchedCompany requireOwnedWatch(UUID id, User user) {

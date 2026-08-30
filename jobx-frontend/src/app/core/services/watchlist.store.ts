@@ -105,12 +105,24 @@ export class WatchlistStore {
     });
   }
 
-  /** Resolves to the created company, or rejects with the AppError (409 etc.). */
+  /**
+   * Resolves to the created company, or rejects with the AppError (409 etc.).
+   *
+   * The feed reload is not optional. POST /watchlist backfills this user's
+   * matches against jobs the board ALREADY has (MatchingService.backfillForWatcher),
+   * synchronously, before it responds — so the moment this resolves the feed
+   * signal is stale. Without the reload those matches sit in the database
+   * invisible until a hard refresh, which is exactly what a new user hits when
+   * they add a board someone else already watches: the rows exist, the
+   * dashboard shows nothing, and "Check now" reports "no new roles" because a
+   * backfill is not a fetch and never counts towards newMatches.
+   */
   add(request: WatchedCompanyRequest): Promise<WatchedCompanyResponse> {
     return new Promise((resolve, reject) => {
       this.api.add(request).subscribe({
         next: (company) => {
           this.companiesSignal.update((list) => [...list, company]);
+          this.feed.reload();
           resolve(company);
         },
         error: (error: AppError) => reject(error),
@@ -155,8 +167,16 @@ export class WatchlistStore {
    * especially: before the 2026-08-15 backend fix an unreachable board returned
    * a cheerful 200 {newJobs: 0}, so a board that had been 404ing for a week read
    * as "checked just now, nothing new". It must never fall back into that path.
+   *
+   * `quietWhenNothingNew` suppresses only the two "nothing arrived" toasts, for
+   * the check fired automatically right after adding a company. There the add
+   * has already spoken, and a board another user watches is inside the shared
+   * cooldown — so the honest 200-with-zeros would otherwise read as "no new
+   * roles" on screen at the same moment the backfilled matches appear in the
+   * feed. Real outcomes (new matches, new roles that missed, every failure)
+   * still speak.
    */
-  checkNow(company: WatchedCompanyResponse): void {
+  checkNow(company: WatchedCompanyResponse, options: { quietWhenNothingNew?: boolean } = {}): void {
     if (this.isChecking(company.id)) return;
     this.markChecking(company.id, true);
 
@@ -182,7 +202,7 @@ export class WatchlistStore {
               result.newJobs > 1 ? 's' : ''
             } at ${company.companyName}, none matched your keywords`,
           );
-        } else {
+        } else if (!options.quietWhenNothingNew) {
           this.toasts.show(`Checked just now · no new roles at ${company.companyName}`);
         }
       },

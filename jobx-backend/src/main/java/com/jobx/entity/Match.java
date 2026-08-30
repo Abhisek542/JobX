@@ -16,6 +16,15 @@ import java.util.UUID;
  * users watch it). Match rows are per-user — computed by running every
  * user's FilterProfile through MatchScorer against new Job rows after
  * each poll cycle.
+ *
+ * Since V5 a match can OUTLIVE its job. When the six-day TTL sweep drops a
+ * posting it deletes the NEW/DISMISSED matches itself, but SEEN (saved) and
+ * APPLIED rows are the user's own history and are kept — their {@link #job}
+ * becomes null (ON DELETE SET NULL) and {@link #jobExpiredAt} is stamped.
+ * That is why the handful of facts a card needs to render — title, apply URL,
+ * company — are copied onto the match at creation instead of being read
+ * through the job every time. Anything reading {@code match.getJob()} must
+ * therefore null-check it.
  */
 @Entity
 @Table(name = "matches",
@@ -31,9 +40,31 @@ public class Match {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "job_id", nullable = false)
+    /** Null once the posting has been expired and swept away. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "job_id")
     private Job job;
+
+    /**
+     * The board this match came from. A real FK, not a copied name: companies
+     * outlive jobs (the TTL never deletes them), and unwatch cleanup has to be
+     * able to find expired matches that no longer route through a job row.
+     */
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "company_id", nullable = false)
+    private Company company;
+
+    /** Copied from the job so an expired match can still be rendered. */
+    @Column(name = "job_title", nullable = false)
+    private String jobTitle;
+
+    /** Copied from the job. The posting may well be gone — see jobExpiredAt. */
+    @Column(name = "apply_url", nullable = false)
+    private String applyUrl;
+
+    /** When the TTL sweep dropped the underlying posting; null while it is live. */
+    @Column(name = "job_expired_at")
+    private Instant jobExpiredAt;
 
     // 0–100 from MatchScorer: keywordScore (0-70) + experienceScore (0-30)
     @Column(nullable = false)
