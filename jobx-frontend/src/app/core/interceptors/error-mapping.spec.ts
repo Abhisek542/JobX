@@ -1,5 +1,21 @@
+// @vitest-environment jsdom
+import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('@angular/common/http', () => {
+  class MockHttpErrorResponse {
+    status: number;
+    statusText: string;
+    error: unknown;
+    constructor(init: { status: number; statusText?: string; error?: unknown }) {
+      this.status = init.status;
+      this.statusText = init.statusText ?? '';
+      this.error = init.error;
+    }
+  }
+  return { HttpErrorResponse: MockHttpErrorResponse };
+});
+
 import { HttpErrorResponse } from '@angular/common/http';
-import { describe, expect, it } from 'vitest';
 import { toAppError } from './error-mapping';
 
 /** One mapper, used everywhere — so it has to survive every shape the backend

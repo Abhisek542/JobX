@@ -81,7 +81,7 @@ export class WatchlistStore {
     };
   });
 
-  /** Newest check first, so the rail's top rows are the informative ones. */
+  /** Alphabetical by company name. */
   readonly ordered = computed(() =>
     [...this.companiesSignal()].sort((a, b) => a.companyName.localeCompare(b.companyName)),
   );
@@ -211,7 +211,10 @@ export class WatchlistStore {
         this.toasts.error(this.fetchErrorCopy(error, company));
 
         if (error.status === 502) {
-          this.patchLocal(company.id, { lastFetchStatus: 'FAILED' });
+          this.patchLocal(company.id, {
+            lastFetchStatus: 'FAILED',
+            lastFetchedAt: new Date().toISOString(),
+          });
         }
         if (error.status === 404) {
           this.load({ force: true });
