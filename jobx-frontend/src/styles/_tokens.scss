@@ -13,6 +13,10 @@
   --panel: #ffffff;
   --panel-2: #f7f9fd;
   --panel-3: #eef2f9;
+  /* Below --panel, not above it: the surface for content that has been set
+     aside (a dismissed match). --panel-2/-3 are *raised* fills in the dark
+     theme, so a recessed surface needs its own token to stay recessed in both. */
+  --sunk: #f3f6fc;
   --line: #e4e9f2;
   --line-soft: #eef1f7;
 
@@ -56,6 +60,7 @@
   --panel: #111926;
   --panel-2: #172232;
   --panel-3: #1e2b3d;
+  --sunk: #0d1420;
   --line: #25334a;
   --line-soft: #1c2839;
 
