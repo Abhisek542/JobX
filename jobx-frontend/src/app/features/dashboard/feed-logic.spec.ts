@@ -28,6 +28,7 @@ function match(over: Partial<MatchResponse> = {}): MatchResponse {
     matchedKeywords: ['Java', 'Spring Boot'],
     status: 'NEW',
     createdAt: '2026-08-15T09:00:00Z',
+    expiredAt: null,
     ...over,
   };
 }

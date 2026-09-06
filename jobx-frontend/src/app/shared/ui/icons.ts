@@ -87,6 +87,10 @@ export const ICONS = {
     },
     { k: 'path', d: 'M12 9v4M12 17h.01' },
   ],
+  undo: [
+    { k: 'polyline', points: '1 4 1 10 7 10' },
+    { k: 'path', d: 'M3.51 15a9 9 0 1 0 2.13-9.36L1 10' },
+  ],
   refresh: [
     { k: 'path', d: 'M23 4v6h-6M1 20v-6h6' },
     { k: 'path', d: 'M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4-4.64 4.36A9 9 0 0 1 3.51 15' },

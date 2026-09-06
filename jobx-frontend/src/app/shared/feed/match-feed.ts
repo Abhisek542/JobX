@@ -75,11 +75,13 @@ const EMPTY_TITLE: Record<StatusFilter, string> = {
         <button class="btn btn-primary" type="button" (click)="feed.reload()">Try again</button>
       </app-empty-state>
     } @else if (feed.paged().length) {
-      <div class="cards">
+      <!-- The Dismissed view is an archive, so it lists rows, not cards. -->
+      <div class="cards" [class.cards-compact]="isArchive()">
         @for (match of feed.paged(); track match.id; let i = $index) {
           <app-match-card
             [match]="match"
             [index]="i"
+            [compact]="isArchive()"
             [pending]="feed.pending().has(match.id)"
             (statusChange)="feed.setStatus(match.id, $event)"
             (openDetails)="openDrawer(match.id)"
@@ -170,6 +172,9 @@ export class MatchFeed {
   });
 
   protected readonly title = computed(() => FEED_TITLE[this.feed.status()]);
+
+  /** The Dismissed pill — every row in it is dismissed, so cards collapse. */
+  protected readonly isArchive = computed(() => this.feed.status() === 'DISMISSED');
 
   protected readonly subtitle = computed(() => {
     const count = this.feed.visible().length;
