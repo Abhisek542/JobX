@@ -7,6 +7,7 @@ import com.jobx.entity.Company;
 import com.jobx.enums.AtsPlatform;
 import com.jobx.fetcher.AtsFetchException;
 import com.jobx.fetcher.AtsFetcher;
+import com.jobx.fetcher.BoardPreview;
 import com.jobx.fetcher.ExperienceParser;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -142,5 +143,65 @@ public class AshbyFetcher implements AtsFetcher {
 
         log.info("Translated {} listed jobs for {} (Ashby)", results.size(), company.getDisplayName());
         return results;
+    }
+
+    /**
+     * One list call. Ashby's root is {@code {jobs, apiVersion}} with no company
+     * name, so the preview carries no display name.
+     */
+    @Override
+    public BoardPreview previewBoard(Company company) {
+        String token = company.getBoardToken();
+        String url = BASE_URL + "/posting-api/job-board/" + token;
+
+        String responseBody;
+        try {
+            responseBody = webClientBuilder.build()
+                    .get()
+                    .uri(url)
+                    .retrieve()
+                    .bodyToMono(String.class)
+                    .block();
+        } catch (Exception e) {
+            throw new AtsFetchException("Ashby board request failed for token " + token, e);
+        }
+
+        if (responseBody == null) {
+            throw new AtsFetchException("Empty response from Ashby for token " + token);
+        }
+
+        return parsePreview(responseBody, token);
+    }
+
+    // Package-private seam so tests can exercise preview parsing without HTTP.
+    BoardPreview parsePreview(String responseBody, String token) {
+        JsonNode root;
+        try {
+            root = objectMapper.readTree(responseBody);
+        } catch (Exception e) {
+            throw new AtsFetchException("Could not parse Ashby response for token " + token, e);
+        }
+
+        JsonNode jobs = root.get("jobs");
+        if (jobs == null || !jobs.isArray()) {
+            throw new AtsFetchException("No jobs array in Ashby response for token " + token);
+        }
+
+        List<String> titles = new ArrayList<>();
+        int count = 0;
+        for (JsonNode node : jobs) {
+            // Unlisted postings are invisible on the public board — excluded
+            // here too, so the count matches what fetch() would store.
+            if (!node.path("isListed").asBoolean(true)) {
+                continue;
+            }
+            count++;
+            String title = node.path("title").asText("");
+            if (titles.size() < BoardPreview.SAMPLE_SIZE && !title.isBlank()) {
+                titles.add(title.trim());
+            }
+        }
+
+        return new BoardPreview(null, count, titles);
     }
 }

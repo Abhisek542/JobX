@@ -7,6 +7,7 @@ import com.jobx.entity.Company;
 import com.jobx.enums.AtsPlatform;
 import com.jobx.fetcher.AtsFetchException;
 import com.jobx.fetcher.AtsFetcher;
+import com.jobx.fetcher.BoardPreview;
 import com.jobx.fetcher.ExperienceParser;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -164,5 +165,69 @@ public class GreenhouseFetcher implements AtsFetcher {
                 results.size(), company.getDisplayName());
 
         return results;
+    }
+
+    /**
+     * One list call, deliberately WITHOUT {@code ?content=true} — the preview
+     * only needs titles, and the description payload is the expensive half of a
+     * Greenhouse response.
+     *
+     * No display name: the jobs endpoint carries none, and Greenhouse's board
+     * metadata lives behind a second call this method is not allowed to make.
+     */
+    @Override
+    public BoardPreview previewBoard(Company company) {
+        String token = company.getBoardToken();
+        String url = BASE_URL + "/v1/boards/" + token + "/jobs";
+
+        String responseBody;
+        try {
+            responseBody = webClientBuilder.build()
+                    .get()
+                    .uri(url)
+                    .retrieve()
+                    .bodyToMono(String.class)
+                    .block();
+        } catch (Exception e) {
+            throw new AtsFetchException("Greenhouse board request failed for token " + token, e);
+        }
+
+        if (responseBody == null) {
+            throw new AtsFetchException("Empty response from Greenhouse for token " + token);
+        }
+
+        return parsePreview(responseBody, token);
+    }
+
+    // Package-private seam so tests can exercise preview parsing without HTTP.
+    BoardPreview parsePreview(String responseBody, String token) {
+        JsonNode root;
+        try {
+            root = objectMapper.readTree(responseBody);
+        } catch (Exception e) {
+            throw new AtsFetchException("Could not parse Greenhouse response for token " + token, e);
+        }
+
+        JsonNode jobs = root.get("jobs");
+        if (jobs == null || !jobs.isArray()) {
+            throw new AtsFetchException("No jobs array in Greenhouse response for token " + token);
+        }
+
+        List<String> titles = new ArrayList<>();
+        int count = 0;
+        for (JsonNode node : jobs) {
+            // Prospect posts are not openings — same filter fetch() applies, so
+            // the count a user is shown matches the feed they will actually get.
+            if (node.get("internal_job_id") == null || node.get("internal_job_id").isNull()) {
+                continue;
+            }
+            count++;
+            String title = node.path("title").asText("");
+            if (titles.size() < BoardPreview.SAMPLE_SIZE && !title.isBlank()) {
+                titles.add(title.trim());
+            }
+        }
+
+        return new BoardPreview(null, count, titles);
     }
 }

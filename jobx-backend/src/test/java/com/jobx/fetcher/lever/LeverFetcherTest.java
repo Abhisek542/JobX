@@ -5,6 +5,8 @@ import com.jobx.entity.Job;
 import com.jobx.entity.Company;
 import com.jobx.enums.AtsPlatform;
 import com.jobx.fetcher.AtsFetchException;
+import com.jobx.fetcher.AtsFetchException;
+import com.jobx.fetcher.BoardPreview;
 import com.jobx.fetcher.FixtureSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -88,5 +90,27 @@ class LeverFetcherTest {
         // The other side of the same coin: a live board with nothing open is
         // an empty ARRAY, and must NOT be treated as a failure.
         assertTrue(fetcher.parse("[]", company).isEmpty());
+    }
+
+    @Test
+    void previewCountsPostingsAndSamplesRealTitles() {
+        BoardPreview preview = fetcher.parsePreview(
+                FixtureSupport.fixture("lever-fampay.json"), "fampay");
+
+        assertEquals(14, preview.jobCount());
+        assertEquals(BoardPreview.SAMPLE_SIZE, preview.sampleTitles().size());
+        preview.sampleTitles().forEach(title -> assertFalse(title.isBlank()));
+        // Lever's root is a bare array — no company name to be had.
+        assertNull(preview.displayName());
+    }
+
+    /**
+     * Lever answers a dead or renamed token with an object, not an array. Same
+     * rule as parse(): an object root is an error, never an empty board.
+     */
+    @Test
+    void previewTreatsAnObjectRootAsAFailure() {
+        assertThrows(AtsFetchException.class,
+                () -> fetcher.parsePreview("{\"error\":\"Document not found\"}", "postman"));
     }
 }

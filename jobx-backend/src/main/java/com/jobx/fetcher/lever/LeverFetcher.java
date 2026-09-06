@@ -7,6 +7,7 @@ import com.jobx.entity.Company;
 import com.jobx.enums.AtsPlatform;
 import com.jobx.fetcher.AtsFetchException;
 import com.jobx.fetcher.AtsFetcher;
+import com.jobx.fetcher.BoardPreview;
 import com.jobx.fetcher.ExperienceParser;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -162,5 +163,59 @@ public class LeverFetcher implements AtsFetcher {
             }
             sb.append(part.trim());
         }
+    }
+
+    /**
+     * One list call. Lever's root is a bare array with no company name in it, so
+     * the preview carries no display name.
+     */
+    @Override
+    public BoardPreview previewBoard(Company company) {
+        String token = company.getBoardToken();
+        String url = BASE_URL + "/v0/postings/" + token + "?mode=json";
+
+        String responseBody;
+        try {
+            responseBody = webClientBuilder.build()
+                    .get()
+                    .uri(url)
+                    .retrieve()
+                    .bodyToMono(String.class)
+                    .block();
+        } catch (Exception e) {
+            throw new AtsFetchException("Lever board request failed for token " + token, e);
+        }
+
+        if (responseBody == null) {
+            throw new AtsFetchException("Empty response from Lever for token " + token);
+        }
+
+        return parsePreview(responseBody, token);
+    }
+
+    // Package-private seam so tests can exercise preview parsing without HTTP.
+    BoardPreview parsePreview(String responseBody, String token) {
+        JsonNode root;
+        try {
+            root = objectMapper.readTree(responseBody);
+        } catch (Exception e) {
+            throw new AtsFetchException("Could not parse Lever response for token " + token, e);
+        }
+
+        // Same rule as parse(): an object root is Lever's error shape, not a board.
+        if (!root.isArray()) {
+            throw new AtsFetchException("Expected bare array in Lever response for token "
+                    + token + ", got " + root.getNodeType());
+        }
+
+        List<String> titles = new ArrayList<>();
+        for (JsonNode node : root) {
+            String title = node.path("text").asText("");
+            if (titles.size() < BoardPreview.SAMPLE_SIZE && !title.isBlank()) {
+                titles.add(title.trim());
+            }
+        }
+
+        return new BoardPreview(null, root.size(), titles);
     }
 }

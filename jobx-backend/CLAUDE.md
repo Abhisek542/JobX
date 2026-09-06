@@ -412,9 +412,87 @@ design and are written up in `docs/ats-api-reference.md`:
 Test suite 102 → 120 (`JobRetentionSweeperTest`, `SmartRecruitersFetcherTest`,
 two new tombstone cases in `FetchSchedulerSharedJobsTest`).
 
-**CURRENT FOCUS (2026-08-29): nothing is mid-flight.** The feed-reload fix, the
-six-day job TTL and the SmartRecruiters fetcher are all done and live-verified
-(above).
+**Add-company resolution done and live-verified 2026-09-06 (migration
+`V6__unsupported_board_requests.sql`).** The form asked for `companyName`,
+`atsPlatform` and `boardToken`; a user knows the first. "ATS platform" means
+nothing to a job seeker, and the token is opaque, **case-sensitive**, and often
+not the company name (`razorpaysoftwareprivatelimited`, `Sprinto`,
+`PHONEPELIMITED`). Now one field takes a name, a website or a careers link, and
+`CompanyResolver` (new `com.jobx.resolve` package) works the board out through
+four strategies, cheapest first, stopping at the first that yields anything:
+
+1. **CATALOG** — `companies` has been a registry of proven boards since V4, so a
+   typeahead over it (`GET /companies/search`) needs no network and no guessing.
+   Seeded from the verified pairs in `docs/ats-test-data.md` via
+   `db/seed/company-catalog.sql` (orphan rows: the scheduler skips boards with no
+   ACTIVE watcher, so they cost nothing until someone adds one).
+2. **URL** — the input is itself an ATS link; `AtsUrlParser` reads the token out.
+3. **SNIFF** — `SafeUrlFetcher` GETs the careers page and the same patterns run
+   over the HTML.
+4. **PROBE** — `SlugCandidates` derives tokens from the domain label or name (in
+   both cases, since Lever/Ashby 404 on the wrong one), and `BoardProbe` asks the
+   APIs in parallel which is real.
+
+**3 and 4 are complementary, not redundant** — measured live, each alone resolved
+about half the companies tried, together all of them. Sniffing is the only thing
+that recovers Razorpay's token; probing is the only thing that finds Atlan and
+FamPay, whose careers pages render the board in JavaScript. Atlan's page names
+Ashby only in a CSP header, which is kept as a **platform hint** and narrows the
+probe from five platforms to one. **Regional hosts are not optional**: Groww
+links `job-boards.eu.greenhouse.io/groww`.
+
+- **The rule that makes guessing safe: a board counts only if it has ≥1 live
+  role.** Verified live, `apply.workable.com/api/v1/widget/accounts/razorpay`
+  returns `{"name":"Razorpay","jobs":[]}` — and the same for groww, atlan, meesho
+  and sprinto, none of them Workable customers. The echoed *name* makes a wrong
+  token look confirmed, so only a live posting is trusted. That still cannot tell
+  a "porter" board from a different Porter, which is why every candidate is shown
+  with **real job titles** and confirmed by a human before anything is written.
+  Resolution is read-only; `POST /watchlist` is **unchanged** and is what watches
+  a board, so the manual path, its tests and the `docs/ats-test-data.md` curl
+  workflow all still work.
+- **`AtsFetcher` gained `previewBoard`** (one cheap list call → display name where
+  the API gives one, job count, sample titles), implemented by all five fetchers.
+  `validateBoard` is now a default that rejects a zero count — so **every**
+  platform validates at add time instead of only SmartRecruiters. Two
+  silent-acceptance bugs closed, both verified as live 400s: `WORKABLE`/`razorpay`
+  (the ghost account) and any bogus Greenhouse/Lever/Ashby token, all of which
+  used to sit on the watchlist looking healthy and never produce a job.
+- **SSRF**: `SafeUrlFetcher` fetches only the pasted URL (no crawling), http/https
+  only, rejects every non-public address for **every** resolved IP, and follows
+  redirects **by hand** re-checking each hop — leaving Netty's own redirect
+  handling on would let a public URL bounce into 127.0.0.1 or a metadata
+  endpoint. `PrivateAddressGuard` covers what Java's predicates miss (IPv6
+  `fc00::/7`, `0.0.0.0/8`, CGNAT). DNS rebinding is a known, accepted residual.
+  `RateLimitFilter` now carries per-prefix budgets and throttles
+  `/watchlist/resolve` separately from `/auth/*`.
+- **Dead ends are recorded**, not just refused: `POST /watchlist/unsupported`
+  writes to `unsupported_board_requests` so "which ATS next" is answered by demand
+  (Workday/Rippling/BambooHR still get the honest "unsupported" state). The modal
+  keeps manual entry behind a collapsed **Advanced** section.
+- Frontend: `add-company-modal.ts` is a four-step rewrite (input → resolving →
+  confirm → dead-end) with a debounced catalog typeahead. The 2026-08-29
+  feed-reload behaviour on success is preserved verbatim.
+- **Live-verified in the browser end to end**: paste `razorpay.com/jobs` → card
+  shows "Greenhouse · 24 open roles" with three real titles and "Found on their
+  careers page" → Watch → feed reloads with 7 scored matches. Also confirmed:
+  typeahead on "Atl", `Sprinto` resolving to the capital-S token (30 roles),
+  Atlan's hint-narrowed probe, the Zoho dead end recording a row, and 400s for
+  `127.0.0.1`, `169.254.169.254` and `file://`. Two defects found *by* that live
+  pass and fixed: duplicate candidates when a board answers to two spellings
+  (Ashby serves Atlan at `atlan` and `Atlan`), and catalog rows with no stored
+  jobs showing "0 open roles" — they now fall back to a live preview.
+- Test suite 120 → 203. New: `AtsUrlParserTest` (real careers-page HTML fixtures
+  for Razorpay/Groww/Atlan), `SlugCandidatesTest`, `SafeUrlFetcherTest`,
+  `BoardProbeTest`, `CompanyResolverTest`, `GreenhouseFetcherTest`, plus
+  `previewBoard` cases on every fetcher.
+- Also fixed in passing: `getOrCreateCompany` now falls back to a
+  case-insensitive token lookup, so a user typing the other casing joins the
+  existing board instead of creating a second `companies` row for it.
+
+**CURRENT FOCUS (2026-09-06): nothing is mid-flight.** Add-company resolution is
+done and live-verified (above), as are the feed-reload fix, the six-day job TTL
+and the SmartRecruiters fetcher.
 What remains are backend items the dashboard currently works around. None are
 started; all are pending Abhisek's call:
 - Backend gaps the frontend deliberately papers over, each recorded in

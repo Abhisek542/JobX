@@ -1,10 +1,14 @@
 package com.jobx.controller;
 
 import com.jobx.dto.ManualFetchResponse;
+import com.jobx.dto.ResolveRequest;
+import com.jobx.dto.ResolveResponse;
+import com.jobx.dto.UnsupportedBoardReportRequest;
 import com.jobx.dto.UpdateWatchedCompanyStatusRequest;
 import com.jobx.dto.WatchedCompanyRequest;
 import com.jobx.dto.WatchedCompanyResponse;
 import com.jobx.entity.Company;
+import com.jobx.entity.UnsupportedBoardRequest;
 import com.jobx.entity.User;
 import com.jobx.entity.WatchedCompany;
 import com.jobx.fetcher.AtsFetchException;
@@ -12,7 +16,9 @@ import com.jobx.fetcher.AtsFetcher;
 import com.jobx.fetcher.FetcherRegistry;
 import com.jobx.repository.CompanyRepository;
 import com.jobx.repository.MatchRepository;
+import com.jobx.repository.UnsupportedBoardRequestRepository;
 import com.jobx.repository.WatchedCompanyRepository;
+import com.jobx.resolve.CompanyResolver;
 import com.jobx.scheduler.FetchScheduler;
 import com.jobx.service.MatchingService;
 import jakarta.validation.Valid;
@@ -57,6 +63,8 @@ public class WatchlistController {
     private final MatchingService matchingService;
     private final FetchScheduler fetchScheduler;
     private final FetcherRegistry fetcherRegistry;
+    private final CompanyResolver companyResolver;
+    private final UnsupportedBoardRequestRepository unsupportedBoardRequestRepository;
     private final long manualCooldownMs;
 
     public WatchlistController(WatchedCompanyRepository watchedCompanyRepository,
@@ -65,6 +73,8 @@ public class WatchlistController {
                                MatchingService matchingService,
                                FetchScheduler fetchScheduler,
                                FetcherRegistry fetcherRegistry,
+                               CompanyResolver companyResolver,
+                               UnsupportedBoardRequestRepository unsupportedBoardRequestRepository,
                                @Value("${jobx.fetch.manual-cooldown-ms:300000}") long manualCooldownMs) {
         this.watchedCompanyRepository = watchedCompanyRepository;
         this.companyRepository = companyRepository;
@@ -72,6 +82,8 @@ public class WatchlistController {
         this.matchingService = matchingService;
         this.fetchScheduler = fetchScheduler;
         this.fetcherRegistry = fetcherRegistry;
+        this.companyResolver = companyResolver;
+        this.unsupportedBoardRequestRepository = unsupportedBoardRequestRepository;
         this.manualCooldownMs = manualCooldownMs;
     }
 
@@ -80,6 +92,52 @@ public class WatchlistController {
         return watchedCompanyRepository.findByUser(user).stream()
                 .map(WatchedCompanyResponse::from)
                 .toList();
+    }
+
+    /**
+     * Works out which ATS board the user means from a company name, a website,
+     * or a careers link — the three things a user actually has. Nobody knows
+     * their own employer's "board token", and half the time it is not the
+     * company name at all (Razorpay's is razorpaysoftwareprivatelimited).
+     *
+     * Reads only. This proposes boards with live job titles attached as
+     * evidence; the user confirms one, and the ordinary POST /watchlist below
+     * is what actually starts watching it. Keeping the two apart is what makes
+     * a derived token safe to offer at all.
+     *
+     * An empty candidate list is a 200, not an error: plenty of companies are on
+     * a portal with no public API, and saying so plainly is the honest outcome.
+     * A 400 means the input itself was refused — see
+     * {@link com.jobx.resolve.SafeUrlFetcher.UnsafeUrlException}.
+     */
+    @PostMapping("/resolve")
+    public ResolveResponse resolve(@AuthenticationPrincipal User user,
+                                   @Valid @RequestBody ResolveRequest request) {
+        ResolveResponse response = companyResolver.resolve(user, request.query());
+        log.info("Resolve '{}' -> {} candidate(s){}", request.query(), response.candidates().size(),
+                response.platformHint() == null ? "" : " (hint: " + response.platformHint() + ")");
+        return response;
+    }
+
+    /**
+     * Records a company Jobx could not resolve. Fired by the dashboard when the
+     * user hits the dead end, so the answer to "which ATS do we build next" is
+     * demand rather than guesswork.
+     *
+     * 204 and deliberately unvalidated beyond size: this is a signal, not a
+     * resource, and nothing downstream reads it back to a user.
+     */
+    @PostMapping("/unsupported")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void reportUnsupported(@AuthenticationPrincipal User user,
+                                  @Valid @RequestBody UnsupportedBoardReportRequest request) {
+        UnsupportedBoardRequest requested = new UnsupportedBoardRequest();
+        requested.setUser(user);
+        requested.setQuery(request.query());
+        requested.setPlatformHint(request.platformHint());
+        unsupportedBoardRequestRepository.save(requested);
+        log.info("Unsupported board requested: '{}' (hint: {})",
+                request.query(), request.platformHint());
     }
 
     @PostMapping
@@ -192,6 +250,13 @@ public class WatchlistController {
     private Company getOrCreateCompany(WatchedCompanyRequest request) {
         return companyRepository
                 .findByAtsPlatformAndBoardToken(request.atsPlatform(), request.boardToken())
+                // Tokens are case-sensitive at the ATS but identify one board: Lever's
+                // is "Sprinto" and 404s as "sprinto". Without this fallback a user who
+                // typed the other casing would create a second companies row for the
+                // same board — reintroducing, one row at a time, exactly the duplicate
+                // jobs and duplicate matches that the V4 rework existed to remove.
+                .or(() -> companyRepository.findByPlatformAndTokenIgnoreCase(
+                        request.atsPlatform(), request.boardToken()))
                 .orElseGet(() -> {
                     Company company = new Company();
                     company.setAtsPlatform(request.atsPlatform());

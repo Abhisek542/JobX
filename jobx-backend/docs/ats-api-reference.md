@@ -84,6 +84,19 @@ the fetcher makes two kinds of calls:
   price (~96 calls for Apna, ~50s); steady state is ~0 per cycle. If a detail call
   fails, the job is still emitted from list data (null description), not dropped.
 
+- **A TOKEN THAT WAS NEVER THEIRS RETURNS 200 WITH THE RIGHT COMPANY NAME.**
+  Verified live 2026-09-06: `apply.workable.com/api/v1/widget/accounts/razorpay`
+  answers `{"name":"Razorpay","description":null,"jobs":[]}`. Razorpay is a
+  Greenhouse customer. The same is true for `groww`, `atlan`, `meesho` and
+  `sprinto` — none of them Workable customers. These are dormant or never-used
+  accounts, and Workable is happy to name them.
+  This is the SmartRecruiters empty-200 problem with a sting: the echoed name
+  makes a wrong token look *confirmed*. A Workable board is therefore only
+  believed when it has at least one live posting — `validateBoard` (inherited
+  from `AtsFetcher`, driven by `previewBoard`) rejects a zero count at add time,
+  and the add-company resolver applies the same rule before it will propose a
+  board. Fixture: `workable-ghost-account.json`.
+
 Zerodha's careers page is custom-built, not Workable-hosted — Apna (`apna`) is the
 confirmed working target.
 
@@ -144,3 +157,34 @@ unit tests: `ashby-aspora.json`, `lever-fampay.json`, `lever-sprinto.json`,
 `smartrecruiters-phonepe.json` (list) and `smartrecruiters-phonepe-detail.json`
 (detail), captured 2026-08-29. If a board's live shape drifts, re-capture with curl
 and update both fixture and mapping.
+
+## Careers-page URL forms (for ATS detection, verified live 2026-09-06)
+
+The add-company flow reads a board out of a careers page. These are the public
+*page* hosts, distinct from the API hosts above, and `AtsUrlParser` matches both.
+
+| Platform | Public board URL |
+|---|---|
+| Greenhouse | `job-boards.greenhouse.io/{token}`, `boards.greenhouse.io/{token}`, `boards.greenhouse.io/embed/job_board?for={token}` |
+| Lever | `jobs.lever.co/{token}` |
+| Ashby | `jobs.ashbyhq.com/{token}` |
+| Workable | `apply.workable.com/{token}` |
+| SmartRecruiters | `jobs.smartrecruiters.com/{token}` |
+
+**REGIONAL HOSTS ARE NOT OPTIONAL.** Groww's careers page links
+`job-boards.**eu**.greenhouse.io/groww`. A pattern anchored on
+`boards.greenhouse.io` finds nothing on the second company anyone tests. Lever
+has `jobs.eu.lever.co` likewise.
+
+What sniffing a live careers page actually yields, measured across four boards:
+
+| Page | Outcome |
+|---|---|
+| `razorpay.com/jobs` | token found — `razorpaysoftwareprivatelimited`, which no guess from the name reaches |
+| `groww.in/careers` | token found, via the EU host |
+| `atlan.com/careers` | **platform only** — `*.ashbyhq.com` appears solely in a CSP header; the board is client-rendered |
+| `fampay.in/careers` | nothing — SPA, no ATS reference in server HTML |
+
+So sniffing hits about half of careers pages, and slug probing covers exactly the
+half it misses (atlan → `atlan`, fampay → `fampay`). Neither is sufficient alone.
+Page fixtures for the first three are in `src/test/resources/fixtures/careers-*.html`.
