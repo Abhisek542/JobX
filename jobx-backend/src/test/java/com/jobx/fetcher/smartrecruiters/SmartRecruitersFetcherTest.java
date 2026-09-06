@@ -6,6 +6,8 @@ import com.jobx.entity.Company;
 import com.jobx.entity.Job;
 import com.jobx.enums.AtsPlatform;
 import com.jobx.fetcher.AtsFetchException;
+import com.jobx.fetcher.AtsFetchException;
+import com.jobx.fetcher.BoardPreview;
 import com.jobx.fetcher.FixtureSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -133,5 +135,50 @@ class SmartRecruitersFetcherTest {
         } catch (Exception e) {
             throw new IllegalStateException(e);
         }
+    }
+
+    /**
+     * jobCount is the API's own totalFound, not the rows returned — the preview
+     * asks for a sample page, so counting rows would report 3 for Bosch's 4,774.
+     * SmartRecruiters is also one of only two platforms that names the company.
+     */
+    @Test
+    void previewReportsTotalFoundAndNamesTheCompany() {
+        BoardPreview preview = fetcher.parsePreview(
+                FixtureSupport.fixture("smartrecruiters-phonepe.json"), "PHONEPELIMITED");
+
+        assertTrue(preview.jobCount() > 0);
+        assertEquals("PHONEPE LIMITED", preview.displayName());
+        assertFalse(preview.sampleTitles().isEmpty());
+        assertTrue(preview.sampleTitles().size() <= BoardPreview.SAMPLE_SIZE);
+        preview.sampleTitles().forEach(title -> assertFalse(title.isBlank()));
+    }
+
+    /**
+     * The original reason this platform needed a validation hook: a bogus
+     * company id returns 200 with an empty list rather than 404, so a typo would
+     * otherwise look like a healthy board that simply never posts a job.
+     */
+    @Test
+    void aBogusTokenPreviewsAsEmptyAndFailsValidation() {
+        String emptyBoard = "{\"offset\":0,\"limit\":3,\"totalFound\":0,\"content\":[]}";
+        BoardPreview preview = fetcher.parsePreview(emptyBoard, "PHONEPELIMTED");
+
+        assertEquals(0, preview.jobCount());
+        assertNull(preview.displayName());
+
+        SmartRecruitersFetcher stub = new SmartRecruitersFetcher(null, new ObjectMapper(), null) {
+            @Override
+            public BoardPreview previewBoard(Company company) {
+                return parsePreview(emptyBoard, company.getBoardToken());
+            }
+        };
+        assertThrows(AtsFetchException.class, () -> stub.validateBoard(
+                FixtureSupport.company("Typo", AtsPlatform.SMARTRECRUITERS, "PHONEPELIMTED")));
+    }
+
+    @Test
+    void previewRejectsAPayloadThatIsNotABoard() {
+        assertThrows(AtsFetchException.class, () -> fetcher.parsePreview("{\"nope\":1}", "bogus"));
     }
 }

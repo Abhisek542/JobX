@@ -7,6 +7,7 @@ import com.jobx.entity.Company;
 import com.jobx.enums.AtsPlatform;
 import com.jobx.fetcher.AtsFetchException;
 import com.jobx.fetcher.AtsFetcher;
+import com.jobx.fetcher.BoardPreview;
 import com.jobx.fetcher.ExperienceParser;
 import com.jobx.repository.JobRepository;
 import lombok.RequiredArgsConstructor;
@@ -232,5 +233,80 @@ public class WorkableFetcher implements AtsFetcher {
 
         // Detail response is a superset of the list item — store it instead
         job.setRawJson(detail.toString());
+    }
+
+    /**
+     * One list call — never the detail calls fetch() makes, so previewing a
+     * board costs one request whether it has 4 openings or 158.
+     *
+     * Workable names the company in the list root, which is what lets the
+     * add-company flow fill the name in for the user — and is also the trap
+     * here. An abandoned or never-used Workable account answers 200 with a
+     * perfectly plausible name and an empty jobs array: verified live,
+     * {@code apply.workable.com/api/v1/widget/accounts/razorpay} returns
+     * {@code {"name":"Razorpay","description":null,"jobs":[]}}, and the same is
+     * true for groww, atlan, meesho and sprinto — none of which are Workable
+     * customers. A name is therefore NOT evidence that a board is real; only a
+     * live posting is. The inherited validateBoard rejects a zero count for
+     * exactly this reason, and the add-company resolver applies the same rule
+     * before it will ever propose a Workable board to a user.
+     */
+    @Override
+    public BoardPreview previewBoard(Company company) {
+        String token = company.getBoardToken();
+        String url = BASE_URL + "/api/v1/widget/accounts/" + token;
+
+        String responseBody;
+        try {
+            responseBody = webClientBuilder.build()
+                    .get()
+                    .uri(url)
+                    .retrieve()
+                    .bodyToMono(String.class)
+                    .block();
+        } catch (Exception e) {
+            throw new AtsFetchException("Workable board request failed for token " + token, e);
+        }
+
+        if (responseBody == null) {
+            throw new AtsFetchException("Empty response from Workable for token " + token);
+        }
+
+        return parsePreview(responseBody, token);
+    }
+
+    // Package-private seam so tests can exercise preview parsing without HTTP.
+    BoardPreview parsePreview(String responseBody, String token) {
+        JsonNode root;
+        try {
+            root = objectMapper.readTree(responseBody);
+        } catch (Exception e) {
+            throw new AtsFetchException("Could not parse Workable response for token " + token, e);
+        }
+
+        JsonNode jobs = root.get("jobs");
+        if (jobs == null || !jobs.isArray()) {
+            throw new AtsFetchException("No jobs array in Workable response for token " + token);
+        }
+
+        List<String> titles = new ArrayList<>();
+        // The list repeats a job once per posting location under the same
+        // shortcode (Apna: 158 rows, 126 jobs). Count what fetch() would store,
+        // not what the board happens to have said.
+        java.util.Set<String> seenShortcodes = new java.util.HashSet<>();
+        for (JsonNode node : jobs) {
+            String shortcode = node.path("shortcode").asText("");
+            if (shortcode.isEmpty() || !seenShortcodes.add(shortcode)) {
+                continue;
+            }
+            String title = node.path("title").asText("");
+            if (titles.size() < BoardPreview.SAMPLE_SIZE && !title.isBlank()) {
+                titles.add(title.trim());
+            }
+        }
+
+        String name = root.path("name").asText("");
+        return new BoardPreview(name.isBlank() ? null : name.trim(),
+                seenShortcodes.size(), titles);
     }
 }

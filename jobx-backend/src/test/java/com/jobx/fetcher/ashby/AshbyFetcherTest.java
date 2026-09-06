@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jobx.entity.Job;
 import com.jobx.entity.Company;
 import com.jobx.enums.AtsPlatform;
+import com.jobx.fetcher.AtsFetchException;
+import com.jobx.fetcher.BoardPreview;
 import com.jobx.fetcher.FixtureSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -71,5 +73,30 @@ class AshbyFetcherTest {
 
         assertEquals(1, jobs.size());
         assertEquals("b", jobs.get(0).getExternalId());
+    }
+
+    /**
+     * Preview must count exactly what fetch() would store, or the number a user
+     * confirms against is not the feed they get. Ashby's unlisted postings are
+     * invisible on the public board, so they are excluded from both.
+     */
+    @Test
+    void previewCountsListedJobsAndSamplesRealTitles() {
+        BoardPreview preview = fetcher.parsePreview(
+                FixtureSupport.fixture("ashby-aspora.json"), "Aspora");
+
+        assertEquals(18, preview.jobCount());
+        assertEquals(BoardPreview.SAMPLE_SIZE, preview.sampleTitles().size());
+        preview.sampleTitles().forEach(title -> assertFalse(title.isBlank()));
+        // Ashby's list carries no company name at all.
+        assertNull(preview.displayName());
+    }
+
+    @Test
+    void previewRejectsAPayloadThatIsNotABoard() {
+        assertThrows(AtsFetchException.class,
+                () -> fetcher.parsePreview("{\"nope\":1}", "bogus"));
+        assertThrows(AtsFetchException.class,
+                () -> fetcher.parsePreview("<html>404</html>", "bogus"));
     }
 }

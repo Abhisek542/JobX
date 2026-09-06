@@ -15,6 +15,13 @@ import java.util.UUID;
 public interface WatchedCompanyRepository extends JpaRepository<WatchedCompany, UUID> {
     List<WatchedCompany> findByUser(User user);
 
+    /**
+     * Whether this user already watches this board — drives the "already on your
+     * watchlist" state in add-company, so a user is told before they submit
+     * rather than by a 409 afterwards.
+     */
+    boolean existsByUserAndCompany(User user, Company company);
+
     @Query("SELECT w.user FROM WatchedCompany w WHERE w.company = :company AND w.status = :status")
     List<User> findUsersByCompanyAndStatus(@Param("company") Company company,
                                            @Param("status") WatchedCompany.CompanyStatus status);

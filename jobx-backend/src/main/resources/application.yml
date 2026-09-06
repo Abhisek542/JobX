@@ -44,6 +44,31 @@ jobx:
     # later company is ever polled again.
     connect-timeout-ms: 10000
     response-timeout-ms: 60000   # generous: a full Greenhouse board is MBs of JSON
+  resolve:
+    # Add-company resolution: turning a company name, a website or a careers link
+    # into an ATS platform + board token, so users never have to know either.
+    #
+    # These timeouts are much tighter than jobx.http.* above because a person is
+    # waiting on the response, and because the URL being fetched was chosen by
+    # whoever is typing rather than by us.
+    connect-timeout-ms: 5000
+    response-timeout-ms: 10000
+    # Slug probing fans out across platforms x spellings, so the wall-clock
+    # budget -- not the per-request timeout -- is what bounds how long an add
+    # can take. Probes run in parallel on their own pool; every fetcher blocks.
+    probe-threads: 8
+    probe-budget-ms: 9000
+    max-slug-candidates: 4
+    # Tokens recently proven not to be boards, remembered so a user refining a
+    # search doesn't re-spend an ATS vendor's rate limit on the same near-miss.
+    probe-miss-ttl-ms: 120000
+    max-sniffed-boards: 3
+    catalog-page-size: 8
+    rate-limit:
+      # Resolution makes outbound requests on the user's behalf, so it gets its
+      # own budget rather than riding the auth limiter's.
+      max-attempts: 20
+      window-seconds: 60
   cors:
     # Origins allowed to call this API from a browser. The Angular dev server is
     # the dev default; add the deployed dashboard origin per environment.

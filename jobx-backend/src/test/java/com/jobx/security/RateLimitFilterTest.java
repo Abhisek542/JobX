@@ -11,13 +11,16 @@ import static org.junit.jupiter.api.Assertions.*;
 class RateLimitFilterTest {
 
     private static final int MAX_ATTEMPTS = 3;
+    private static final int RESOLVE_MAX_ATTEMPTS = 5;
 
     private RateLimitFilter filter;
 
     @BeforeEach
     void setUp() {
         // Wide window so the test can't straddle a boundary
-        filter = new RateLimitFilter(MAX_ATTEMPTS, 3600);
+        // Resolve gets a distinct budget so the per-endpoint tests below can tell
+        // the two limiters apart.
+        filter = new RateLimitFilter(MAX_ATTEMPTS, 3600, RESOLVE_MAX_ATTEMPTS, 3600);
     }
 
     private MockHttpServletResponse request(String ip, String path) throws Exception {
@@ -68,6 +71,29 @@ class RateLimitFilterTest {
     void nonAuthPathsAreNeverLimited() throws Exception {
         for (int i = 0; i < MAX_ATTEMPTS * 3; i++) {
             assertEquals(200, request("1.2.3.4", "/matches").getStatus());
+        }
+    }
+
+    @Test
+    void resolveHasItsOwnBudget() throws Exception {
+        // Exhausting the auth budget must not touch resolution's.
+        for (int i = 0; i < MAX_ATTEMPTS; i++) {
+            request("1.2.3.4", "/auth/login");
+        }
+        assertEquals(429, request("1.2.3.4", "/auth/login").getStatus());
+
+        for (int i = 0; i < RESOLVE_MAX_ATTEMPTS; i++) {
+            assertEquals(200, request("1.2.3.4", "/watchlist/resolve").getStatus());
+        }
+        assertEquals(429, request("1.2.3.4", "/watchlist/resolve").getStatus());
+    }
+
+    @Test
+    void otherWatchlistRoutesAreNotLimited() throws Exception {
+        // Only /watchlist/resolve makes outbound calls on the caller's behalf.
+        // Adding, listing and checking companies must stay unthrottled.
+        for (int i = 0; i < RESOLVE_MAX_ATTEMPTS * 3; i++) {
+            assertEquals(200, request("1.2.3.4", "/watchlist").getStatus());
         }
     }
 }

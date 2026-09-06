@@ -2,6 +2,7 @@ package com.jobx.repository;
 
 import com.jobx.entity.Company;
 import com.jobx.entity.Job;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -17,6 +18,22 @@ public interface JobRepository extends JpaRepository<Job, UUID> {
 
     /** All stored jobs for a board — used to backfill a new watcher's feed. */
     List<Job> findByCompany(Company company);
+
+    /**
+     * How many postings Jobx currently holds for a board.
+     *
+     * Evidence for the add-company confirmation card when the board came from
+     * the catalog: it is already stored, so its roles can be shown without
+     * calling the ATS at all.
+     */
+    long countByCompany(Company company);
+
+    /**
+     * A few stored titles for a board, freshest first — the catalog path's
+     * equivalent of BoardPreview.sampleTitles.
+     */
+    @Query("SELECT j.title FROM Job j WHERE j.company = :company ORDER BY j.firstSeenAt DESC")
+    List<String> findTitlesByCompany(@Param("company") Company company, Pageable pageable);
 
     /**
      * Jobs past the retention window, oldest first — the TTL sweep's input.

@@ -37,22 +37,54 @@ public interface AtsFetcher {
     List<Job> fetch(Company company);
 
     /**
-     * Cheap one-call check that the board token actually identifies a board,
-     * run once when a user first adds it. Throws {@link AtsFetchException} if
-     * it does not; POST /watchlist turns that into a 400 naming the token.
+     * ONE cheap list call describing the board: how many roles are live and a
+     * few real titles. Two callers depend on it:
      *
-     * The default is to do nothing, because for Greenhouse, Lever, Ashby and
-     * Workable a bad token 404s and {@link #fetch} already reports it. It is
-     * overridden only where the API cannot tell a typo from an empty board —
-     * SmartRecruiters answers a nonsense company id with a cheerful
-     * {@code 200 {"totalFound":0,"content":[]}}, so without this a typo'd
-     * watch would look healthy forever and simply never produce a job.
+     *  - the add-company resolver, which previews candidate boards it worked out
+     *    from a careers URL or a slug guess, and shows the winner's real titles
+     *    so a human can confirm it is actually their company;
+     *  - {@link #validateBoard}, below.
      *
-     * Deliberately separate from {@code fetch}: a real board that has zero
-     * openings this week must keep fetching normally once it is on the
-     * watchlist. The distinction is only drawable at add time.
+     * MUST stay to a single HTTP request. The resolver runs this across many
+     * (platform, token) candidates in parallel to work out which board a company
+     * is on, so a second call here multiplies straight into that fan-out. That
+     * is also why it must never fetch per-job detail the way {@link #fetch} does
+     * on Workable and SmartRecruiters — titles come from the list response only.
+     *
+     * Throws {@link AtsFetchException} if the board could not be read at all.
+     * A board that exists but has nothing open returns jobCount 0, which is a
+     * successful outcome here; it is {@code validateBoard} that decides whether
+     * zero is acceptable.
+     */
+    BoardPreview previewBoard(Company company);
+
+    /**
+     * Cheap check that the board token actually identifies a real board, run
+     * once when a user first adds it. Throws {@link AtsFetchException} if it
+     * does not; POST /watchlist turns that into a 400 naming the token.
+     *
+     * The rule is "a board we cannot see a single live role on is not a board we
+     * should accept", and it is deliberately stricter than {@link #fetch}. Two
+     * platforms cannot distinguish a typo from an empty board by status code at
+     * all — SmartRecruiters answers a nonsense company id with a cheerful
+     * {@code 200 {"totalFound":0,"content":[]}}, and Workable answers an
+     * abandoned account with {@code 200 {"name":"Razorpay","jobs":[]}}, echoing
+     * a plausible company name back at us. Both were verified live. Without this
+     * check either would sit on a watchlist looking perfectly healthy and simply
+     * never produce a job — the silent-empty-feed shape that has bitten this
+     * project three times.
+     *
+     * Accepted trade-off, unchanged from when SmartRecruiters introduced it: a
+     * real board with zero openings this week is rejected at add time. Only add
+     * time is strict — once a board is on the watchlist, {@link #fetch} treats
+     * an empty list as the ordinary "nothing new" outcome, so a company that
+     * closes all its roles keeps being polled rather than being dropped.
      */
     default void validateBoard(Company company) {
-        // no-op: this platform's API distinguishes a bad token by itself
+        BoardPreview preview = previewBoard(company);
+        if (preview.jobCount() == 0) {
+            throw new AtsFetchException("No live roles found on the " + supports()
+                    + " board '" + company.getBoardToken() + "'");
+        }
     }
 }

@@ -1,6 +1,7 @@
 package com.jobx.controller;
 
 import com.jobx.dto.ApiError;
+import com.jobx.resolve.SafeUrlFetcher;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
@@ -61,6 +62,19 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest()
                 .body(ApiError.of(400, "invalid_parameter",
                         "parameter '" + ex.getName() + "' has an invalid value"));
+    }
+
+    /**
+     * A careers URL Jobx will not request at all — a non-HTTP scheme, or a host
+     * that resolves somewhere off the public internet. 400 rather than 500
+     * because the user pasted it and the user can change it, and the message is
+     * SafeUrlFetcher's own: it says what was wrong with the address without
+     * describing what is reachable from the server.
+     */
+    @ExceptionHandler(SafeUrlFetcher.UnsafeUrlException.class)
+    public ResponseEntity<ApiError> handleUnsafeUrl(SafeUrlFetcher.UnsafeUrlException ex) {
+        return ResponseEntity.badRequest()
+                .body(ApiError.of(400, "invalid_url", ex.getMessage()));
     }
 
     // Unique-constraint fallback for races the controllers' own checks miss.

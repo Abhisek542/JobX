@@ -7,6 +7,7 @@ import com.jobx.entity.Job;
 import com.jobx.enums.AtsPlatform;
 import com.jobx.fetcher.AtsFetchException;
 import com.jobx.fetcher.AtsFetcher;
+import com.jobx.fetcher.BoardPreview;
 import com.jobx.fetcher.ExperienceParser;
 import com.jobx.repository.JobRepository;
 import lombok.RequiredArgsConstructor;
@@ -87,20 +88,32 @@ public class SmartRecruitersFetcher implements AtsFetcher {
     }
 
     /**
-     * One cheap list call to prove the board exists, used when a user first
-     * adds it. See the class comment: SmartRecruiters cannot distinguish a
-     * typo'd company id from an empty board at fetch time, so this is the only
-     * moment the distinction can be drawn honestly.
+     * One cheap list call, asking for only a sample page. jobCount is the API's
+     * own {@code totalFound} rather than the rows returned, so a 4,774-posting
+     * board like Bosch reports honestly without paging through it.
+     *
+     * Unusually among the five platforms, this one CAN name the company:
+     * {@code content[].company.name} ("PHONEPE LIMITED"), which is what lets the
+     * add-company flow fill the company name in for the user.
+     *
+     * The inherited validateBoard rejects a zero count, which is the whole
+     * reason this platform needed a validation hook first: a bogus company id
+     * answers 200 with an empty list rather than 404, so a typo would otherwise
+     * look like a perfectly healthy board that simply never posts a job.
      */
     @Override
-    public void validateBoard(Company company) {
+    public BoardPreview previewBoard(Company company) {
         String token = company.getBoardToken();
-        String body = get(listUrl(token, 1, 0),
+        String body = get(listUrl(token, BoardPreview.SAMPLE_SIZE, 0),
                 "SmartRecruiters board request failed for token " + token);
+        return parsePreview(body, token);
+    }
 
+    // Package-private seam so tests can exercise preview parsing without HTTP.
+    BoardPreview parsePreview(String responseBody, String token) {
         JsonNode root;
         try {
-            root = objectMapper.readTree(body);
+            root = objectMapper.readTree(responseBody);
         } catch (Exception e) {
             throw new AtsFetchException("Could not parse SmartRecruiters response for token " + token, e);
         }
@@ -109,10 +122,24 @@ public class SmartRecruitersFetcher implements AtsFetcher {
         if (content == null || !content.isArray()) {
             throw new AtsFetchException("Not a SmartRecruiters board response for token " + token);
         }
-        if (root.path("totalFound").asInt(0) == 0) {
-            throw new AtsFetchException(
-                    "No roles found on the SmartRecruiters board '" + token + "'");
+
+        List<String> titles = new ArrayList<>();
+        String displayName = null;
+        for (JsonNode node : content) {
+            if (displayName == null) {
+                String name = node.path("company").path("name").asText("");
+                if (!name.isBlank()) {
+                    displayName = name.trim();
+                }
+            }
+            // SmartRecruiters puts the job title in "name", not "title".
+            String title = node.path("name").asText("");
+            if (titles.size() < BoardPreview.SAMPLE_SIZE && !title.isBlank()) {
+                titles.add(title.trim());
+            }
         }
+
+        return new BoardPreview(displayName, root.path("totalFound").asInt(0), titles);
     }
 
     @Override

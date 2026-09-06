@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jobx.entity.Job;
 import com.jobx.entity.Company;
 import com.jobx.enums.AtsPlatform;
+import com.jobx.fetcher.AtsFetchException;
+import com.jobx.fetcher.BoardPreview;
 import com.jobx.fetcher.FixtureSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -73,5 +75,57 @@ class WorkableFetcherTest {
         assertEquals(Instant.parse("2026-06-27T00:00:00Z"), job.getPlatformPostedAt());
         // rawJson upgraded to the richer detail response
         assertTrue(job.getRawJson().contains("accountUid"));
+    }
+
+    /**
+     * The ghost-account case, captured live on 2026-09-06 from
+     * apply.workable.com/api/v1/widget/accounts/razorpay. Razorpay is a
+     * Greenhouse customer; this Workable account has never posted a job, yet the
+     * API answers 200 and echoes back a perfectly plausible company name.
+     *
+     * The same is true for groww, atlan, meesho and sprinto. If resolution
+     * trusted the name — or merely a 200 — it would confidently hand a user a
+     * board that can never produce a single match, which is the silent-empty-feed
+     * failure this project has already hit three times. jobCount 0 is the only
+     * honest reading, and validateBoard turns it into a rejection.
+     */
+    @Test
+    void aGhostAccountReportsNoJobsEvenThoughItNamesTheCompany() {
+        BoardPreview preview = fetcher.parsePreview(
+                FixtureSupport.fixture("workable-ghost-account.json"), "razorpay");
+
+        assertEquals("Razorpay", preview.displayName());
+        assertEquals(0, preview.jobCount());
+        assertTrue(preview.sampleTitles().isEmpty());
+
+        Company ghost = FixtureSupport.company("Razorpay", AtsPlatform.WORKABLE, "razorpay");
+        WorkableFetcher spy = new WorkableFetcher(null, new ObjectMapper(), null) {
+            @Override
+            public BoardPreview previewBoard(Company company) {
+                return parsePreview(FixtureSupport.fixture("workable-ghost-account.json"),
+                        company.getBoardToken());
+            }
+        };
+        assertThrows(AtsFetchException.class, () -> spy.validateBoard(ghost));
+    }
+
+    @Test
+    void previewCountsUniqueShortcodesAndNamesTheCompany() {
+        BoardPreview preview = fetcher.parsePreview(
+                FixtureSupport.fixture("workable-apna.json"), "apna");
+
+        // Same dedup the full mapping applies: 128 list rows, 96 real jobs.
+        assertEquals(96, preview.jobCount());
+        assertEquals("Apna", preview.displayName());
+        assertEquals(BoardPreview.SAMPLE_SIZE, preview.sampleTitles().size());
+        preview.sampleTitles().forEach(title -> assertFalse(title.isBlank()));
+    }
+
+    @Test
+    void previewRejectsAPayloadThatIsNotABoard() {
+        assertThrows(AtsFetchException.class,
+                () -> fetcher.parsePreview("{\"error\":\"nope\"}", "bogus"));
+        assertThrows(AtsFetchException.class,
+                () -> fetcher.parsePreview("not json at all", "bogus"));
     }
 }
