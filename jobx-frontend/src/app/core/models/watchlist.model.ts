@@ -10,7 +10,14 @@ export type CompanyStatus = 'ACTIVE' | 'PAUSED' | 'UNSUPPORTED';
 export type FetchStatus = 'SUCCESS' | 'FAILED';
 
 export interface WatchedCompanyResponse {
+  /** The watch row — what PATCH/DELETE /watchlist/{id} addresses. */
   id: string;
+  /**
+   * The shared board behind the watch row. This is NOT `id`, and it is the
+   * only thing that joins a watch to a MatchResponse — matching them by
+   * display name would be a guess.
+   */
+  companyId: string;
   companyName: string;
   atsPlatform: AtsPlatform;
   boardToken: string;

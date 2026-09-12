@@ -4,12 +4,15 @@ import { AppError } from '../../core/models/api-error.model';
 import { MatchResponse, MatchStatus } from '../../core/models/match.model';
 import { ToastService } from '../../core/services/toast.service';
 import {
+  GROUP_PAGE_SIZE,
+  GroupOrder,
   PAGE_SIZE,
   SortMode,
   StatusFilter,
   applyView,
   clampPage,
   countByStatus,
+  groupByCompany,
   pageNumbers,
   pageRangeLabel,
   pageSlice,
@@ -42,6 +45,12 @@ export class FeedStore {
   private readonly sortSignal = signal<SortMode>('score');
   private readonly pageSignal = signal(1);
 
+  /** View mode, not a filter — grouping composes with any status pill. */
+  private readonly groupedSignal = signal(false);
+  private readonly groupOrderSignal = signal<GroupOrder>('score');
+  /** Collapsed company ids. Session-only, like the status pill. */
+  private readonly collapsedSignal = signal<ReadonlySet<string>>(new Set());
+
   readonly matches = this.matchesSignal.asReadonly();
   readonly loading = this.loadingSignal.asReadonly();
   readonly error = this.errorSignal.asReadonly();
@@ -51,6 +60,9 @@ export class FeedStore {
   readonly status = this.statusSignal.asReadonly();
   readonly query = this.querySignal.asReadonly();
   readonly sort = this.sortSignal.asReadonly();
+  readonly grouped = this.groupedSignal.asReadonly();
+  readonly groupOrder = this.groupOrderSignal.asReadonly();
+  readonly collapsed = this.collapsedSignal.asReadonly();
 
   /** filter -> search -> sort. Pagination happens after this, never before. */
   readonly visible = computed(() =>
@@ -62,7 +74,24 @@ export class FeedStore {
   );
 
   readonly statusCounts = computed(() => countByStatus(this.matchesSignal()));
-  readonly totalPages = computed(() => totalPages(this.visible().length, PAGE_SIZE));
+
+  /**
+   * Grouping runs on `visible()`, i.e. after filter -> search -> sort, so the
+   * two views can never disagree about which roles exist or how they rank.
+   */
+  readonly groups = computed(() => groupByCompany(this.visible(), this.groupOrderSignal()));
+
+  /**
+   * Pagination is mode-aware: the flat view pages 10 ROLES, the grouped view
+   * pages 5 COMPANIES. Paging the grouped view by role would split a company
+   * across a page boundary — the exact defect grouping exists to fix.
+   */
+  private readonly pageSize = computed(() => (this.groupedSignal() ? GROUP_PAGE_SIZE : PAGE_SIZE));
+  private readonly itemCount = computed(() =>
+    this.groupedSignal() ? this.groups().length : this.visible().length,
+  );
+
+  readonly totalPages = computed(() => totalPages(this.itemCount(), this.pageSize()));
 
   /**
    * The page actually rendered: clamped, so a shrinking list can't strand us on
@@ -77,9 +106,13 @@ export class FeedStore {
     this.loadedSignal() ? clampPage(this.pageSignal(), this.totalPages()) : this.pageSignal(),
   );
   readonly paged = computed(() => pageSlice(this.visible(), this.page(), PAGE_SIZE));
+  /** The groups actually rendered. `pageSlice` is generic — same machinery. */
+  readonly pagedGroups = computed(() =>
+    pageSlice(this.groups(), this.page(), GROUP_PAGE_SIZE),
+  );
   readonly pageItems = computed(() => pageNumbers(this.page(), this.totalPages()));
-  readonly range = computed(() => pageRangeLabel(this.visible().length, this.page(), PAGE_SIZE));
-  readonly showPagination = computed(() => this.visible().length > PAGE_SIZE);
+  readonly range = computed(() => pageRangeLabel(this.itemCount(), this.page(), this.pageSize()));
+  readonly showPagination = computed(() => this.itemCount() > this.pageSize());
 
   readonly isSearching = computed(() => this.querySignal().trim() !== '');
   readonly isFiltered = computed(() => this.isSearching() || this.statusSignal() !== 'ALL');
@@ -132,12 +165,47 @@ export class FeedStore {
     this.pageSignal.set(1);
   }
 
+  /**
+   * Page 1 on every switch — page 3 of 9 companies means nothing as page 3 of
+   * 43 roles, and the two modes count different things.
+   */
+  setGrouped(grouped: boolean): void {
+    if (this.groupedSignal() === grouped) return;
+    this.groupedSignal.set(grouped);
+    this.pageSignal.set(1);
+  }
+
+  setGroupOrder(order: GroupOrder): void {
+    if (this.groupOrderSignal() === order) return;
+    this.groupOrderSignal.set(order);
+    this.pageSignal.set(1);
+  }
+
+  toggleCollapsed(companyId: string): void {
+    this.collapsedSignal.update((set) => {
+      const next = new Set(set);
+      if (next.has(companyId)) next.delete(companyId);
+      else next.add(companyId);
+      return next;
+    });
+  }
+
+  expandAll(): void {
+    this.collapsedSignal.set(new Set());
+  }
+
+  /** Collapses every group currently in the feed, not just this page. */
+  collapseAll(): void {
+    this.collapsedSignal.set(new Set(this.groups().map((g) => g.companyId)));
+  }
+
   setPage(page: number): void {
     // Sanitize only — the clamp against the real page count happens in `page`
     // once the feed has actually loaded.
     this.pageSignal.set(Math.max(1, Math.trunc(page) || 1));
   }
 
+  /** Filters only. Grouping is a view mode and deliberately survives this. */
   clearFilters(): void {
     this.statusSignal.set('ALL');
     this.querySignal.set('');

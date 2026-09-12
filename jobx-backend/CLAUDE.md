@@ -490,6 +490,47 @@ links `job-boards.eu.greenhouse.io/groww`.
   case-insensitive token lookup, so a user typing the other casing joins the
   existing board instead of creating a second `companies` row for it.
 
+**Feed grouped by company done and live-verified 2026-09-12.** Replaces
+`Sort by: Company`, which is **removed** from `SortMode`. As a flat sort it
+only interleaved cards alphabetically: it clustered a company's roles without
+separating them, let the 10/page slice cut through the middle of a company,
+ranked by a letter nobody cares about, and still could not answer "show me only
+this company" (the only workaround was typing the name into free-text search).
+- **Backend, two lines**: `MatchResponse` gains `companyId` and
+  `WatchedCompanyResponse` gains `companyId`. Both read through an association
+  the DTO already dereferenced, so neither costs a query. The second one matters
+  because `WatchedCompanyResponse.id` is the **watch row** id — without a
+  company id on both, the feed's groups could only be joined to board health by
+  display name. No new endpoint; `GET /matches` is still param-less.
+- **Grouping keys on `companyId`, never `companyName`** — the name is
+  `Company.displayName` (first-adder-wins) and two boards can share one.
+- **The grouped view paginates COMPANIES (5/page), not roles.** That is what
+  guarantees a company's postings are never split across a page boundary. It
+  reuses the generic `pageSlice`/`clampPage`/`pageNumbers` helpers, so `?page=N`,
+  the clamp and the ellipses behave identically; the range label reads
+  "Showing 1–5 of 6 companies".
+- Entry point is a **List / By company** toggle in the toolbar, deliberately not
+  a sixth status pill: grouping is a view mode that composes with any pill,
+  Dismissed included (groups then fill with compact archive rows). In grouped
+  mode the sort dropdown orders the *groups* — Best match / Newest / **A–Z**.
+  A–Z survives only here: useless for interleaving cards, but the natural way to
+  find one company among a screen of headers.
+- Group state (collapsed set, grouped on/off, group order) is **session-only**,
+  matching how the status pill and sort already behave — only `page` is
+  URL-backed. A refresh therefore returns to the flat view.
+- Live-verified in the browser against a 6-board / 51-match feed: groups render
+  with real counts and board health, Collapse all gives a clean company index,
+  group pagination pages 1–5 then 6 of 6, A–Z reorders and resets to page 1,
+  dismissing inside a group drops its header count live (11 → 10), and the
+  Dismissed pill while grouped yields one group of archive rows with Restore.
+  Both themes checked. **Not** verified: the ≤1280px / ≤900px breakpoints — the
+  automation browser window still cannot be resized (same limitation as
+  2026-08-15).
+- Tests: frontend 37 → 46 (`groupByCompany` + group-pagination suites in
+  `feed-logic.spec.ts`, including the two-boards-one-display-name case and an
+  expired match). Backend suite unchanged at 203 green — every DTO call site
+  goes through the static `from` factory, so nothing else needed touching.
+
 **CURRENT FOCUS (2026-09-06): nothing is mid-flight.** Add-company resolution is
 done and live-verified (above), as are the feed-reload fix, the six-day job TTL
 and the SmartRecruiters fetcher.

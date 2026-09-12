@@ -22,6 +22,14 @@ public record MatchResponse(
         /** Null once the posting has been expired and swept away. */
         UUID jobId,
         String jobTitle,
+        /**
+         * The board this role came from. companyName is a display string and
+         * two distinct boards can carry the same one, so anything grouping or
+         * joining by company keys on this id, never on the name. Safe on an
+         * expired match: matches.company_id is a real FK that outlives the job
+         * row, which is exactly why it is denormalized onto the match.
+         */
+        UUID companyId,
         String companyName,
         String applyUrl,
         Integer score,
@@ -36,6 +44,7 @@ public record MatchResponse(
                 match.getId(),
                 match.getJob() != null ? match.getJob().getId() : null,
                 match.getJobTitle(),
+                match.getCompany().getId(),
                 match.getCompany().getDisplayName(),
                 match.getApplyUrl(),
                 match.getScore(),

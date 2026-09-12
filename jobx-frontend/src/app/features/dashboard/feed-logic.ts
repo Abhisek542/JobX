@@ -9,14 +9,48 @@ import { MatchResponse, MatchStatus } from '../../core/models/match.model';
    ========================================================================== */
 
 export type StatusFilter = 'ALL' | MatchStatus;
-export type SortMode = 'score' | 'newest' | 'company';
+
+/**
+ * How roles are ordered inside the list. 'company' used to live here and was
+ * removed: as a flat sort it only interleaved cards alphabetically, which
+ * clustered a company's roles without ever separating them and still could not
+ * answer "show me only this company". Grouping replaces it — see
+ * `groupByCompany` and GroupOrder below.
+ */
+export type SortMode = 'score' | 'newest';
+
+/** How the company groups themselves are ordered in the grouped view. */
+export type GroupOrder = 'score' | 'newest' | 'name';
 
 export const PAGE_SIZE = 10;
+
+/**
+ * Companies per page in the grouped view. The grouped view paginates GROUPS,
+ * not roles, which is the whole point: paging by role at PAGE_SIZE splits one
+ * company across a page boundary, which is the bug grouping exists to fix.
+ */
+export const GROUP_PAGE_SIZE = 5;
 
 export interface FeedView {
   status: StatusFilter;
   query: string;
   sort: SortMode;
+}
+
+/**
+ * One company's slice of the feed. Counts and bestScore describe the group as
+ * it stands in the CURRENT filtered view, not the whole feed — the header says
+ * so, because a "12 roles" that ignored the active status pill would be a lie.
+ */
+export interface CompanyGroup {
+  companyId: string;
+  companyName: string;
+  matches: MatchResponse[];
+  count: number;
+  bestScore: number;
+  newCount: number;
+  /** Most recent `createdAt` in the group, for 'newest' group ordering. */
+  latestAt: string;
 }
 
 export interface ScoreBand {
@@ -83,10 +117,6 @@ export function sortMatches(matches: readonly MatchResponse[], sort: SortMode) {
       return list.sort(
         (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
       );
-    case 'company':
-      return list.sort(
-        (a, b) => a.companyName.localeCompare(b.companyName) || b.score - a.score,
-      );
     case 'score':
     default:
       return list.sort((a, b) => b.score - a.score);
@@ -96,6 +126,71 @@ export function sortMatches(matches: readonly MatchResponse[], sort: SortMode) {
 /** filter -> search -> sort, in that order. Pagination is applied separately. */
 export function applyView(matches: readonly MatchResponse[], view: FeedView): MatchResponse[] {
   return sortMatches(searchMatches(filterByStatus(matches, view.status), view.query), view.sort);
+}
+
+/**
+ * Step 3b — grouping. Runs on the OUTPUT of `applyView`, so roles inside a
+ * group keep whatever order the flat pipeline just gave them and the two views
+ * can never disagree about ordering.
+ *
+ * Keyed on `companyId`, never on `companyName`: the name is a display string
+ * (Company.displayName, first-adder-wins) and two distinct boards can carry the
+ * same one, which would silently merge two companies into one group.
+ */
+export function groupByCompany(
+  matches: readonly MatchResponse[],
+  order: GroupOrder,
+): CompanyGroup[] {
+  const groups = new Map<string, CompanyGroup>();
+
+  for (const match of matches) {
+    let group = groups.get(match.companyId);
+    if (!group) {
+      group = {
+        companyId: match.companyId,
+        // First member wins. Every match on a board carries the same canonical
+        // displayName, so this is that name, not an arbitrary pick.
+        companyName: match.companyName,
+        matches: [],
+        count: 0,
+        bestScore: 0,
+        newCount: 0,
+        latestAt: match.createdAt,
+      };
+      groups.set(match.companyId, group);
+    }
+    group.matches.push(match);
+    group.count++;
+    if (match.score > group.bestScore) group.bestScore = match.score;
+    if (match.status === 'NEW') group.newCount++;
+    // Parsed, not compared as strings. Jackson drops trailing zeros from an
+    // Instant, so the same feed carries both "…:16Z" and "…:16.246Z" — and
+    // lexically "16.246Z" sorts BEFORE "16Z" ('.' < 'Z'), which is backwards.
+    if (Date.parse(match.createdAt) > Date.parse(group.latestAt)) {
+      group.latestAt = match.createdAt;
+    }
+  }
+
+  return orderGroups([...groups.values()], order);
+}
+
+/** Ties fall back to name so the order is stable and reproducible. */
+function orderGroups(groups: CompanyGroup[], order: GroupOrder): CompanyGroup[] {
+  switch (order) {
+    case 'name':
+      return groups.sort((a, b) => a.companyName.localeCompare(b.companyName));
+    case 'newest':
+      return groups.sort(
+        (a, b) =>
+          new Date(b.latestAt).getTime() - new Date(a.latestAt).getTime() ||
+          a.companyName.localeCompare(b.companyName),
+      );
+    case 'score':
+    default:
+      return groups.sort(
+        (a, b) => b.bestScore - a.bestScore || a.companyName.localeCompare(b.companyName),
+      );
+  }
 }
 
 /**

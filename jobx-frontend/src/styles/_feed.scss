@@ -147,6 +147,161 @@ select.sort:hover {
   color: var(--faint);
 }
 
+/* -------------------------------------------------- feed layout toggle --- */
+/* Segmented List | By company. Deliberately NOT styled as a pill: the pills are
+   a status tablist, and this is a view mode that composes with any of them. */
+.view-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+}
+.view-toggle button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-2);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.view-toggle button:hover {
+  color: var(--text);
+}
+.view-toggle button.active {
+  background: var(--panel);
+  color: var(--brand);
+  box-shadow: var(--sh-1);
+}
+
+/* ------------------------------------------------------- company groups --- */
+/* Replaces the old "Sort by: Company", which only interleaved cards
+   alphabetically — it clustered a company's roles without separating them, and
+   pagination still cut through the middle of a company. A header you can
+   collapse fixes both, and the grouped view pages COMPANIES, not roles. */
+.cgroups {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.cgroup {
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--panel-2);
+  overflow: hidden;
+}
+.cgroup-h {
+  margin: 0;
+  font-size: inherit;
+  font-weight: inherit;
+  /* Sticks to the top of the viewport while you scroll a long company, so you
+     never lose track of whose roles you are reading. */
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+.cgroup-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 11px 14px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  /* Opaque: cards scroll underneath this. */
+  background: var(--panel);
+  font: inherit;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+.cgroup-btn:hover {
+  background: var(--panel-2);
+}
+.cgroup.is-collapsed .cgroup-btn {
+  border-bottom-color: transparent;
+}
+.cgroup-btn > svg {
+  flex: none;
+  color: var(--faint);
+  transition: transform 0.15s ease;
+}
+.cgroup.is-collapsed .cgroup-btn > svg {
+  transform: rotate(-90deg);
+}
+.cgroup-id {
+  flex: 1;
+  min-width: 0;
+}
+.cgroup-id .nm {
+  display: block;
+  font-size: 15px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cgroup-id .sub {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 2px;
+  font-size: 12.5px;
+  color: var(--faint);
+  flex-wrap: wrap;
+}
+.cgroup-id .sub .fresh {
+  color: var(--brand);
+  font-weight: 650;
+}
+.cgroup-id .sub .bad {
+  color: var(--bad);
+}
+.cgroup-best {
+  flex: none;
+  font-size: 14px;
+  font-weight: 700;
+  text-align: right;
+}
+.cgroup-best .lbl {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--faint);
+}
+.cgroup-body {
+  padding: 13px;
+}
+/* The group already frames its cards, so they drop their own border. */
+.cgroup-body .card {
+  border-color: var(--line-soft);
+}
+
+.collapse-all {
+  margin-left: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cgroup-btn > svg {
+    transition: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .cgroup-best .lbl {
+    display: none;
+  }
+}
+
 /* ---------------------------------------------------------------- card --- */
 .cards {
   display: flex;

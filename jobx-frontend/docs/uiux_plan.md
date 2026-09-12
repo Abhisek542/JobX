@@ -112,20 +112,61 @@ Showing 1–10 of 43
 
 **Rules**
 
-- Page size **10**.
+- Page size **10** in the flat view. The grouped view pages **5 companies**
+  (§4a) — same helpers, different unit.
 - Page lives in the URL: `/dashboard?page=3`, read/written via `ActivatedRoute`
   + `Router`. A view survives refresh and is shareable.
-- **Reset to page 1** whenever search text, status pill, or sort changes.
+- **Reset to page 1** whenever search text, status pill, sort, the layout
+  toggle, or the group order changes.
 - **Clamp** when the list shrinks beneath the current page — dismissing the last
   card on page 4 lands on page 3, never on an empty page.
 - Show at most 5 page numbers; use ellipses beyond that.
 - Hide the whole control when the filtered result fits on one page.
-- Fixed order of operations: **filter → search → sort → paginate**.
+- Fixed order of operations: **filter → search → sort → (group) → paginate**.
 - Status pill counts always reflect the **whole feed**, never the current page.
 - `aria-current="page"` on the active number; Prev/Next disabled at the ends.
 
 Move to server-side pagination only when real feed size demands it; that needs
 `GET /matches?page=&size=` on the backend first.
+
+---
+
+## 4a. Grouped view — "By company" (added 2026-09-12)
+
+Replaces the old `Sort by: Company`, which is **removed** from `SortMode`. As a
+flat sort it clustered a company's roles alphabetically without ever separating
+them, let pagination cut through the middle of a company, ranked by a letter
+nobody cares about, and still could not answer "show me only this company".
+
+**Entry point** is a segmented **List / By company** toggle in the toolbar,
+beside the sort select. It is deliberately *not* a sixth status pill: the pills
+are a status tablist and grouping is a view mode that composes with any of them,
+Dismissed included (groups then fill with compact archive rows).
+
+**Rules**
+
+- `groupByCompany` runs on the output of `applyView`, so roles inside a group
+  keep the flat pipeline's order and the two views can never disagree.
+- Grouping keys on **`companyId`**, never `companyName` — the name is a display
+  string and two boards can share one.
+- **Pagination pages groups, not roles**: `GROUP_PAGE_SIZE` = 5 companies. This
+  is what guarantees a company's roles are never split across pages. The same
+  generic `pageSlice`/`clampPage`/`pageNumbers` helpers are reused, so `?page=N`,
+  the clamp and the ellipses all behave identically.
+- In grouped mode the sort dropdown orders the **groups**: Best match / Newest /
+  **A–Z**. A–Z lives here and only here — useless for interleaving cards, but the
+  natural way to find one company among a screen of headers.
+- Group headers are collapsible (`aria-expanded` + `aria-controls`), with
+  Expand all / Collapse all.
+- **All three pieces of grouped state — the layout toggle, the group order and
+  the collapsed set — are session-only**, exactly like the status pill and sort.
+  `page` remains the only URL-backed view state, so a refresh returns to the
+  flat view. Revisit together with putting status/sort in the URL, not alone.
+- **Header honesty:** counts describe the group *within the current filtered
+  view* and say "in this view" whenever a filter is active, so they are never
+  read as the company's whole board. The health line is the real
+  `lastFetchStatus`, joined via `companyId`; a company the user no longer
+  watches simply shows no health line rather than a guess.
 
 ---
 
@@ -154,13 +195,17 @@ This table is authoritative. Base URL `http://localhost:8080`.
 
 ```ts
 type MatchResponse = {
-  id: string; jobId: string; jobTitle: string; companyName: string;
+  id: string; jobId: string | null; jobTitle: string;
+  companyId: string;                        // the board; added 2026-09-12
+  companyName: string;
   applyUrl: string; score: number; matchedKeywords: string[];
-  status: MatchStatus; createdAt: string;
+  status: MatchStatus; createdAt: string; expiredAt: string | null;
 };
 
 type WatchedCompanyResponse = {
-  id: string; companyName: string; atsPlatform: AtsPlatform; boardToken: string;
+  id: string;                               // the WATCH row, not the company
+  companyId: string;                        // the board; added 2026-09-12
+  companyName: string; atsPlatform: AtsPlatform; boardToken: string;
   status: CompanyStatus; lastFetchedAt: string | null;
   lastFetchStatus: FetchStatus | null;      // null = never checked
   createdAt: string;
@@ -223,8 +268,9 @@ and the default redirect.
 One `signal<MatchResponse[]>` holds the feed. Everything else is `computed`:
 
 ```
-matches ──▶ filtered ──▶ searched ──▶ sorted ──▶ paged
-   └──────▶ statusCounts        └──▶ totalPages
+matches ──▶ filtered ──▶ searched ──▶ sorted ──┬─▶ paged        (flat: 10 roles)
+   └──────▶ statusCounts                       └─▶ groups ──▶ pagedGroups
+                                                              (grouped: 5 companies)
 ```
 
 No duplicated arrays, so nothing can drift out of sync. Port the predicates and

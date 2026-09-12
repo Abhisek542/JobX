@@ -126,4 +126,11 @@ export const ICONS = {
       d: 'M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z',
     },
   ],
+  // The feed-layout toggle: a flat list of rows vs. rows gathered into stacks.
+  list: [{ k: 'path', d: 'M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01' }],
+  layers: [
+    { k: 'polygon', points: '12 2 2 7 12 12 22 7 12 2' },
+    { k: 'polyline', points: '2 17 12 22 22 17' },
+    { k: 'polyline', points: '2 12 12 17 22 12' },
+  ],
 } as const satisfies Record<string, readonly IconShape[]>;

@@ -12,6 +12,7 @@ import { FeedStore } from '../../features/dashboard/feed.store';
 import { StatusFilter } from '../../features/dashboard/feed-logic';
 import { MatchDetailDrawer } from '../overlays/match-detail-drawer';
 import { EmptyState } from '../ui/empty-state';
+import { CompanyGroupSection } from './company-group';
 import { FeedToolbar } from './feed-toolbar';
 import { MatchCard } from './match-card';
 import { Pagination } from './pagination';
@@ -40,22 +41,38 @@ const EMPTY_TITLE: Record<StatusFilter, string> = {
 @Component({
   selector: 'app-match-feed',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [EmptyState, FeedToolbar, MatchCard, MatchDetailDrawer, Pagination],
+  imports: [
+    CompanyGroupSection,
+    EmptyState,
+    FeedToolbar,
+    MatchCard,
+    MatchDetailDrawer,
+    Pagination,
+  ],
   template: `
     <app-feed-toolbar
       [query]="feed.query()"
       [status]="feed.status()"
       [sort]="feed.sort()"
+      [grouped]="feed.grouped()"
+      [groupOrder]="feed.groupOrder()"
       [counts]="feed.statusCounts()"
       (queryChange)="feed.setQuery($event)"
       (statusChange)="feed.setStatusFilter($event)"
       (sortChange)="feed.setSort($event)"
+      (groupedChange)="feed.setGrouped($event)"
+      (groupOrderChange)="feed.setGroupOrder($event)"
     />
 
     <div class="feed-head">
       <h2>{{ title() }}</h2>
       @if (feed.visible().length) {
         <span class="sub">{{ subtitle() }}</span>
+      }
+      @if (feed.grouped() && feed.groups().length) {
+        <button class="btn btn-ghost btn-sm collapse-all" type="button" (click)="toggleAll()">
+          {{ allCollapsed() ? 'Expand all' : 'Collapse all' }}
+        </button>
       }
     </div>
 
@@ -74,6 +91,33 @@ const EMPTY_TITLE: Record<StatusFilter, string> = {
       >
         <button class="btn btn-primary" type="button" (click)="feed.reload()">Try again</button>
       </app-empty-state>
+    } @else if (feed.grouped() && feed.groups().length) {
+      <!--
+        Grouped view. Pagination below is over COMPANIES here, not roles, so a
+        company's postings are never split across a page boundary.
+      -->
+      <div class="cgroups">
+        @for (group of feed.pagedGroups(); track group.companyId) {
+          <app-company-group
+            [group]="group"
+            [compact]="isArchive()"
+            (openDetails)="openDrawer($event)"
+          />
+        }
+      </div>
+
+      @if (feed.showPagination()) {
+        <app-pagination
+          [page]="feed.page()"
+          [totalPages]="feed.totalPages()"
+          [items]="feed.pageItems()"
+          [range]="feed.range()"
+          unit="companies"
+          (pageChange)="feed.setPage($event)"
+        />
+      }
+
+      <div class="feed-foot">{{ footer() }}</div>
     } @else if (feed.paged().length) {
       <!-- The Dismissed view is an archive, so it lists rows, not cards. -->
       <div class="cards" [class.cards-compact]="isArchive()">
@@ -179,7 +223,16 @@ export class MatchFeed {
   protected readonly subtitle = computed(() => {
     const count = this.feed.visible().length;
     const suffix = this.feed.isSearching() ? ' matching your search' : '';
-    return `${count} role${count === 1 ? '' : 's'}${suffix}`;
+    const roles = `${count} role${count === 1 ? '' : 's'}`;
+    if (!this.feed.grouped()) return `${roles}${suffix}`;
+    const companies = this.feed.groups().length;
+    return `${roles} across ${companies} compan${companies === 1 ? 'y' : 'ies'}${suffix}`;
+  });
+
+  /** Every group on screen collapsed — drives the Expand/Collapse all label. */
+  protected readonly allCollapsed = computed(() => {
+    const groups = this.feed.groups();
+    return groups.length > 0 && groups.every((g) => this.feed.collapsed().has(g.companyId));
   });
 
   /** Honest footer: last check time comes from real lastFetchedAt values. */
@@ -234,6 +287,11 @@ export class MatchFeed {
         });
       }
     });
+  }
+
+  protected toggleAll(): void {
+    if (this.allCollapsed()) this.feed.expandAll();
+    else this.feed.collapseAll();
   }
 
   protected openDrawer(id: string): void {

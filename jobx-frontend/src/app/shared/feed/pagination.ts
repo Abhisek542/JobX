@@ -3,7 +3,10 @@ import { PageItem } from '../../features/dashboard/feed-logic';
 import { Icon } from '../ui/icon';
 
 /**
- * Numbered pagination, 10/page (change #3, uiux_plan.md §4).
+ * Numbered pagination (change #3, uiux_plan.md §4). 10 roles/page in the flat
+ * view; in the grouped view it pages 5 COMPANIES, which is what stops a
+ * company's roles being split across a page boundary. `unit` names whichever
+ * is being counted.
  *
  * Client-side over the already-loaded array — `GET /matches` takes no page
  * parameters, so nothing here may imply the server paginates. The wording
@@ -15,7 +18,9 @@ import { Icon } from '../ui/icon';
   imports: [Icon],
   template: `
     <nav class="pagination" aria-label="Match feed pages">
-      <span class="range">Showing {{ range().from }}–{{ range().to }} of {{ range().total }}</span>
+      <span class="range">
+        Showing {{ range().from }}–{{ range().to }} of {{ range().total }}{{ unitSuffix() }}
+      </span>
 
       <div class="pages">
         <button
@@ -62,8 +67,13 @@ export class Pagination {
   readonly totalPages = input.required<number>();
   readonly items = input.required<PageItem[]>();
   readonly range = input.required<{ from: number; to: number; total: number }>();
+  /**
+   * What is being paged. Empty keeps the flat view's verified copy unchanged;
+   * the grouped view passes 'companies' so "1–5 of 12" can't read as roles.
+   */
+  readonly unit = input('');
 
   readonly pageChange = output<number>();
 
-  protected readonly isFirst = computed(() => this.page() <= 1);
+  protected readonly unitSuffix = computed(() => (this.unit() ? ` ${this.unit()}` : ''));
 }
