@@ -9,7 +9,7 @@ import com.jobx.fetcher.AtsFetchException;
 import com.jobx.fetcher.AtsFetcher;
 import com.jobx.fetcher.BoardPreview;
 import com.jobx.fetcher.ExperienceParser;
-import com.jobx.repository.JobRepository;
+import com.jobx.fetcher.FetchFilter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jsoup.Jsoup;
@@ -33,10 +33,11 @@ import java.util.List;
  *           → description + requirements + benefits (HTML), published (full ISO)
  *           (v1 widget /jobs/{code} and v3 paths both 404 — v2 is the working detail path)
  *
- * N+1 mitigation: detail is fetched ONLY for shortcodes not already in the DB
- * (JobRepository check). First fetch of a board pays full price (~128 calls for
- * Apna); steady state is ~0–2 per cycle. If a detail call fails, the job is
- * still emitted from list data (null description) rather than dropped.
+ * N+1 mitigation: detail is fetched ONLY for shortcodes the FetchFilter does not
+ * already know — neither stored nor tombstoned — and whose list date is inside
+ * the retention window. First fetch of a board pays for its fresh postings only;
+ * steady state is ~0–2 per cycle. If a detail call fails, the job is skipped
+ * and retried next cycle (see the comment at the detail call).
  *
  * Other quirks from live recon:
  *  - list "experience" is a seniority label ("Associate"), NOT years — ignored;
@@ -52,7 +53,6 @@ public class WorkableFetcher implements AtsFetcher {
 
     private final WebClient.Builder webClientBuilder;
     private final ObjectMapper objectMapper;
-    private final JobRepository jobRepository;
 
     @Override
     public AtsPlatform supports() {
@@ -60,7 +60,7 @@ public class WorkableFetcher implements AtsFetcher {
     }
 
     @Override
-    public List<Job> fetch(Company company) {
+    public List<Job> fetch(Company company, FetchFilter filter) {
         String token = company.getBoardToken();
         String url = BASE_URL + "/api/v1/widget/accounts/" + token;
         log.info("Fetching Workable board: {} ({})", company.getDisplayName(), token);
@@ -82,7 +82,7 @@ public class WorkableFetcher implements AtsFetcher {
         }
 
         try {
-            return parseList(responseBody, company, true);
+            return parseList(responseBody, company, filter, true);
         } catch (AtsFetchException e) {
             throw e;
         } catch (Exception e) {
@@ -94,7 +94,8 @@ public class WorkableFetcher implements AtsFetcher {
      * Package-private seam so fixture tests can exercise the mapping without HTTP.
      * fetchDetails=false lets tests cover the list mapping in isolation.
      */
-    List<Job> parseList(String responseBody, Company company, boolean fetchDetails) throws Exception {
+    List<Job> parseList(String responseBody, Company company, FetchFilter filter,
+                        boolean fetchDetails) throws Exception {
         List<Job> results = new ArrayList<>();
 
         JsonNode root = objectMapper.readTree(responseBody);
@@ -109,6 +110,7 @@ public class WorkableFetcher implements AtsFetcher {
 
         int detailCalls = 0;
         int skipped = 0;
+        int tooOld = 0;
         // The list repeats a job once per posting location, same shortcode —
         // observed live on Apna (128 rows, 96 unique). Dedupe within the batch.
         java.util.Set<String> seenShortcodes = new java.util.HashSet<>();
@@ -119,9 +121,11 @@ public class WorkableFetcher implements AtsFetcher {
                 continue;
             }
 
-            // N+1 guard: known jobs get skipped entirely — the scheduler would
-            // dedup them anyway, so a detail call would be pure waste
-            if (fetchDetails && jobRepository.existsByCompanyAndExternalId(company, shortcode)) {
+            // N+1 guard: a stored OR tombstoned posting would be dropped by the
+            // scheduler anyway, so its detail call would be pure waste. This
+            // used to check only the jobs table, which cost one detail call per
+            // TTL-expired posting still listed on the board, every cycle.
+            if (filter.isKnown(shortcode)) {
                 continue;
             }
 
@@ -143,12 +147,24 @@ public class WorkableFetcher implements AtsFetcher {
             // published_on is date-only ("2026-06-27") — midnight UTC fallback;
             // overwritten by the detail call's full ISO timestamp when available
             String publishedOn = node.path("published_on").asText("");
+            LocalDate publishedDate = null;
             if (!publishedOn.isEmpty()) {
                 try {
-                    job.setPlatformPostedAt(LocalDate.parse(publishedOn).atStartOfDay(ZoneOffset.UTC).toInstant());
+                    publishedDate = LocalDate.parse(publishedOn);
+                    job.setPlatformPostedAt(publishedDate.atStartOfDay(ZoneOffset.UTC).toInstant());
                 } catch (Exception e) {
                     log.debug("Could not parse published_on '{}' for job {}", publishedOn, shortcode);
                 }
+            }
+
+            // Past the TTL already — the sweep would delete it within a day, so
+            // don't pay a detail call for it. The date is DAY precision, so judge
+            // by the END of that day: midnight would make every posting look up
+            // to 24h older than it is and drop roles still inside the window.
+            if (publishedDate != null
+                    && filter.isTooOld(publishedDate.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant())) {
+                tooOld++;
+                continue;
             }
 
             job.setRawJson(node.toString());
@@ -167,12 +183,7 @@ public class WorkableFetcher implements AtsFetcher {
                 // failure, because the alternative is showing it with a wrong score.
                 String detailBody;
                 try {
-                    detailBody = webClientBuilder.build()
-                            .get()
-                            .uri(BASE_URL + "/api/v2/accounts/" + company.getBoardToken() + "/jobs/" + shortcode)
-                            .retrieve()
-                            .bodyToMono(String.class)
-                            .block();
+                    detailBody = fetchDetail(company.getBoardToken(), shortcode);
                     detailCalls++;
                 } catch (Exception e) {
                     log.warn("Workable detail fetch failed for {} ({}) — skipping, will retry next cycle: {}",
@@ -195,9 +206,20 @@ public class WorkableFetcher implements AtsFetcher {
             results.add(job);
         }
 
-        log.info("Translated {} new jobs for {} (Workable, {} detail calls, {} skipped pending retry)",
-                results.size(), company.getDisplayName(), detailCalls, skipped);
+        log.info("Translated {} new jobs for {} (Workable, {} detail calls, {} skipped pending retry, "
+                        + "{} past the TTL)",
+                results.size(), company.getDisplayName(), detailCalls, skipped, tooOld);
         return results;
+    }
+
+    /** The per-posting detail call. Package-private seam so tests can count calls. */
+    String fetchDetail(String token, String shortcode) {
+        return webClientBuilder.build()
+                .get()
+                .uri(BASE_URL + "/api/v2/accounts/" + token + "/jobs/" + shortcode)
+                .retrieve()
+                .bodyToMono(String.class)
+                .block();
     }
 
     // Package-private seam for fixture tests.

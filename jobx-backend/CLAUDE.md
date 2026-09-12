@@ -531,6 +531,42 @@ this company" (the only workaround was typing the name into free-text search).
   expired match). Backend suite unchanged at 203 green — every DTO call site
   goes through the static `from` factory, so nothing else needed touching.
 
+**FIXED (2026-09-13): tombstoned postings no longer cost detail calls (BUG_REPORT #2).**
+After the TTL sweep, every posting still listed on a Workable or SmartRecruiters
+board lived in `expired_jobs`, not `jobs`. The fetchers' N+1 guard only checked
+`jobs`, so each of those postings cost a detail HTTP call every cycle. The
+scheduler's tombstone check ran only *after* the fetcher returned.
+- **`AtsFetcher.fetch(Company, FetchFilter)`**. The scheduler builds the new
+  `FetchFilter` record before the fetch. `knownIds` holds the stored ids plus the
+  tombstoned ids (`JobRepository.findExternalIdsByCompany` and
+  `ExpiredJobRepository.findExternalIdsByCompany`).
+  `postedCutoff` is `now - jobx.retention.job-ttl-days`, the same property the
+  sweeper reads. `FetchScheduler` now has an explicit constructor for that
+  `@Value`. Workable and SmartRecruiters check both before the detail call and no
+  longer depend on `JobRepository`. The other three fetchers ignore the filter,
+  and the scheduler re-applies it to every result.
+- **Age gate before ingest.** Closes the related gap: a new board no longer ingests
+  postings already past the TTL (which were shown as "New", then swept within a
+  day). Workable's `published_on` is date-only, so it is judged by the **end** of
+  that day. Otherwise a posting from the cutoff day would be dropped while still
+  inside the window. No date means the posting is never too old.
+- The per-posting `existsByCompanyAndExternalId` queries are gone from the fetch
+  path, and the now-unused repository methods were deleted. On Bosch that was
+  4,774 DB queries a cycle; it's now three set queries per board. Stored ids are
+  read once for the fetcher and **again after the fetch returns**, because a slow
+  Workable fetch would otherwise widen the "Check now" vs cycle race window
+  (BUG_REPORT #11, still open: that needs a per-board lock).
+- **Live-verified** on the dev database with no data changes. Before starting the
+  build, a read-only pass over the live boards found the old cost: PhonePe 39 and
+  Deloitte 267 detail calls per cycle, all tombstoned. The fixed build's first
+  cycle logged **0 detail calls** for both.
+- Tests 203 → 217: `WorkableFetchFilterTest` (known, too old, cutoff-day edge,
+  no date), filter cases in `SmartRecruitersFetcherTest`, and scheduler tests
+  that check the fetcher is handed stored + tombstoned ids, that query counts
+  don't grow with the posting count, the post-fetch re-read, and the age gate. `fetchDetail`
+  (both fetchers) and `SmartRecruitersFetcher.translate` are new package-private
+  test seams.
+
 **CURRENT FOCUS (2026-09-06): nothing is mid-flight.** Add-company resolution is
 done and live-verified (above), as are the feed-reload fix, the six-day job TTL
 and the SmartRecruiters fetcher.

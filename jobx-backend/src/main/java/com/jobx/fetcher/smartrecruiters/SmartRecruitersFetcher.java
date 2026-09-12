@@ -9,7 +9,7 @@ import com.jobx.fetcher.AtsFetchException;
 import com.jobx.fetcher.AtsFetcher;
 import com.jobx.fetcher.BoardPreview;
 import com.jobx.fetcher.ExperienceParser;
-import com.jobx.repository.JobRepository;
+import com.jobx.fetcher.FetchFilter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jsoup.Jsoup;
@@ -80,7 +80,6 @@ public class SmartRecruitersFetcher implements AtsFetcher {
 
     private final WebClient.Builder webClientBuilder;
     private final ObjectMapper objectMapper;
-    private final JobRepository jobRepository;
 
     @Override
     public AtsPlatform supports() {
@@ -143,14 +142,23 @@ public class SmartRecruitersFetcher implements AtsFetcher {
     }
 
     @Override
-    public List<Job> fetch(Company company) {
+    public List<Job> fetch(Company company, FetchFilter filter) {
         String token = company.getBoardToken();
         log.info("Fetching SmartRecruiters board: {} ({})", company.getDisplayName(), token);
 
-        List<JsonNode> postings = fetchAllPages(token);
+        return translate(fetchAllPages(token), company, filter);
+    }
+
+    /**
+     * List rows → new jobs, paying a detail call only for postings that survive
+     * the filter. Package-private seam so tests can count detail calls.
+     */
+    List<Job> translate(List<JsonNode> postings, Company company, FetchFilter filter) {
+        String token = company.getBoardToken();
         List<Job> results = new ArrayList<>();
         int detailCalls = 0;
         int skipped = 0;
+        int tooOld = 0;
 
         // The same posting can appear on more than one page if the board is
         // edited mid-pagination; dedupe within the batch as Workable does.
@@ -162,18 +170,27 @@ public class SmartRecruitersFetcher implements AtsFetcher {
                 continue;
             }
 
-            // N+1 guard: a known posting would be deduped by the scheduler
-            // anyway, so its detail call would be pure waste. Bosch-sized
-            // boards make this the difference between 2 calls and 4,774.
-            if (jobRepository.existsByCompanyAndExternalId(company, externalId)) {
+            // N+1 guard: a stored OR tombstoned posting would be dropped by the
+            // scheduler anyway, so its detail call would be pure waste. Bosch-
+            // sized boards make this the difference between 2 calls and 4,774 —
+            // and checking only the jobs table used to lose exactly that once
+            // the TTL sweep had tombstoned the board.
+            if (filter.isKnown(externalId)) {
                 continue;
             }
 
             Job job = mapListItem(node, company, externalId);
 
+            // Past the TTL already — the sweep would delete it within a day.
+            // releasedDate is a full instant, so it compares directly.
+            if (filter.isTooOld(job.getPlatformPostedAt())) {
+                tooOld++;
+                continue;
+            }
+
             String detailBody;
             try {
-                detailBody = get(BASE_URL + "/v1/companies/" + token + "/postings/" + externalId, null);
+                detailBody = fetchDetail(token, externalId);
                 detailCalls++;
             } catch (Exception e) {
                 // Skipped rather than emitted description-less, for exactly the
@@ -216,9 +233,15 @@ public class SmartRecruitersFetcher implements AtsFetcher {
             results.add(job);
         }
 
-        log.info("Translated {} new jobs for {} (SmartRecruiters, {} detail calls, {} skipped pending retry)",
-                results.size(), company.getDisplayName(), detailCalls, skipped);
+        log.info("Translated {} new jobs for {} (SmartRecruiters, {} detail calls, {} skipped pending retry, "
+                        + "{} past the TTL)",
+                results.size(), company.getDisplayName(), detailCalls, skipped, tooOld);
         return results;
+    }
+
+    /** The per-posting detail call. Package-private seam so tests can count calls. */
+    String fetchDetail(String token, String externalId) {
+        return get(BASE_URL + "/v1/companies/" + token + "/postings/" + externalId, null);
     }
 
     /**
