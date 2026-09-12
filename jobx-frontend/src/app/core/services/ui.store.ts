@@ -33,6 +33,16 @@ export class UiStore {
     this.preferencesOpen.set(false);
   }
 
+  /**
+   * Closes every overlay on sign-out. `navCollapsed` is a device preference,
+   * persisted like the theme, so it deliberately survives.
+   */
+  reset(): void {
+    this.addCompanyOpen.set(false);
+    this.preferencesOpen.set(false);
+    this.mobileNavOpen.set(false);
+  }
+
   toggleNavCollapsed(): void {
     const next = !this.navCollapsed();
     this.navCollapsed.set(next);

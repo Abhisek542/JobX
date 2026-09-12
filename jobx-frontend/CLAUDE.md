@@ -295,6 +295,24 @@ this company" (the only workaround was typing the name into free-text search).
   expired match). Backend suite unchanged at 203 green — every DTO call site
   goes through the static `from` factory, so nothing else needed touching.
 
+**Sign-out resets every per-user store, done 2026-09-12** (BUG_REPORT.md #1). Before
+this, user A signing out and user B signing in on the same tab without a reload showed
+B the feed, watchlist and filter profile of A: the stores are root singletons whose
+`load()` is a no-op once `loaded`, and `AuthStore.clear()` only dropped the token.
+- `AuthStore.clear()` is the single chokepoint for both sign-out paths (sidebar button
+  and the 401 handler in `errorInterceptor`). It now calls `reset()` on `FeedStore`,
+  `WatchlistStore`, `FilterProfileStore` and `UiStore` (overlays only), and
+  `ToastService.clear()`. The collapsed-sidebar preference survives, like the theme.
+- **Epoch guard, a rule for new store code:** each store holds a private `epoch` that
+  `reset()` bumps. Every async `subscribe` callback captures it before the request and
+  returns early if it changed. Without this, a response sent before sign-out lands after
+  the reset and sets `loaded` again, recreating the bug. Any new store method that
+  subscribes must follow the same pattern.
+- Tests: frontend suite at 53 green. `core/services/session-reset.spec.ts` is the first TestBed
+  suite (still no DOM), driving the real interceptors through `HttpTestingController`.
+  Also fixed a stale helper in `util.spec.ts` that lacked `companyId` since the grouping
+  change, which had stopped the whole frontend suite from compiling.
+
 **CURRENT FOCUS (2026-08-22): step 5 is built and verified, and nothing is
 mid-flight.** What remains are backend items the dashboard currently works around.
 None are started; all are pending Abhisek's call:

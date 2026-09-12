@@ -68,6 +68,7 @@ describe('companyStatusLine', () => {
   const now = Date.parse('2026-08-15T12:00:00Z');
   const company = (over: Partial<WatchedCompanyResponse>): WatchedCompanyResponse => ({
     id: 'w1',
+    companyId: 'c1',
     companyName: 'Razorpay',
     atsPlatform: 'GREENHOUSE',
     boardToken: 'razorpay',

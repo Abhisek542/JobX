@@ -2,8 +2,13 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import { Observable, tap } from 'rxjs';
 import { AuthApi } from '../api/auth.api';
 import { AuthResponse, LoginRequest, RegisterRequest, Session } from '../models/auth.model';
+import { FeedStore } from '../../features/dashboard/feed.store';
 import { displayName, initials } from '../util/identity';
 import { readStorage, removeStorage, writeStorage } from '../util/storage';
+import { FilterProfileStore } from './filter-profile.store';
+import { ToastService } from './toast.service';
+import { UiStore } from './ui.store';
+import { WatchlistStore } from './watchlist.store';
 
 const SESSION_KEY = 'jobx-session';
 
@@ -17,6 +22,15 @@ const SESSION_KEY = 'jobx-session';
 export class AuthStore {
   private readonly api = inject(AuthApi);
   private readonly session = signal<Session | null>(restore());
+
+  // Per-user state that must not outlive the session. None of these inject
+  // AuthStore, and the interceptors only inject it at request time, so there is
+  // no construction-time cycle.
+  private readonly feed = inject(FeedStore);
+  private readonly watchlist = inject(WatchlistStore);
+  private readonly profile = inject(FilterProfileStore);
+  private readonly toasts = inject(ToastService);
+  private readonly ui = inject(UiStore);
 
   readonly token = computed(() => this.session()?.token ?? null);
   readonly email = computed(() => this.session()?.email ?? '');
@@ -35,10 +49,23 @@ export class AuthStore {
     return this.api.register(request).pipe(tap((response) => this.accept(response)));
   }
 
-  /** Local sign-out. Nothing to revoke server-side — the JWT is stateless. */
+  /**
+   * Ends the whole client session: the token, and every root store holding the
+   * user's data. Both sign-out paths come through here (the sidebar button and
+   * the 401 handler in errorInterceptor). The stores are root singletons whose
+   * load() is a no-op once loaded, so without the resets the next user to sign
+   * in on this tab would be shown this user's feed, watchlist and profile.
+   *
+   * Nothing to revoke server-side — the JWT is stateless.
+   */
   clear(): void {
     this.session.set(null);
     removeStorage(SESSION_KEY);
+    this.feed.reset();
+    this.watchlist.reset();
+    this.profile.reset();
+    this.toasts.clear();
+    this.ui.reset();
   }
 
   private accept(response: AuthResponse): void {
