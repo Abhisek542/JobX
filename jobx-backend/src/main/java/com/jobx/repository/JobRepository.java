@@ -10,11 +10,19 @@ import org.springframework.stereotype.Repository;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 @Repository
 public interface JobRepository extends JpaRepository<Job, UUID> {
-    boolean existsByCompanyAndExternalId(Company company, String externalId);
+    /**
+     * Every stored external id for one board, loaded once per fetch cycle — the
+     * jobs-table half of FetchFilter.knownIds (ExpiredJobRepository has the
+     * other). Replaces an existsBy per posting, which on Bosch was 4,774
+     * queries a cycle to learn nothing was new.
+     */
+    @Query("SELECT j.externalId FROM Job j WHERE j.company = :company")
+    Set<String> findExternalIdsByCompany(@Param("company") Company company);
 
     /** All stored jobs for a board — used to backfill a new watcher's feed. */
     List<Job> findByCompany(Company company);

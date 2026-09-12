@@ -9,6 +9,7 @@ import com.jobx.fetcher.AtsFetchException;
 import com.jobx.fetcher.AtsFetcher;
 import com.jobx.fetcher.BoardPreview;
 import com.jobx.fetcher.ExperienceParser;
+import com.jobx.fetcher.FetchFilter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jsoup.Jsoup;
@@ -52,7 +53,9 @@ public class LeverFetcher implements AtsFetcher {
     }
 
     @Override
-    public List<Job> fetch(Company company) {
+    public List<Job> fetch(Company company, FetchFilter filter) {
+        // One call returns everything — nothing to save by filtering here.
+        // FetchScheduler applies the filter to the result.
         String token = company.getBoardToken();
         String url = BASE_URL + "/v0/postings/" + token + "?mode=json";
         log.info("Fetching Lever board: {} ({})", company.getDisplayName(), token);

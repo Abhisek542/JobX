@@ -4,19 +4,22 @@ import com.jobx.entity.Company;
 import com.jobx.entity.Job;
 import com.jobx.entity.User;
 import com.jobx.fetcher.AtsFetcher;
+import com.jobx.fetcher.FetchFilter;
 import com.jobx.fetcher.FetcherRegistry;
 import com.jobx.repository.CompanyRepository;
 import com.jobx.repository.ExpiredJobRepository;
 import com.jobx.repository.JobRepository;
 import com.jobx.service.MatchingService;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.Instant;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -28,14 +31,14 @@ import java.util.Set;
  *   1. Load all companies with at least one ACTIVE watcher — since V4 a board
  *      is fetched ONCE per cycle no matter how many users watch it (pre-V4 it
  *      was fetched once per watch row, storing N duplicate copies of every job)
- *   2. Route each to the correct fetcher
- *   3. For each new job (not seen before by external_id):
+ *   2. Route each to the correct fetcher, telling it which postings are already
+ *      known (stored or tombstoned) and how old is too old
+ *   3. For each new job (not seen before by external_id, not past the TTL):
  *      a. Save the Job — one shared row per posting
  *      b. MatchingService scores it for every ACTIVE watcher of the company
  */
 @Component
 @Slf4j
-@RequiredArgsConstructor
 public class FetchScheduler {
 
     /** Max chars of last_fetch_error kept — a summary for operators, never a stack trace. */
@@ -48,6 +51,24 @@ public class FetchScheduler {
     private final MatchingService matchingService;
     /** Own proxy, so fetchAllCompanies gets a real transaction per company. */
     private final ObjectProvider<FetchScheduler> self;
+    /** Same property JobRetentionSweeper reads, so the two can never disagree. */
+    private final int ttlDays;
+
+    public FetchScheduler(CompanyRepository companyRepository,
+                          JobRepository jobRepository,
+                          ExpiredJobRepository expiredJobRepository,
+                          FetcherRegistry fetcherRegistry,
+                          MatchingService matchingService,
+                          ObjectProvider<FetchScheduler> self,
+                          @Value("${jobx.retention.job-ttl-days:6}") int ttlDays) {
+        this.companyRepository = companyRepository;
+        this.jobRepository = jobRepository;
+        this.expiredJobRepository = expiredJobRepository;
+        this.fetcherRegistry = fetcherRegistry;
+        this.matchingService = matchingService;
+        this.self = self;
+        this.ttlDays = ttlDays;
+    }
 
     /**
      * Outcome of one company fetch — feeds the manual "Check now" endpoint's
@@ -117,9 +138,25 @@ public class FetchScheduler {
             return recordFailure(company, "no fetcher for platform " + company.getAtsPlatform());
         }
 
+        // Everything this board already has, loaded BEFORE the fetch and handed
+        // to the fetcher. Two things live in it:
+        //  - stored jobs, the ordinary dedup;
+        //  - tombstones (V5): postings we dropped on age. Boards keep stale
+        //    postings listed long after they stop being worth applying to, so
+        //    without these the retention sweep and this loop would fight —
+        //    deleted each night, re-added as "new" each morning, forever.
+        // It has to reach the fetcher, not just this loop: Workable and
+        // SmartRecruiters pay a detail call per posting, and filtering only
+        // after they return cost one call per tombstoned posting every cycle.
+        // Two set queries per board rather than one existsBy per posting — a
+        // board the size of Bosch is thousands of postings.
+        Set<String> known = new HashSet<>(jobRepository.findExternalIdsByCompany(company));
+        known.addAll(expiredJobRepository.findExternalIdsByCompany(company));
+        FetchFilter filter = new FetchFilter(known, Instant.now().minus(Duration.ofDays(ttlDays)));
+
         List<Job> fetchedJobs;
         try {
-            fetchedJobs = fetcher.get().fetch(company);
+            fetchedJobs = fetcher.get().fetch(company, filter);
         } catch (Exception e) {
             // The board is unreachable or unintelligible. Record it as FAILED and
             // return normally: nothing has been written yet, so the transaction is
@@ -129,32 +166,37 @@ public class FetchScheduler {
             return recordFailure(company, summarize(e));
         }
 
+        // Re-read stored ids now that the fetch is done. The set above was taken
+        // before it, and a Workable board's detail calls can take seconds — long
+        // enough for a concurrent "Check now" or cycle to store the same posting.
+        // Without this the save loop would miss that row and trip
+        // UNIQUE (company_id, external_id), rolling back this whole board (see
+        // BUG_REPORT #11, which a lock still needs to close). One query, not one
+        // per posting. Tombstones only change in the daily sweep, so they stay.
+        known.addAll(jobRepository.findExternalIdsByCompany(company));
+
         int newCount = 0;
         int requesterMatches = 0;
 
-        // Postings we deliberately dropped on age (V5). Loaded once per board
-        // rather than per job — a board the size of Bosch is thousands of
-        // postings, and this is the same question asked once instead of N times.
-        Set<String> tombstoned = expiredJobRepository.findExternalIdsByCompany(company);
-
         for (Job job : fetchedJobs) {
-            // Dedup: skip if we've seen this external_id for this company before.
-            // Post-V4 this is board-wide, not per-watch-row — the second user
-            // watching a board no longer re-inserts every posting.
-            if (jobRepository.existsByCompanyAndExternalId(company, job.getExternalId())) {
+            // Dedup against stored AND tombstoned postings. Post-V4 this is
+            // board-wide, not per-watch-row — the second user watching a board
+            // no longer re-inserts every posting. Two-call fetchers already
+            // applied this; single-call ones rely on it here.
+            if (filter.isKnown(job.getExternalId())) {
                 continue;
             }
 
-            // Expired on purpose. Boards keep stale postings listed long after
-            // they stop being worth applying to, so without this the retention
-            // sweep and this loop would fight: deleted each night, re-added as
-            // "new" each morning, re-notifying every watcher forever.
-            if (tombstoned.contains(job.getExternalId())) {
+            // Already past the TTL. Without this a newly added board ingests
+            // every stale posting it still lists, scores each as "New", and the
+            // sweep deletes them all within a day.
+            if (filter.isTooOld(job.getPlatformPostedAt())) {
                 continue;
             }
 
             // New job — save it (once, shared by all watchers)
             Job saved = jobRepository.save(job);
+            known.add(job.getExternalId());
             newCount++;
 
             requesterMatches += matchingService.scoreForActiveWatchers(company, saved, requester);

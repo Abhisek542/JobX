@@ -6,14 +6,15 @@ import com.jobx.entity.Company;
 import com.jobx.entity.Job;
 import com.jobx.enums.AtsPlatform;
 import com.jobx.fetcher.AtsFetchException;
-import com.jobx.fetcher.AtsFetchException;
 import com.jobx.fetcher.BoardPreview;
+import com.jobx.fetcher.FetchFilter;
 import com.jobx.fetcher.FixtureSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -29,9 +30,9 @@ class SmartRecruitersFetcherTest {
 
     @BeforeEach
     void setUp() {
-        // webClientBuilder and jobRepository are never touched by the parse
+        // webClientBuilder is never touched by the parse
         // seams, same convention as the other fetcher tests.
-        fetcher = new SmartRecruitersFetcher(null, new ObjectMapper(), null);
+        fetcher = new SmartRecruitersFetcher(null, new ObjectMapper());
         company = FixtureSupport.company("PhonePe", AtsPlatform.SMARTRECRUITERS, "PHONEPELIMITED");
     }
 
@@ -129,6 +130,61 @@ class SmartRecruitersFetcherTest {
         assertNull(job.getPlatformPostedAt());
     }
 
+    /**
+     * Bug #2: the detail call is an HTTP request per posting, so the filter must
+     * run before it. Pre-fix the guard knew only the jobs table, and on a
+     * swept Bosch board that was ~4,774 wasted detail calls every cycle.
+     */
+    private SmartRecruitersFetcher countingDetailCalls(List<String> detailCalls) {
+        return new SmartRecruitersFetcher(null, new ObjectMapper()) {
+            @Override
+            String fetchDetail(String token, String externalId) {
+                detailCalls.add(externalId);
+                return FixtureSupport.fixture("smartrecruiters-phonepe-detail.json");
+            }
+        };
+    }
+
+    private JsonNode posting(String id, String releasedDate) {
+        String date = releasedDate == null ? "" : ",\"releasedDate\":\"" + releasedDate + "\"";
+        return jsonOf("{\"id\":\"" + id + "\",\"name\":\"Engineer\"" + date + "}");
+    }
+
+    @Test
+    void aTombstonedPostingCostsNoDetailCall() {
+        List<String> detailCalls = new java.util.ArrayList<>();
+        FetchFilter filter = new FetchFilter(Set.of("tomb"), Instant.MIN);
+
+        List<Job> jobs = countingDetailCalls(detailCalls).translate(
+                List.of(posting("tomb", "2026-08-28T11:20:45.290Z"), posting("new", "2026-08-28T11:20:45.290Z")),
+                company, filter);
+
+        assertEquals(List.of("new"), detailCalls);
+        assertEquals(List.of("new"), jobs.stream().map(Job::getExternalId).toList());
+    }
+
+    @Test
+    void aPostingPastTheTtlCostsNoDetailCall() {
+        List<String> detailCalls = new java.util.ArrayList<>();
+        FetchFilter filter = new FetchFilter(Set.of(), Instant.parse("2026-08-22T00:00:00Z"));
+
+        countingDetailCalls(detailCalls).translate(
+                List.of(posting("old", "2026-08-21T23:59:59Z"), posting("fresh", "2026-08-22T00:00:01Z")),
+                company, filter);
+
+        assertEquals(List.of("fresh"), detailCalls);
+    }
+
+    @Test
+    void aPostingWithNoDateIsStillFetched() {
+        List<String> detailCalls = new java.util.ArrayList<>();
+        FetchFilter filter = new FetchFilter(Set.of(), Instant.parse("2026-08-22T00:00:00Z"));
+
+        countingDetailCalls(detailCalls).translate(List.of(posting("undated", null)), company, filter);
+
+        assertEquals(List.of("undated"), detailCalls);
+    }
+
     private JsonNode jsonOf(String json) {
         try {
             return new ObjectMapper().readTree(json);
@@ -167,7 +223,7 @@ class SmartRecruitersFetcherTest {
         assertEquals(0, preview.jobCount());
         assertNull(preview.displayName());
 
-        SmartRecruitersFetcher stub = new SmartRecruitersFetcher(null, new ObjectMapper(), null) {
+        SmartRecruitersFetcher stub = new SmartRecruitersFetcher(null, new ObjectMapper()) {
             @Override
             public BoardPreview previewBoard(Company company) {
                 return parsePreview(emptyBoard, company.getBoardToken());

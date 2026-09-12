@@ -2,12 +2,17 @@
 
 Found by a full read of `jobx-backend/` and `jobx-frontend/` on branch `task/bug-findFix`.
 Gaps that `CLAUDE.md` already records as deliberate (unpaginated `GET /matches`, no `SAVED`
-status, login timing, N+1 on the feed) are excluded. Nothing here has been fixed yet.
+status, login timing, N+1 on the feed) are excluded. Fixed items are marked **Fixed** below.
 
 | # | Severity | Area | Summary |
 |---|----------|------|---------|
+task/tombstoned-issue
+| 1 | High | Frontend | Sign-out does not clear the data stores — next user sees the previous user's data |
+| 2 | High | Backend | **Fixed 2026-09-13** — Workable / SmartRecruiters re-fetch detail for every tombstoned posting, every cycle |
+=======
 | 1 | High | Frontend | **Fixed** · Sign-out does not clear the data stores — next user sees the previous user's data |
 | 2 | High | Backend | Workable / SmartRecruiters re-fetch detail for every tombstoned posting, every cycle |
+main
 | 3 | Medium | Backend | Email is case-sensitive at register and login |
 | 4 | Medium | Backend | Experience penalty never fires for open-ended ranges ("5+ years") |
 | 5 | Medium | Frontend | Typeahead pick shows "0 open roles" and a blank board link |
@@ -90,6 +95,16 @@ The collapsed-sidebar preference survives on purpose, like the theme. Covered by
 ---
 
 ## 2. Detail calls are spent on every tombstoned posting, every cycle (High)
+
+> **Fixed 2026-09-13** (branch `task/tombstoned-issue`). `FetchScheduler` now builds a
+> `FetchFilter` (stored + tombstoned external ids, and the TTL cutoff) *before* the fetch and
+> passes it to `AtsFetcher.fetch(Company, FetchFilter)`. Workable and SmartRecruiters check it
+> before every detail call, and also skip postings whose list date is already past the TTL.
+> Workable's date-only `published_on` is judged by the end of that day. The scheduler applies
+> the same filter to every platform, which closes the related gap below. The per-posting
+> `existsByCompanyAndExternalId` queries are gone: it's now three set queries per board.
+> Live-verified against the dev database: PhonePe went from 39 detail calls per cycle to 0, and
+> Deloitte from 267 to 0. The text below is the original report.
 
 **Symptom.** After the six-day TTL sweeps a board, every posting still listed on it is absent
 from `jobs` and present in `expired_jobs`. The Workable and SmartRecruiters fetchers guard the
@@ -435,6 +450,11 @@ sets the profile).
 ---
 
 ## 11. No per-board lock between "Check now" and the scheduled cycle (Low)
+
+> **Still open.** The snippet below predates the #2 fix. Dedup now checks in-memory sets
+> (`FetchFilter`), and the scheduler re-reads stored ids after the fetch returns. That keeps
+> the race window about as narrow as the old per-posting `existsBy`, but it doesn't close
+> it. The per-company lock below is still the fix.
 
 **Symptom.** If a user clicks "Check now" while the scheduler is mid-fetch of the same board
 (Workable boards take a while), both paths pass the `existsBy` check for the same new posting.

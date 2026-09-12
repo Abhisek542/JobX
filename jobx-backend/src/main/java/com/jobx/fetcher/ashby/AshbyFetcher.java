@@ -9,6 +9,7 @@ import com.jobx.fetcher.AtsFetchException;
 import com.jobx.fetcher.AtsFetcher;
 import com.jobx.fetcher.BoardPreview;
 import com.jobx.fetcher.ExperienceParser;
+import com.jobx.fetcher.FetchFilter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -51,7 +52,9 @@ public class AshbyFetcher implements AtsFetcher {
     }
 
     @Override
-    public List<Job> fetch(Company company) {
+    public List<Job> fetch(Company company, FetchFilter filter) {
+        // One call returns everything — nothing to save by filtering here.
+        // FetchScheduler applies the filter to the result.
         String token = company.getBoardToken();
         String url = BASE_URL + "/posting-api/job-board/" + token;
         log.info("Fetching Ashby board: {} ({})", company.getDisplayName(), token);

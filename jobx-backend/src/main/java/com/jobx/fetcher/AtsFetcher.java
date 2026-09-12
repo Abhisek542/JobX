@@ -33,8 +33,15 @@ public interface AtsFetcher {
      * FAILED health rather than reporting a dead board as a quiet one.
      * FetchScheduler isolates the failure; one board's outage never stops the
      * next company from being processed.
+     *
+     * {@code filter} says which postings are already known (stored or
+     * tombstoned) and how old is too old. Fetchers that pay per posting — the
+     * two-call Workable and SmartRecruiters designs — MUST consult it before
+     * the detail call; that is the only place it saves anything. Single-call
+     * fetchers may ignore it, since FetchScheduler applies the same filter to
+     * whatever comes back.
      */
-    List<Job> fetch(Company company);
+    List<Job> fetch(Company company, FetchFilter filter);
 
     /**
      * ONE cheap list call describing the board: how many roles are live and a

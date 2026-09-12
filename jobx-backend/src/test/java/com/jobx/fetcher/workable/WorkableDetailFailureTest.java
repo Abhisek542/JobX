@@ -5,8 +5,8 @@ import com.jobx.entity.Job;
 import com.jobx.entity.Company;
 import com.jobx.enums.AtsPlatform;
 import com.jobx.fetcher.AtsFetchException;
+import com.jobx.fetcher.FetchFilter;
 import com.jobx.fetcher.FixtureSupport;
-import com.jobx.repository.JobRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -14,7 +14,6 @@ import org.springframework.web.reactive.function.client.WebClient;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
@@ -39,16 +38,13 @@ class WorkableDetailFailureTest {
         when(builder.build().get().uri(anyString()).retrieve().bodyToMono(String.class).block())
                 .thenThrow(new RuntimeException("503 Service Unavailable"));
 
-        JobRepository jobRepository = mock(JobRepository.class);
-        when(jobRepository.existsByCompanyAndExternalId(any(), anyString())).thenReturn(false);
-
-        return new WorkableFetcher(builder, new ObjectMapper(), jobRepository);
+        return new WorkableFetcher(builder, new ObjectMapper());
     }
 
     @Test
     void jobIsSkippedRatherThanPersistedWithoutADescription() throws Exception {
         List<Job> jobs = fetcherWithFailingDetail()
-                .parseList(FixtureSupport.fixture("workable-apna.json"), company, true);
+                .parseList(FixtureSupport.fixture("workable-apna.json"), company, FetchFilter.none(), true);
 
         // Nothing is emitted, so nothing is written, so the next cycle retries
         // these shortcodes instead of skipping them as "already known".
@@ -61,21 +57,21 @@ class WorkableDetailFailureTest {
         // The board itself was fetched fine — per-job detail trouble is not a
         // board outage, so parseList returns normally rather than throwing.
         assertDoesNotThrow(() -> fetcherWithFailingDetail()
-                .parseList(FixtureSupport.fixture("workable-apna.json"), company, true));
+                .parseList(FixtureSupport.fixture("workable-apna.json"), company, FetchFilter.none(), true));
     }
 
     @Test
     void missingJobsArrayIsAFailureNotAnEmptyBoard() {
-        WorkableFetcher fetcher = new WorkableFetcher(null, new ObjectMapper(), null);
+        WorkableFetcher fetcher = new WorkableFetcher(null, new ObjectMapper());
 
         assertThrows(AtsFetchException.class,
-                () -> fetcher.parseList("{\"error\":\"account not found\"}", company, false));
+                () -> fetcher.parseList("{\"error\":\"account not found\"}", company, FetchFilter.none(), false));
     }
 
     @Test
     void emptyBoardIsASuccessfulEmptyResult() throws Exception {
-        WorkableFetcher fetcher = new WorkableFetcher(null, new ObjectMapper(), null);
+        WorkableFetcher fetcher = new WorkableFetcher(null, new ObjectMapper());
 
-        assertTrue(fetcher.parseList("{\"jobs\":[]}", company, false).isEmpty());
+        assertTrue(fetcher.parseList("{\"jobs\":[]}", company, FetchFilter.none(), false).isEmpty());
     }
 }

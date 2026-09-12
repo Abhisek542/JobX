@@ -14,16 +14,13 @@ import java.util.UUID;
 public interface ExpiredJobRepository extends JpaRepository<ExpiredJob, UUID> {
 
     /**
-     * The dedup half that survives deletion — FetchScheduler consults this
-     * alongside JobRepository so an expired posting that is still live on the
-     * board is not re-inserted as new on the next poll.
-     */
-    boolean existsByCompanyAndExternalId(Company company, String externalId);
-
-    /**
-     * Every tombstoned external id for one board, loaded once per fetch cycle.
-     * A per-job existsBy would be an N+1 against a board the size of Bosch
-     * (4.7k postings); one set lookup per company carries the same information.
+     * Every tombstoned external id for one board, loaded once per fetch cycle —
+     * the dedup half that survives deletion. FetchScheduler merges it with
+     * JobRepository's stored ids into the FetchFilter handed to the fetcher, so
+     * an expired posting still live on the board is neither re-inserted as new
+     * nor paid for with a detail call. A per-job existsBy would be an N+1 against
+     * a board the size of Bosch (4.7k postings); one set lookup carries the same
+     * information.
      */
     @Query("SELECT e.externalId FROM ExpiredJob e WHERE e.company = :company")
     Set<String> findExternalIdsByCompany(@Param("company") Company company);

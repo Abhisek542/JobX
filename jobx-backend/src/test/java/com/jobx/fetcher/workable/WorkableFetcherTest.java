@@ -6,6 +6,7 @@ import com.jobx.entity.Company;
 import com.jobx.enums.AtsPlatform;
 import com.jobx.fetcher.AtsFetchException;
 import com.jobx.fetcher.BoardPreview;
+import com.jobx.fetcher.FetchFilter;
 import com.jobx.fetcher.FixtureSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -27,13 +28,13 @@ class WorkableFetcherTest {
 
     @BeforeEach
     void setUp() {
-        fetcher = new WorkableFetcher(null, new ObjectMapper(), null);
+        fetcher = new WorkableFetcher(null, new ObjectMapper());
         company = FixtureSupport.company("Apna", AtsPlatform.WORKABLE, "apna");
     }
 
     @Test
     void mapsListItemsDedupingRepeatedShortcodes() throws Exception {
-        List<Job> jobs = fetcher.parseList(FixtureSupport.fixture("workable-apna.json"), company, false);
+        List<Job> jobs = fetcher.parseList(FixtureSupport.fixture("workable-apna.json"), company, FetchFilter.none(), false);
 
         // Fixture has 128 list rows but only 96 unique shortcodes — the list
         // repeats a job once per posting location. In-batch dedup collapses them.
@@ -49,7 +50,7 @@ class WorkableFetcherTest {
 
     @Test
     void mapsKnownFirstJobFromList() throws Exception {
-        Job job = fetcher.parseList(FixtureSupport.fixture("workable-apna.json"), company, false).get(0);
+        Job job = fetcher.parseList(FixtureSupport.fixture("workable-apna.json"), company, FetchFilter.none(), false).get(0);
 
         assertEquals("01B0CB39DD", job.getExternalId());
         assertEquals("Admission Counsellor", job.getTitle());
@@ -62,7 +63,7 @@ class WorkableFetcherTest {
 
     @Test
     void detailEnrichesDescriptionAndTimestamp() throws Exception {
-        Job job = fetcher.parseList(FixtureSupport.fixture("workable-apna.json"), company, false).get(0);
+        Job job = fetcher.parseList(FixtureSupport.fixture("workable-apna.json"), company, FetchFilter.none(), false).get(0);
 
         fetcher.applyDetail(FixtureSupport.fixture("workable-v2-job.json"), job);
 
@@ -99,7 +100,7 @@ class WorkableFetcherTest {
         assertTrue(preview.sampleTitles().isEmpty());
 
         Company ghost = FixtureSupport.company("Razorpay", AtsPlatform.WORKABLE, "razorpay");
-        WorkableFetcher spy = new WorkableFetcher(null, new ObjectMapper(), null) {
+        WorkableFetcher spy = new WorkableFetcher(null, new ObjectMapper()) {
             @Override
             public BoardPreview previewBoard(Company company) {
                 return parsePreview(FixtureSupport.fixture("workable-ghost-account.json"),

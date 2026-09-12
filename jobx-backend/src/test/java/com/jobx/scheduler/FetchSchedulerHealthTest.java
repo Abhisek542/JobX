@@ -20,6 +20,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 /**
@@ -56,7 +57,7 @@ class FetchSchedulerHealthTest {
         ObjectProvider<FetchScheduler> self = mock(ObjectProvider.class);
 
         scheduler = new FetchScheduler(companyRepository, jobRepository, expiredJobRepository,
-                fetcherRegistry, matchingService, self);
+                fetcherRegistry, matchingService, self, 6);
         when(self.getObject()).thenReturn(scheduler);
 
         company = new Company();
@@ -70,7 +71,7 @@ class FetchSchedulerHealthTest {
 
     @Test
     void unreachableBoardIsRecordedAsFailed() {
-        when(fetcher.fetch(company)).thenThrow(new AtsFetchException("board request failed",
+        when(fetcher.fetch(eq(company), any())).thenThrow(new AtsFetchException("board request failed",
                 new RuntimeException("Connection refused")));
 
         FetchScheduler.FetchResult result = scheduler.fetchCompany(company, null);
@@ -87,7 +88,7 @@ class FetchSchedulerHealthTest {
     @Test
     void emptyBoardIsRecordedAsSuccessNotFailure() {
         // The whole point of the split: nothing new is a perfectly good outcome
-        when(fetcher.fetch(company)).thenReturn(List.of());
+        when(fetcher.fetch(eq(company), any())).thenReturn(List.of());
 
         FetchScheduler.FetchResult result = scheduler.fetchCompany(company, null);
 
@@ -100,7 +101,7 @@ class FetchSchedulerHealthTest {
     void successClearsAPreviousFailure() {
         company.setLastFetchStatus(Company.FetchStatus.FAILED);
         company.setLastFetchError("404 Not Found");
-        when(fetcher.fetch(company)).thenReturn(List.of());
+        when(fetcher.fetch(eq(company), any())).thenReturn(List.of());
 
         scheduler.fetchCompany(company, null);
 
@@ -110,7 +111,7 @@ class FetchSchedulerHealthTest {
 
     @Test
     void storedErrorIsShortAndHasNoStackTrace() {
-        when(fetcher.fetch(company))
+        when(fetcher.fetch(eq(company), any()))
                 .thenThrow(new AtsFetchException("x".repeat(5000), new RuntimeException("y".repeat(5000))));
 
         scheduler.fetchCompany(company, null);
@@ -141,16 +142,16 @@ class FetchSchedulerHealthTest {
 
         AtsFetcher ashby = mock(AtsFetcher.class);
         when(fetcherRegistry.getFetcher(AtsPlatform.ASHBY)).thenReturn(Optional.of(ashby));
-        when(ashby.fetch(healthy)).thenReturn(List.of());
+        when(ashby.fetch(eq(healthy), any())).thenReturn(List.of());
 
         // The broken one is first in the cycle, and fails hard
-        when(fetcher.fetch(company)).thenThrow(new AtsFetchException("board is down"));
+        when(fetcher.fetch(eq(company), any())).thenThrow(new AtsFetchException("board is down"));
         when(companyRepository.findAllWithActiveWatchers()).thenReturn(List.of(company, healthy));
 
         scheduler.fetchAllCompanies();
 
         // The healthy board that came after it was still polled
-        verify(ashby).fetch(healthy);
+        verify(ashby).fetch(eq(healthy), any());
         assertEquals(Company.FetchStatus.FAILED, company.getLastFetchStatus());
         assertEquals(Company.FetchStatus.SUCCESS, healthy.getLastFetchStatus());
     }
@@ -165,21 +166,21 @@ class FetchSchedulerHealthTest {
 
         AtsFetcher ashby = mock(AtsFetcher.class);
         when(fetcherRegistry.getFetcher(AtsPlatform.ASHBY)).thenReturn(Optional.of(ashby));
-        when(ashby.fetch(healthy)).thenReturn(List.of());
+        when(ashby.fetch(eq(healthy), any())).thenReturn(List.of());
 
         // Not an AtsFetchException — something the fetch contract didn't anticipate,
         // e.g. a DB error while saving. The cycle must still continue.
-        when(fetcher.fetch(company)).thenReturn(List.of(new Job()));
+        when(fetcher.fetch(eq(company), any())).thenReturn(List.of(new Job()));
         when(companyRepository.save(company)).thenThrow(new RuntimeException("db down"));
         when(companyRepository.findAllWithActiveWatchers()).thenReturn(List.of(company, healthy));
 
         assertDoesNotThrow(() -> scheduler.fetchAllCompanies());
-        verify(ashby).fetch(healthy);
+        verify(ashby).fetch(eq(healthy), any());
     }
 
     @Test
     void jobsFromAFailedFetchAreNeverScored() {
-        when(fetcher.fetch(company)).thenThrow(new AtsFetchException("board is down"));
+        when(fetcher.fetch(eq(company), any())).thenThrow(new AtsFetchException("board is down"));
 
         scheduler.fetchCompany(company, null);
 
