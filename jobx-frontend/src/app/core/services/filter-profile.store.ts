@@ -16,6 +16,13 @@ export class FilterProfileStore {
   private readonly errorSignal = signal<AppError | null>(null);
   private readonly missingSignal = signal(false);
 
+  /**
+   * Bumped by reset() on sign-out. Every async callback captures it before the
+   * request goes out and bails if it changed, so a response from the previous
+   * user's session can never write into the next user's store.
+   */
+  private epoch = 0;
+
   readonly profile = this.profileSignal.asReadonly();
   readonly loading = this.loadingSignal.asReadonly();
   readonly loaded = this.loadedSignal.asReadonly();
@@ -44,14 +51,17 @@ export class FilterProfileStore {
 
     this.loadingSignal.set(true);
     this.errorSignal.set(null);
+    const epoch = this.epoch;
     this.api.get().subscribe({
       next: (profile) => {
+        if (epoch !== this.epoch) return;
         this.profileSignal.set(profile);
         this.missingSignal.set(false);
         this.loadedSignal.set(true);
         this.loadingSignal.set(false);
       },
       error: (error: AppError) => {
+        if (epoch !== this.epoch) return;
         if (error.status === 404) {
           this.profileSignal.set(null);
           this.missingSignal.set(true);
@@ -62,6 +72,16 @@ export class FilterProfileStore {
         this.loadingSignal.set(false);
       },
     });
+  }
+
+  /** Back to the state of a fresh app boot. Called by AuthStore.clear() on sign-out. */
+  reset(): void {
+    this.epoch++;
+    this.profileSignal.set(null);
+    this.loadingSignal.set(false);
+    this.loadedSignal.set(false);
+    this.errorSignal.set(null);
+    this.missingSignal.set(false);
   }
 
   /**
@@ -75,13 +95,17 @@ export class FilterProfileStore {
    * a populated one.
    */
   save(request: FilterProfileRequest): Promise<FilterProfileResponse> {
+    const epoch = this.epoch;
     return new Promise((resolve, reject) => {
       this.api.save(request).subscribe({
         next: (profile) => {
-          this.profileSignal.set(profile);
-          this.missingSignal.set(false);
-          this.loadedSignal.set(true);
-          this.feed.reload();
+          // Still settle the promise after a sign-out; just leave the store alone.
+          if (epoch === this.epoch) {
+            this.profileSignal.set(profile);
+            this.missingSignal.set(false);
+            this.loadedSignal.set(true);
+            this.feed.reload();
+          }
           resolve(profile);
         },
         error: (error: AppError) => reject(error),

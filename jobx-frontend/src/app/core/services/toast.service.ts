@@ -49,6 +49,16 @@ export class ToastService {
     this.items.update((list) => list.filter((t) => t.id !== id));
   }
 
+  /**
+   * Drops every toast and its timer. Called on sign-out: an Undo closure from the
+   * previous session would otherwise PATCH that user's match.
+   */
+  clear(): void {
+    for (const timer of this.timers.values()) clearTimeout(timer);
+    this.timers.clear();
+    this.items.set([]);
+  }
+
   runUndo(toast: Toast): void {
     toast.undo?.();
     this.dismiss(toast.id);

@@ -6,8 +6,13 @@ status, login timing, N+1 on the feed) are excluded. Fixed items are marked **Fi
 
 | # | Severity | Area | Summary |
 |---|----------|------|---------|
+task/tombstoned-issue
 | 1 | High | Frontend | Sign-out does not clear the data stores — next user sees the previous user's data |
 | 2 | High | Backend | **Fixed 2026-09-13** — Workable / SmartRecruiters re-fetch detail for every tombstoned posting, every cycle |
+=======
+| 1 | High | Frontend | **Fixed** · Sign-out does not clear the data stores — next user sees the previous user's data |
+| 2 | High | Backend | Workable / SmartRecruiters re-fetch detail for every tombstoned posting, every cycle |
+main
 | 3 | Medium | Backend | Email is case-sensitive at register and login |
 | 4 | Medium | Backend | Experience penalty never fires for open-ended ranges ("5+ years") |
 | 5 | Medium | Frontend | Typeahead pick shows "0 open roles" and a blank board link |
@@ -73,6 +78,19 @@ plain `load()` on construction.
 
 **Fix direction.** Give each store a `reset()` and call all three from `AuthStore.clear()`
 (or from an auth-state effect), so `loaded` flips back to false and the arrays empty.
+
+**Fixed (2026-09-12, branch `task/sign-out-clear-fix`).** `AuthStore.clear()` now resets
+`FeedStore`, `WatchlistStore` and `FilterProfileStore`, clears `ToastService` and closes the
+`UiStore` overlays, so both the sidebar button and the 401 path are covered. Two further leaks
+were closed in the same change:
+- **Late responses.** A request sent before sign-out could land after the reset and set
+  `loaded = true` again, recreating the bug. Each store now carries a session `epoch` that
+  `reset()` bumps, and every subscribe callback bails if the epoch changed.
+- **Toasts and overlays.** An Undo toast kept a closure that would PATCH the previous user's
+  match, and a modal open at a 401 stayed open for the next user.
+
+The collapsed-sidebar preference survives on purpose, like the theme. Covered by
+`jobx-frontend/src/app/core/services/session-reset.spec.ts`.
 
 ---
 

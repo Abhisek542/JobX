@@ -37,6 +37,13 @@ export class WatchlistStore {
   private readonly errorSignal = signal<AppError | null>(null);
   private readonly checkingSignal = signal<ReadonlySet<string>>(new Set());
 
+  /**
+   * Bumped by reset() on sign-out. Every async callback captures it before the
+   * request goes out and bails if it changed, so a response from the previous
+   * user's session can never write into the next user's store.
+   */
+  private epoch = 0;
+
   readonly companies = this.companiesSignal.asReadonly();
   readonly loading = this.loadingSignal.asReadonly();
   readonly loaded = this.loadedSignal.asReadonly();
@@ -102,17 +109,30 @@ export class WatchlistStore {
 
     this.loadingSignal.set(true);
     this.errorSignal.set(null);
+    const epoch = this.epoch;
     this.api.list().subscribe({
       next: (companies) => {
+        if (epoch !== this.epoch) return;
         this.companiesSignal.set(companies);
         this.loadedSignal.set(true);
         this.loadingSignal.set(false);
       },
       error: (error: AppError) => {
+        if (epoch !== this.epoch) return;
         this.errorSignal.set(error);
         this.loadingSignal.set(false);
       },
     });
+  }
+
+  /** Back to the state of a fresh app boot. Called by AuthStore.clear() on sign-out. */
+  reset(): void {
+    this.epoch++;
+    this.companiesSignal.set([]);
+    this.loadingSignal.set(false);
+    this.loadedSignal.set(false);
+    this.errorSignal.set(null);
+    this.checkingSignal.set(new Set());
   }
 
   /**
@@ -128,11 +148,15 @@ export class WatchlistStore {
    * backfill is not a fetch and never counts towards newMatches.
    */
   add(request: WatchedCompanyRequest): Promise<WatchedCompanyResponse> {
+    const epoch = this.epoch;
     return new Promise((resolve, reject) => {
       this.api.add(request).subscribe({
         next: (company) => {
-          this.companiesSignal.update((list) => [...list, company]);
-          this.feed.reload();
+          // Still settle the promise after a sign-out; just leave the store alone.
+          if (epoch === this.epoch) {
+            this.companiesSignal.update((list) => [...list, company]);
+            this.feed.reload();
+          }
           resolve(company);
         },
         error: (error: AppError) => reject(error),
@@ -141,8 +165,10 @@ export class WatchlistStore {
   }
 
   updateStatus(id: string, status: CompanyStatus): void {
+    const epoch = this.epoch;
     this.api.updateStatus(id, status).subscribe({
       next: (company) => {
+        if (epoch !== this.epoch) return;
         this.replace(company);
         this.toasts.ok(
           status === 'PAUSED'
@@ -150,19 +176,25 @@ export class WatchlistStore {
             : `${company.companyName} is active again`,
         );
       },
-      error: (error: AppError) => this.toasts.error(error.detail),
+      error: (error: AppError) => {
+        if (epoch === this.epoch) this.toasts.error(error.detail);
+      },
     });
   }
 
   remove(company: WatchedCompanyResponse): void {
+    const epoch = this.epoch;
     this.api.remove(company.id).subscribe({
       next: () => {
+        if (epoch !== this.epoch) return;
         this.companiesSignal.update((list) => list.filter((c) => c.id !== company.id));
         // Deleting a watch cascades to its jobs and matches server-side.
         this.feed.reload();
         this.toasts.ok(`${company.companyName} removed from your watchlist`);
       },
-      error: (error: AppError) => this.toasts.error(error.detail),
+      error: (error: AppError) => {
+        if (epoch === this.epoch) this.toasts.error(error.detail);
+      },
     });
   }
 
@@ -190,8 +222,10 @@ export class WatchlistStore {
     if (this.isChecking(company.id)) return;
     this.markChecking(company.id, true);
 
+    const epoch = this.epoch;
     this.api.fetchNow(company.id).subscribe({
       next: (result: ManualFetchResponse) => {
+        if (epoch !== this.epoch) return;
         this.markChecking(company.id, false);
         this.patchLocal(company.id, {
           lastFetchedAt: result.checkedAt,
@@ -217,6 +251,7 @@ export class WatchlistStore {
         }
       },
       error: (error: AppError) => {
+        if (epoch !== this.epoch) return;
         this.markChecking(company.id, false);
         this.toasts.error(this.fetchErrorCopy(error, company));
 
