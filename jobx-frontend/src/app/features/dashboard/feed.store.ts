@@ -51,6 +51,13 @@ export class FeedStore {
   /** Collapsed company ids. Session-only, like the status pill. */
   private readonly collapsedSignal = signal<ReadonlySet<string>>(new Set());
 
+  /**
+   * Bumped by reset() on sign-out. Every async callback captures it before the
+   * request goes out and bails if it changed, so a response from the previous
+   * user's session can never write into the next user's store.
+   */
+  private epoch = 0;
+
   readonly matches = this.matchesSignal.asReadonly();
   readonly loading = this.loadingSignal.asReadonly();
   readonly error = this.errorSignal.asReadonly();
@@ -125,13 +132,16 @@ export class FeedStore {
 
     this.loadingSignal.set(true);
     this.errorSignal.set(null);
+    const epoch = this.epoch;
     this.api.list().subscribe({
       next: (matches) => {
+        if (epoch !== this.epoch) return;
         this.matchesSignal.set(matches);
         this.loadedSignal.set(true);
         this.loadingSignal.set(false);
       },
       error: (error: AppError) => {
+        if (epoch !== this.epoch) return;
         this.errorSignal.set(error);
         this.loadingSignal.set(false);
       },
@@ -141,6 +151,27 @@ export class FeedStore {
   /** After a manual "Check now" reported new matches, the feed is stale. */
   reload(): void {
     this.load({ force: true });
+  }
+
+  /**
+   * Back to the state of a fresh app boot. Called by AuthStore.clear() on every
+   * sign-out, including the 401 path. View state goes too: it is session-only by
+   * design, and `collapsed` holds the previous user's company ids.
+   */
+  reset(): void {
+    this.epoch++;
+    this.matchesSignal.set([]);
+    this.loadingSignal.set(false);
+    this.errorSignal.set(null);
+    this.loadedSignal.set(false);
+    this.pendingSignal.set(new Set());
+    this.statusSignal.set('ALL');
+    this.querySignal.set('');
+    this.sortSignal.set('score');
+    this.pageSignal.set(1);
+    this.groupedSignal.set(false);
+    this.groupOrderSignal.set('score');
+    this.collapsedSignal.set(new Set());
   }
 
   /* -------------------------------------------------------- view controls -- */
@@ -239,13 +270,16 @@ export class FeedStore {
     this.applyStatus(id, next);
     this.markPending(id, true);
 
+    const epoch = this.epoch;
     this.api.updateStatus(id, next).subscribe({
       next: (updated) => {
+        if (epoch !== this.epoch) return;
         // Trust the server's row over our optimistic guess.
         this.matchesSignal.update((list) => list.map((m) => (m.id === id ? updated : m)));
         this.markPending(id, false);
       },
       error: (error: AppError) => {
+        if (epoch !== this.epoch) return;
         this.matchesSignal.set(before);
         this.markPending(id, false);
         this.toasts.error(
