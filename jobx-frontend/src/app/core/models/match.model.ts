@@ -10,6 +10,13 @@ export interface MatchResponse {
    */
   jobId: string | null;
   jobTitle: string;
+  /**
+   * The board this role came from. Grouping and any join to the watchlist key
+   * on this id, never on companyName — that is a display string, and two
+   * distinct boards can carry the same one. Present even when the posting has
+   * expired: it is a denormalized FK on the match, so it outlives jobId.
+   */
+  companyId: string;
   companyName: string;
   applyUrl: string;
   score: number;

@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { MatchResponse, MatchStatus } from '../../core/models/match.model';
 import {
+  GROUP_PAGE_SIZE,
   applyView,
   band,
   clampPage,
   countByStatus,
   filterByStatus,
+  groupByCompany,
   pageNumbers,
   pageRangeLabel,
   pageSlice,
@@ -22,6 +24,7 @@ function match(over: Partial<MatchResponse> = {}): MatchResponse {
     id: 'm1',
     jobId: 'j1',
     jobTitle: 'Backend Engineer',
+    companyId: 'c-razorpay',
     companyName: 'Razorpay',
     applyUrl: 'https://example.test/apply',
     score: 80,
@@ -110,14 +113,6 @@ describe('sortMatches', () => {
     expect(sortMatches(feed, 'newest').map((m) => m.id)).toEqual(['a', 'b', 'c']);
   });
 
-  it('sorts by company, falling back to score', () => {
-    expect(sortMatches(feed, 'company').map((m) => m.companyName)).toEqual([
-      'Apna',
-      'Apna',
-      'Zolve',
-    ]);
-  });
-
   it('does not mutate the input', () => {
     const input = [...feed];
     sortMatches(input, 'score');
@@ -201,5 +196,129 @@ describe('pagination', () => {
     expect(pageNumbers(3, 6)).toEqual([1, 2, 3, 'gap', 6]);
     expect(pageNumbers(10, 20)).toEqual([1, 'gap', 10, 'gap', 20]);
     expect(pageNumbers(20, 20)).toEqual([1, 'gap', 18, 19, 20]);
+  });
+});
+
+describe('groupByCompany', () => {
+  const rz = (over = {}) => match({ companyId: 'c-rz', companyName: 'Razorpay', ...over });
+  const ap = (over = {}) => match({ companyId: 'c-ap', companyName: 'Apna', ...over });
+
+  const feed = [
+    rz({ id: 'a', score: 95, status: 'NEW', createdAt: '2026-08-15T10:00:00Z' }),
+    ap({ id: 'b', score: 70, status: 'SEEN', createdAt: '2026-08-18T10:00:00Z' }),
+    rz({ id: 'c', score: 60, status: 'NEW', createdAt: '2026-08-10T10:00:00Z' }),
+  ];
+
+  it('gathers each company once, with its own roles', () => {
+    const groups = groupByCompany(feed, 'score');
+    expect(groups).toHaveLength(2);
+    expect(groups.map((g) => g.companyName)).toEqual(['Razorpay', 'Apna']);
+    expect(groups[0].matches.map((m) => m.id)).toEqual(['a', 'c']);
+  });
+
+  it('summarises a group from the rows it actually holds', () => {
+    const [razorpay] = groupByCompany(feed, 'score');
+    expect(razorpay.count).toBe(2);
+    expect(razorpay.bestScore).toBe(95);
+    expect(razorpay.newCount).toBe(2);
+    expect(razorpay.latestAt).toBe('2026-08-15T10:00:00Z');
+  });
+
+  it('keys on companyId, so two boards sharing a display name stay apart', () => {
+    // The exact case companyId was added to MatchResponse for: companyName is
+    // a display string and is not unique.
+    const collision = [
+      match({ id: 'x', companyId: 'c-1', companyName: 'Porter' }),
+      match({ id: 'y', companyId: 'c-2', companyName: 'Porter' }),
+    ];
+    const groups = groupByCompany(collision, 'name');
+    expect(groups).toHaveLength(2);
+    expect(groups.map((g) => g.companyId)).toEqual(['c-1', 'c-2']);
+  });
+
+  it('preserves the incoming role order inside a group', () => {
+    // groupByCompany runs on applyView's output, so within-group order is
+    // whatever the flat pipeline produced — it must not re-sort.
+    const sorted = applyView(feed, { status: 'ALL', query: '', sort: 'score' });
+    const [razorpay] = groupByCompany(sorted, 'score');
+    expect(razorpay.matches.map((m) => m.score)).toEqual([95, 60]);
+  });
+
+  it('orders groups by best score, then newest, then A-Z', () => {
+    expect(groupByCompany(feed, 'score').map((g) => g.companyName)).toEqual([
+      'Razorpay',
+      'Apna',
+    ]);
+    expect(groupByCompany(feed, 'newest').map((g) => g.companyName)).toEqual([
+      'Apna',
+      'Razorpay',
+    ]);
+    expect(groupByCompany(feed, 'name').map((g) => g.companyName)).toEqual([
+      'Apna',
+      'Razorpay',
+    ]);
+  });
+
+  it('still groups a match whose posting has expired', () => {
+    // V5 TTL: jobId goes null but companyId is a denormalized FK and survives.
+    const expired = [
+      match({ id: 'e', companyId: 'c-rz', jobId: null, expiredAt: '2026-08-20T10:00:00Z' }),
+    ];
+    expect(groupByCompany(expired, 'score')[0].companyId).toBe('c-rz');
+  });
+
+  it('returns nothing for an empty feed', () => {
+    expect(groupByCompany([], 'score')).toEqual([]);
+  });
+
+  it('tracks latestAt by instant, not by string order', () => {
+    // Jackson omits trailing zeros on an Instant, so one feed carries both
+    // shapes. Lexically ".246773300Z" sorts BEFORE "Z", so a string compare
+    // would pick the earlier row as the latest.
+    const mixed = [
+      match({ id: 'p', companyId: 'c-1', createdAt: '2026-09-12T12:34:16Z' }),
+      match({ id: 'q', companyId: 'c-1', createdAt: '2026-09-12T12:34:16.246773300Z' }),
+    ];
+    expect(groupByCompany(mixed, 'score')[0].latestAt).toBe('2026-09-12T12:34:16.246773300Z');
+  });
+
+  it('orders groups by newest across those same mixed formats', () => {
+    const feedMixed = [
+      match({ id: 'a', companyId: 'c-old', companyName: 'Old', createdAt: '2026-09-12T12:34:16.900Z' }),
+      match({ id: 'b', companyId: 'c-new', companyName: 'New', createdAt: '2026-09-12T12:34:17Z' }),
+    ];
+    expect(groupByCompany(feedMixed, 'newest').map((g) => g.companyName)).toEqual(['New', 'Old']);
+  });
+});
+
+describe('paginating groups', () => {
+  // The grouped view reuses the generic page helpers over CompanyGroup[], which
+  // is what keeps one company's roles off two different pages.
+  const groups = groupByCompany(
+    Array.from({ length: 12 }, (_, i) =>
+      match({ id: `m${i}`, companyId: `c${i}`, companyName: `Co ${i}` }),
+    ),
+    'name',
+  );
+
+  it('pages 12 companies into 3 pages of 5', () => {
+    expect(groups).toHaveLength(12);
+    expect(totalPages(groups.length, GROUP_PAGE_SIZE)).toBe(3);
+    expect(pageSlice(groups, 1, GROUP_PAGE_SIZE)).toHaveLength(5);
+    expect(pageSlice(groups, 3, GROUP_PAGE_SIZE)).toHaveLength(2);
+  });
+
+  it('clamps onto the last page when groups disappear', () => {
+    const shrunk = groups.slice(0, 6);
+    const pages = totalPages(shrunk.length, GROUP_PAGE_SIZE);
+    expect(clampPage(3, pages)).toBe(2);
+  });
+
+  it('labels the range in companies', () => {
+    expect(pageRangeLabel(groups.length, 3, GROUP_PAGE_SIZE)).toEqual({
+      from: 11,
+      to: 12,
+      total: 12,
+    });
   });
 });

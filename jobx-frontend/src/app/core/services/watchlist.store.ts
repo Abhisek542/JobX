@@ -81,6 +81,16 @@ export class WatchlistStore {
     };
   });
 
+  /**
+   * Watched boards by company id. The feed's groups are keyed on companyId, and
+   * WatchedCompanyResponse.id is the WATCH row — different id — so this is the
+   * only honest join between the two. A company absent here is one the user no
+   * longer watches: the group still renders, just without a health line.
+   */
+  readonly byCompanyId = computed(
+    () => new Map(this.companiesSignal().map((c) => [c.companyId, c])),
+  );
+
   /** Alphabetical by company name. */
   readonly ordered = computed(() =>
     [...this.companiesSignal()].sort((a, b) => a.companyName.localeCompare(b.companyName)),

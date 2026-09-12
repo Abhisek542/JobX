@@ -18,7 +18,14 @@ import java.util.UUID;
  * displayName, and the fetch-health trio is board-wide, not per-watch-row.
  */
 public record WatchedCompanyResponse(
+        /** The watch row — what PATCH/DELETE /watchlist/{id} addresses. */
         UUID id,
+        /**
+         * The shared board behind that watch row, and the only thing that
+         * matches this watch to a MatchResponse: the two ids are different, so
+         * without this the client could only join them by display name.
+         */
+        UUID companyId,
         String companyName,
         AtsPlatform atsPlatform,
         String boardToken,
@@ -31,6 +38,7 @@ public record WatchedCompanyResponse(
         Company company = watch.getCompany();
         return new WatchedCompanyResponse(
                 watch.getId(),
+                company.getId(),
                 company.getDisplayName(),
                 company.getAtsPlatform(),
                 company.getBoardToken(),
