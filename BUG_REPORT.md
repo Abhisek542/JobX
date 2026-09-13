@@ -6,13 +6,8 @@ status, login timing, N+1 on the feed) are excluded. Fixed items are marked **Fi
 
 | # | Severity | Area | Summary |
 |---|----------|------|---------|
-task/tombstoned-issue
-| 1 | High | Frontend | Sign-out does not clear the data stores — next user sees the previous user's data |
+| 1 | High | Frontend | **Fixed 2026-09-12** — Sign-out does not clear the data stores — next user sees the previous user's data |
 | 2 | High | Backend | **Fixed 2026-09-13** — Workable / SmartRecruiters re-fetch detail for every tombstoned posting, every cycle |
-=======
-| 1 | High | Frontend | **Fixed** · Sign-out does not clear the data stores — next user sees the previous user's data |
-| 2 | High | Backend | Workable / SmartRecruiters re-fetch detail for every tombstoned posting, every cycle |
-main
 | 3 | Medium | Backend | Email is case-sensitive at register and login |
 | 4 | Medium | Backend | Experience penalty never fires for open-ended ranges ("5+ years") |
 | 5 | Medium | Frontend | Typeahead pick shows "0 open roles" and a blank board link |
@@ -96,7 +91,7 @@ The collapsed-sidebar preference survives on purpose, like the theme. Covered by
 
 ## 2. Detail calls are spent on every tombstoned posting, every cycle (High)
 
-> **Fixed 2026-09-13** (branch `task/tombstoned-issue`). `FetchScheduler` now builds a
+> **Fixed 2026-09-13** (PR #8, branch `task/tombstoned-issue`). `FetchScheduler` now builds a
 > `FetchFilter` (stored + tombstoned external ids, and the TTL cutoff) *before* the fetch and
 > passes it to `AtsFetcher.fetch(Company, FetchFilter)`. Workable and SmartRecruiters check it
 > before every detail call, and also skip postings whose list date is already past the TTL.
