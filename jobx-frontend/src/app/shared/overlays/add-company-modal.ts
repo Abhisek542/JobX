@@ -177,8 +177,13 @@ type Step = 'input' | 'resolving' | 'confirm' | 'dead-end';
             <div class="ac-working">
               <app-icon name="search" />
               <div>
-                <b>Looking for {{ query() }}'s job board…</b>
-                <p>Checking their careers page and the job-board providers we support.</p>
+                @if (resolvingKnown()) {
+                  <b>Loading {{ query() }}'s open roles…</b>
+                  <p>Jobx already tracks this board.</p>
+                } @else {
+                  <b>Looking for {{ query() }}'s job board…</b>
+                  <p>Checking their careers page and the job-board providers we support.</p>
+                }
               </div>
             </div>
           }
@@ -220,13 +225,15 @@ type Step = 'input' | 'resolving' | 'confirm' | 'dead-end';
             }
 
             @if (selected(); as board) {
-              <p class="hint ac-verify">
-                Not sure?
-                <a [href]="board.boardUrl" target="_blank" rel="noopener noreferrer">
-                  Open their board<app-icon name="external-link" size="sm"
-                /></a>
-                and check it's the company you mean.
-              </p>
+              @if (board.boardUrl) {
+                <p class="hint ac-verify">
+                  Not sure?
+                  <a [href]="board.boardUrl" target="_blank" rel="noopener noreferrer">
+                    Open their board<app-icon name="external-link" size="sm"
+                  /></a>
+                  and check it's the company you mean.
+                </p>
+              }
             }
           }
 
@@ -326,6 +333,8 @@ export class AddCompanyModal {
   protected readonly candidates = signal<ResolvedBoardResponse[]>([]);
   protected readonly selected = signal<ResolvedBoardResponse | null>(null);
   protected readonly platformHint = signal<AtsPlatform | null>(null);
+  /** The resolving step is loading a known catalog board, not searching for one. */
+  protected readonly resolvingKnown = signal(false);
   protected readonly advancedOpen = signal(false);
 
   // Advanced (manual) fields — unchanged from the original form.
@@ -404,29 +413,43 @@ export class AddCompanyModal {
     this.step.set('input');
   }
 
-  /** A catalog pick is already a confirmed board — skip straight to confirming it. */
+  /**
+   * A catalog pick names the exact board, but the suggestion carries no evidence.
+   * Fetch that board's real count, titles and link before confirming — a card
+   * reading "0 open roles" with a blank link is what BUG_REPORT #5 was.
+   */
   protected pickSuggestion(option: CompanySearchResponse): void {
-    const board: ResolvedBoardResponse = {
-      source: 'CATALOG',
-      atsPlatform: option.atsPlatform,
-      boardToken: option.boardToken,
-      companyName: option.companyName,
-      boardUrl: '',
-      jobCount: 0,
-      sampleTitles: [],
-      alreadyWatched: option.alreadyWatched,
-    };
     this.query.set(option.companyName);
     this.suggestions.set([]);
-    this.candidates.set([board]);
-    this.selected.set(board);
-    this.step.set('confirm');
+    this.fieldErrors.set({});
+    this.formError.set(null);
+    this.resolvingKnown.set(true);
+    this.step.set('resolving');
+
+    this.api.resolveCatalog(option.companyId).subscribe({
+      next: (board) => {
+        this.candidates.set([board]);
+        this.selected.set(board);
+        this.step.set('confirm');
+      },
+      error: (error: AppError) => {
+        // Nothing live on the known board — the company may have moved ATS, so
+        // a full resolve by name can still find it, or land on the dead end.
+        if (error.status === 404) {
+          this.findBoard();
+          return;
+        }
+        this.step.set('input');
+        this.formError.set(error.detail);
+      },
+    });
   }
 
   protected findBoard(): void {
     const query = this.query().trim();
     this.fieldErrors.set({});
     this.formError.set(null);
+    this.resolvingKnown.set(false);
 
     if (!query) {
       this.fieldErrors.set({ query: 'Enter a company name, website or careers link' });

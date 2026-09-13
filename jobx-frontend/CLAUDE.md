@@ -313,6 +313,12 @@ B the feed, watchlist and filter profile of A: the stores are root singletons wh
   Also fixed a stale helper in `util.spec.ts` that lacked `companyId` since the grouping
   change, which had stopped the whole frontend suite from compiling.
 
+**FIXED (2026-09-13): typeahead pick showed "0 open roles" and a blank board link (BUG_REPORT #5).**
+`AddCompanyModal.pickSuggestion` no longer builds a fake candidate. It shows the resolving step
+("Loading X's open roles…") and calls `WatchlistApi.resolveCatalog(companyId)`, which returns the
+real count, titles and board URL for that exact board. On 404 it falls back to `findBoard()` by
+name. The "Open their board" hint only renders when `boardUrl` is set.
+
 **CURRENT FOCUS (2026-08-22): step 5 is built and verified, and nothing is
 mid-flight.** What remains are backend items the dashboard currently works around.
 None are started; all are pending Abhisek's call:

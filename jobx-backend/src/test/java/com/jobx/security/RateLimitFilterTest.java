@@ -88,6 +88,27 @@ class RateLimitFilterTest {
         assertEquals(429, request("1.2.3.4", "/watchlist/resolve").getStatus());
     }
 
+    /**
+     * The typeahead-pick preview carries a company id in its path. Keying the
+     * window on the full path would give every id a fresh budget of live ATS
+     * calls, so every path under /watchlist/resolve spends one shared budget.
+     */
+    @Test
+    void resolveBudgetIsSharedAcrossCompanyIdsAndTheNameResolve() throws Exception {
+        for (int i = 0; i < RESOLVE_MAX_ATTEMPTS - 1; i++) {
+            assertEquals(200, request("1.2.3.4",
+                    "/watchlist/resolve/catalog/00000000-0000-0000-0000-00000000000" + i).getStatus());
+        }
+        assertEquals(200, request("1.2.3.4", "/watchlist/resolve").getStatus());
+
+        assertEquals(429, request("1.2.3.4",
+                "/watchlist/resolve/catalog/11111111-1111-1111-1111-111111111111").getStatus());
+        assertEquals(429, request("1.2.3.4", "/watchlist/resolve").getStatus());
+        // Still per IP
+        assertEquals(200, request("5.6.7.8",
+                "/watchlist/resolve/catalog/11111111-1111-1111-1111-111111111111").getStatus());
+    }
+
     @Test
     void otherWatchlistRoutesAreNotLimited() throws Exception {
         // Only /watchlist/resolve makes outbound calls on the caller's behalf.
