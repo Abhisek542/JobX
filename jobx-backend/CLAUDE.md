@@ -567,6 +567,19 @@ scheduler's tombstone check ran only *after* the fetcher returned.
   (both fetchers) and `SmartRecruitersFetcher.translate` are new package-private
   test seams.
 
+**FIXED (2026-09-13): emails are case-insensitive (BUG_REPORT #3, migration
+`V7__users_email_case_insensitive.sql`).** Registering `Abhi@Example.com` then logging in
+as `abhi@example.com` used to 401, and case variants could be separate accounts.
+- `RegisterRequest` / `LoginRequest` normalize in their record compact constructors
+  (`util/Emails.normalize`: strip + `toLowerCase(Locale.ROOT)`). That runs at Jackson
+  construction, *before* `@Valid`, so `AuthController` is unchanged. Any new DTO that
+  carries a login email must do the same.
+- V7 aborts with the colliding addresses if existing users already differ only by case
+  (deciding which account survives is a human call), otherwise lower-cases rows and adds
+  `uq_users_email_lower` on `LOWER(email)`. A racing duplicate register → 409 via
+  `GlobalExceptionHandler`.
+- Emails returned in `AuthResponse` and the JWT `email` claim are now lower-cased.
+
 **CURRENT FOCUS (2026-09-06): nothing is mid-flight.** Add-company resolution is
 done and live-verified (above), as are the feed-reload fix, the six-day job TTL
 and the SmartRecruiters fetcher.
