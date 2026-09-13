@@ -27,7 +27,9 @@ import java.util.concurrent.atomic.AtomicInteger;
  *    and probes ATS APIs on the caller's behalf, so an unlimited caller could
  *    turn Jobx into a scanner pointed at somebody else's infrastructure, and
  *    spend the ATS vendors' goodwill doing it. The budget is looser than auth's
- *    because a person genuinely retypes a company name a few times.
+ *    because a person genuinely retypes a company name a few times. It covers
+ *    everything under the prefix as one window, including the per-company
+ *    {@code /watchlist/resolve/catalog/{id}} preview.
  *
  * In-memory on purpose: single-instance v1, no Redis. The window map is keyed
  * by ip|path and pruned opportunistically, so memory is bounded by distinct
@@ -41,8 +43,17 @@ import java.util.concurrent.atomic.AtomicInteger;
 @Slf4j
 public class RateLimitFilter extends OncePerRequestFilter {
 
-    /** A path prefix and what it costs to be over budget on it. */
-    private record Budget(String prefix, int maxAttempts, long windowSeconds) {
+    /**
+     * A path prefix and what it costs to be over budget on it.
+     *
+     * {@code sharedAcrossPaths} decides what one window covers. Auth keeps a
+     * window per path, so exhausting login leaves register usable. Resolution
+     * shares one window across everything under its prefix: the typeahead-pick
+     * preview is {@code /watchlist/resolve/catalog/{companyId}}, and a window per
+     * path would hand every company id a fresh budget of live ATS calls.
+     */
+    private record Budget(String prefix, int maxAttempts, long windowSeconds,
+                          boolean sharedAcrossPaths) {
     }
 
     private final Map<String, Window> windows = new ConcurrentHashMap<>();
@@ -57,8 +68,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
                            @Value("${jobx.resolve.rate-limit.window-seconds:60}") long resolveWindowSeconds) {
         // Most specific prefix first — matching stops at the first hit.
         this.budgets = List.of(
-                new Budget("/watchlist/resolve", resolveMaxAttempts, resolveWindowSeconds),
-                new Budget("/auth/", authMaxAttempts, authWindowSeconds));
+                new Budget("/watchlist/resolve", resolveMaxAttempts, resolveWindowSeconds, true),
+                new Budget("/auth/", authMaxAttempts, authWindowSeconds, false));
     }
 
     @Override
@@ -81,7 +92,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
         }
 
         long windowId = System.currentTimeMillis() / 1000 / budget.windowSeconds();
-        String key = request.getRemoteAddr() + "|" + request.getRequestURI();
+        String key = request.getRemoteAddr() + "|"
+                + (budget.sharedAcrossPaths() ? budget.prefix() : request.getRequestURI());
 
         Window window = windows.compute(key, (k, existing) ->
                 existing == null || existing.id() != windowId

@@ -10,7 +10,7 @@ status, login timing, N+1 on the feed) are excluded. Fixed items are marked **Fi
 | 2 | High | Backend | **Fixed 2026-09-13** — Workable / SmartRecruiters re-fetch detail for every tombstoned posting, every cycle |
 | 3 | Medium | Backend | Email is case-sensitive at register and login |
 | 4 | Medium | Backend | Experience penalty never fires for open-ended ranges ("5+ years") |
-| 5 | Medium | Frontend | Typeahead pick shows "0 open roles" and a blank board link |
+| 5 | Medium | Frontend | **Fixed 2026-09-13** — Typeahead pick shows "0 open roles" and a blank board link |
 | 6 | Medium | Backend | Long outbound HTTP calls run inside DB transactions |
 | 7 | Medium | Backend | Framework exceptions (404 path, 405 method, missing param) become 500 |
 | 8 | Low | Backend | Malformed `Location` header on a careers site becomes a 500 |
@@ -252,6 +252,17 @@ on both the job and profile side, and compute distance only across the bounds th
 ---
 
 ## 5. Typeahead pick shows "0 open roles" and a blank board link (Medium)
+
+> **Fixed 2026-09-13** (branch `task/typehead-pick-fix`). A pick now calls the new
+> `GET /watchlist/resolve/catalog/{companyId}`, backed by `CompanyResolver.previewCatalog`.
+> It shares the per-board evidence logic with the name path (stored jobs, else one live
+> preview), so the card shows the real count, titles and board URL for that exact board. It
+> sits under the `/watchlist/resolve` rate-limit budget; `RateLimitFilter` now keys that budget
+> on the prefix rather than the full path, so each company id can't get a fresh window (auth
+> keeps its per-path windows). A 404 (unknown board, or nothing
+> live) makes the modal fall back to a full resolve by name, which can find a company that
+> moved ATS. The board link is also hidden when there is no URL. The text below is the
+> original report.
 
 **Symptom.** Picking a suggestion from the add-company typeahead lands on the confirm step
 reading "Greenhouse · 0 open roles" with no sample titles, and "Open their board" opens the

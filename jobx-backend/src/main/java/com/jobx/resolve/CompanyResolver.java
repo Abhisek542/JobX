@@ -23,6 +23,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.UUID;
 
 /**
  * Works out which ATS board a user means from a company name, a website, or a
@@ -219,26 +220,45 @@ public class CompanyResolver {
     private List<ResolvedBoardResponse> resolveFromCatalog(User user, String query) {
         List<ResolvedBoardResponse> results = new ArrayList<>();
         for (Company company : searchCatalog(query)) {
-            long stored = jobRepository.countByCompany(company);
-            if (stored > 0) {
-                results.add(new ResolvedBoardResponse(
-                        Source.CATALOG.name(),
-                        company.getAtsPlatform(),
-                        company.getBoardToken(),
-                        company.getDisplayName(),
-                        AtsUrlParser.boardUrl(company.getAtsPlatform(), company.getBoardToken()),
-                        (int) stored,
-                        jobRepository.findTitlesByCompany(
-                                company, PageRequest.of(0, BoardPreview.SAMPLE_SIZE)),
-                        watchedCompanyRepository.existsByUserAndCompany(user, company)));
-                continue;
-            }
-
-            BoardRef ref = new BoardRef(company.getAtsPlatform(), company.getBoardToken());
-            previewCandidate(user, ref, Source.CATALOG, company.getDisplayName())
-                    .ifPresent(results::add);
+            catalogCandidate(user, company).ifPresent(results::add);
         }
         return results;
+    }
+
+    /**
+     * The evidence for one board picked straight from the typeahead. The pick
+     * already names the exact board, so this skips the name search entirely —
+     * resolving by name again could return a different board, or several.
+     *
+     * Empty for an unknown id, and for a board with no stored jobs and no live
+     * roles: a catalog row whose company has since moved ATS looks exactly like
+     * that, and the caller should fall back to a full resolve rather than offer
+     * "0 open roles".
+     */
+    @Transactional(readOnly = true)
+    public Optional<ResolvedBoardResponse> previewCatalog(User user, UUID companyId) {
+        return companyRepository.findById(companyId)
+                .flatMap(company -> catalogCandidate(user, company));
+    }
+
+    /** Stored jobs when the board has any, otherwise one live preview call. */
+    private Optional<ResolvedBoardResponse> catalogCandidate(User user, Company company) {
+        long stored = jobRepository.countByCompany(company);
+        if (stored > 0) {
+            return Optional.of(new ResolvedBoardResponse(
+                    Source.CATALOG.name(),
+                    company.getAtsPlatform(),
+                    company.getBoardToken(),
+                    company.getDisplayName(),
+                    AtsUrlParser.boardUrl(company.getAtsPlatform(), company.getBoardToken()),
+                    (int) stored,
+                    jobRepository.findTitlesByCompany(
+                            company, PageRequest.of(0, BoardPreview.SAMPLE_SIZE)),
+                    watchedCompanyRepository.existsByUserAndCompany(user, company)));
+        }
+
+        BoardRef ref = new BoardRef(company.getAtsPlatform(), company.getBoardToken());
+        return previewCandidate(user, ref, Source.CATALOG, company.getDisplayName());
     }
 
     /**

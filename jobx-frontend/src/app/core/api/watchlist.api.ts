@@ -7,6 +7,7 @@ import {
   CompanyStatus,
   ManualFetchResponse,
   ResolveResponse,
+  ResolvedBoardResponse,
   UnsupportedBoardReportRequest,
   WatchedCompanyRequest,
   WatchedCompanyResponse,
@@ -43,6 +44,18 @@ export class WatchlistApi {
    */
   resolve(query: string): Observable<ResolveResponse> {
     return this.http.post<ResolveResponse>(`${this.base}/watchlist/resolve`, { query });
+  }
+
+  /**
+   * The confirm-step evidence for one board picked from the typeahead: real job
+   * count, sample titles and board link. A 404 means the board is unknown or has
+   * nothing live — worth a full `resolve()` by name, since the company may have
+   * moved to another ATS.
+   */
+  resolveCatalog(companyId: string): Observable<ResolvedBoardResponse> {
+    return this.http.get<ResolvedBoardResponse>(
+      `${this.base}/watchlist/resolve/catalog/${companyId}`,
+    );
   }
 
   /**

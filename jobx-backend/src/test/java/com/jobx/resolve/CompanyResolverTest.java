@@ -352,4 +352,79 @@ class CompanyResolverTest {
         assertThrows(SafeUrlFetcher.UnsafeUrlException.class,
                 () -> resolver.resolve(user, "file:///etc/passwd"));
     }
+
+    // -------------------------------------------------------- catalog preview
+
+    /**
+     * A typeahead pick names the exact board, so its evidence comes from the
+     * stored jobs with no ATS call — BUG_REPORT #5, which used to show
+     * "0 open roles" and a blank board link here.
+     */
+    @Test
+    void catalogPreviewUsesStoredJobs() {
+        Company razorpay = company(AtsPlatform.GREENHOUSE, "razorpaysoftwareprivatelimited", "Razorpay");
+        when(companyRepository.findById(razorpay.getId())).thenReturn(Optional.of(razorpay));
+        when(jobRepository.countByCompany(razorpay)).thenReturn(25L);
+        when(jobRepository.findTitlesByCompany(eq(razorpay), any()))
+                .thenReturn(List.of("Senior Backend Engineer", "Product Designer"));
+        when(watchedCompanyRepository.existsByUserAndCompany(user, razorpay)).thenReturn(true);
+
+        ResolvedBoardResponse board = resolver.previewCatalog(user, razorpay.getId()).orElseThrow();
+
+        assertEquals("CATALOG", board.source());
+        assertEquals("Razorpay", board.companyName());
+        assertEquals(25, board.jobCount());
+        assertEquals(List.of("Senior Backend Engineer", "Product Designer"), board.sampleTitles());
+        assertEquals("https://job-boards.greenhouse.io/razorpaysoftwareprivatelimited", board.boardUrl());
+        assertTrue(board.alreadyWatched());
+        verify(fetcherRegistry, never()).getFetcher(any());
+    }
+
+    /** A seeded row with no stored jobs asks the board itself, as the name path does. */
+    @Test
+    void catalogPreviewFallsBackToALiveBoardWhenNothingIsStored() {
+        Company sprinto = company(AtsPlatform.ASHBY, "Sprinto", "Sprinto");
+        when(companyRepository.findById(sprinto.getId())).thenReturn(Optional.of(sprinto));
+        when(jobRepository.countByCompany(sprinto)).thenReturn(0L);
+        stubBoard(AtsPlatform.ASHBY, new BoardPreview(null, 30, List.of("Account Executive")));
+
+        ResolvedBoardResponse board = resolver.previewCatalog(user, sprinto.getId()).orElseThrow();
+
+        assertEquals("CATALOG", board.source());
+        assertEquals("Sprinto", board.companyName());
+        assertEquals(30, board.jobCount());
+        assertEquals(List.of("Account Executive"), board.sampleTitles());
+        assertEquals("https://jobs.ashbyhq.com/Sprinto", board.boardUrl());
+    }
+
+    /** Nothing stored and nothing live — the company may have moved ATS. */
+    @Test
+    void catalogPreviewIsEmptyWhenTheBoardHasNothingLive() {
+        Company phonepe = company(AtsPlatform.GREENHOUSE, "phonepe", "PhonePe");
+        when(companyRepository.findById(phonepe.getId())).thenReturn(Optional.of(phonepe));
+        when(jobRepository.countByCompany(phonepe)).thenReturn(0L);
+        stubBoard(AtsPlatform.GREENHOUSE, new BoardPreview(null, 0, List.of()));
+
+        assertTrue(resolver.previewCatalog(user, phonepe.getId()).isEmpty());
+    }
+
+    @Test
+    void catalogPreviewIsEmptyWhenTheBoardCannotBeRead() {
+        Company dead = company(AtsPlatform.LEVER, "gone", "Gone");
+        when(companyRepository.findById(dead.getId())).thenReturn(Optional.of(dead));
+        when(jobRepository.countByCompany(dead)).thenReturn(0L);
+        AtsFetcher fetcher = stubBoard(AtsPlatform.LEVER, null);
+        when(fetcher.previewBoard(any())).thenThrow(new RuntimeException("404"));
+
+        assertTrue(resolver.previewCatalog(user, dead.getId()).isEmpty());
+    }
+
+    @Test
+    void catalogPreviewIsEmptyForAnUnknownBoard() {
+        UUID unknown = UUID.randomUUID();
+        when(companyRepository.findById(unknown)).thenReturn(Optional.empty());
+
+        assertTrue(resolver.previewCatalog(user, unknown).isEmpty());
+        verifyNoInteractions(fetcherRegistry);
+    }
 }

@@ -567,6 +567,17 @@ scheduler's tombstone check ran only *after* the fetcher returned.
   (both fetchers) and `SmartRecruitersFetcher.translate` are new package-private
   test seams.
 
+**FIXED (2026-09-13): typeahead pick showed "0 open roles" and a blank board link (BUG_REPORT #5).**
+The modal built a fake candidate on a typeahead pick, so the confirm card had no evidence and
+`href=""`. New `GET /watchlist/resolve/catalog/{companyId}` → `CompanyResolver.previewCatalog`,
+which shares `catalogCandidate` (stored jobs, else one live preview) with the name path. It lives
+under `/watchlist/resolve` on purpose, to share that rate-limit budget. `RateLimitFilter` used to
+key windows on the full request path, which would have given every company id its own budget, so
+a `Budget` now has `sharedAcrossPaths`: true for resolve (keyed on the prefix), false for `/auth/`
+(login and register keep separate windows). A 404 (unknown board or nothing live) makes the modal
+fall back to a full resolve by name. Tests: 5 `previewCatalog` cases in `CompanyResolverTest`,
+`WatchlistControllerResolveCatalogTest`, and a shared-budget case in `RateLimitFilterTest`.
+
 **CURRENT FOCUS (2026-09-06): nothing is mid-flight.** Add-company resolution is
 done and live-verified (above), as are the feed-reload fix, the six-day job TTL
 and the SmartRecruiters fetcher.

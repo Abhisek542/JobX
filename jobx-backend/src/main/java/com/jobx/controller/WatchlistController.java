@@ -3,6 +3,7 @@ package com.jobx.controller;
 import com.jobx.dto.ManualFetchResponse;
 import com.jobx.dto.ResolveRequest;
 import com.jobx.dto.ResolveResponse;
+import com.jobx.dto.ResolvedBoardResponse;
 import com.jobx.dto.UnsupportedBoardReportRequest;
 import com.jobx.dto.UpdateWatchedCompanyStatusRequest;
 import com.jobx.dto.WatchedCompanyRequest;
@@ -117,6 +118,26 @@ public class WatchlistController {
         log.info("Resolve '{}' -> {} candidate(s){}", request.query(), response.candidates().size(),
                 response.platformHint() == null ? "" : " (hint: " + response.platformHint() + ")");
         return response;
+    }
+
+    /**
+     * The confirm-step evidence for a board picked from the typeahead: real job
+     * count, sample titles and board link for that exact board.
+     *
+     * Lives under /watchlist/resolve so it shares that rate-limit budget — a
+     * catalog board with no stored jobs costs one live ATS call. 404 when the
+     * board is unknown or has nothing live; the dashboard then falls back to a
+     * full resolve by name, which can find where a company moved to.
+     */
+    @GetMapping("/resolve/catalog/{companyId}")
+    public ResolvedBoardResponse resolveCatalog(@AuthenticationPrincipal User user,
+                                                @PathVariable UUID companyId) {
+        ResolvedBoardResponse board = companyResolver.previewCatalog(user, companyId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "no live roles found for this board"));
+        log.info("Resolve catalog {} -> {} {} ({} roles)", companyId,
+                board.atsPlatform(), board.boardToken(), board.jobCount());
+        return board;
     }
 
     /**
