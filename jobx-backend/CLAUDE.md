@@ -647,7 +647,14 @@ Each user has their own `keywords`, `excludeWords`, `expMin`, `expMax`.
 *nothing* for any keyword whose first or last character isn't a word character —
 `C++`, `C#`, `.NET`. `containsWord` now applies a boundary only on the side that
 ends in a word char, so those work while "Java"/"JavaScript" stays correctly
-separated. Full story in Implementation status above. `MatchScorerTest` (29 tests)
+separated. Full story in Implementation status above.
+
+**Amended 2026-09-13 (BUG_REPORT #4):** rule 3 was only applied when all four bounds
+were set, but `ExperienceParser` sets only `expMin` for "5+ years" / "minimum X years",
+so those roles (and any min-only or max-only profile) always got the full 30. A null
+bound is now **open** (min → 0, max → ∞): a gap is counted only where a real bound
+exists on each side. A fully-null range still scores 30; four-bound behaviour is
+unchanged. `MatchScorerTest` (36 tests)
 pins down every rule in this section — change the scoring rules and it will tell
 you; that suite is the guard against a third silent-matching bug.
 

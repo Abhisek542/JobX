@@ -78,15 +78,16 @@ public class MatchScorer {
         double actualWeight      = (titleHits * 2.0) + (descOnlyHits * 1.0);
         int keywordScore = (int) Math.round(70 * Math.min(1.0, actualWeight / maxPossibleWeight));
 
-        // 3. Soft experience scoring — null exp range = distance 0 (full 30 pts)
+        // 3. Soft experience scoring — a null bound is open (min → 0, max → ∞).
+        // A gap needs a real bound on each side of it, so "5+ years" still
+        // penalises a 0–1 profile, while a fully-null range scores the full 30.
         int distance = 0;
-        if (job.getExpMin() != null && job.getExpMax() != null
-                && profile.getExpMin() != null && profile.getExpMax() != null) {
-            if (job.getExpMax() < profile.getExpMin()) {
-                distance = profile.getExpMin() - job.getExpMax();
-            } else if (job.getExpMin() > profile.getExpMax()) {
-                distance = job.getExpMin() - profile.getExpMax();
-            }
+        if (job.getExpMax() != null && profile.getExpMin() != null
+                && job.getExpMax() < profile.getExpMin()) {
+            distance = profile.getExpMin() - job.getExpMax();
+        } else if (job.getExpMin() != null && profile.getExpMax() != null
+                && job.getExpMin() > profile.getExpMax()) {
+            distance = job.getExpMin() - profile.getExpMax();
         }
         int experienceScore = Math.max(0, 30 - distance * 10);
 

@@ -9,8 +9,10 @@ import java.util.regex.Pattern;
  * Best-effort extraction of an experience range from JD free text.
  * Hoisted from GreenhouseFetcher so all AtsFetcher implementations share it.
  *
- * Sets expMin and/or expMax on the job. Both remain null if nothing matches —
- * MatchScorer treats null as distance=0 (full 30 pts), never hard-excludes.
+ * Sets expMin and/or expMax on the job. Both remain null if nothing matches.
+ * MatchScorer treats a null bound as open (min → 0, max → ∞), so "5+ years"
+ * still gets a distance penalty; a fully-null range scores the full 30 pts.
+ * Experience never hard-excludes.
  *
  * Patterns handled:
  *   "3-5 years"         → min=3, max=5
