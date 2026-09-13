@@ -9,6 +9,8 @@ status, login timing, N+1 on the feed) are excluded. Fixed items are marked **Fi
 | 1 | High | Frontend | **Fixed 2026-09-12** — Sign-out does not clear the data stores — next user sees the previous user's data |
 | 2 | High | Backend | **Fixed 2026-09-13** — Workable / SmartRecruiters re-fetch detail for every tombstoned posting, every cycle |
 | 3 | Medium | Backend | Email is case-sensitive at register and login |
+| 4 | Medium | Backend | **Fixed 2026-09-13** — Experience penalty never fires for open-ended ranges ("5+ years") |
+| 3 | Medium | Backend | **Fixed 2026-09-13** — Email is case-sensitive at register and login |
 | 4 | Medium | Backend | Experience penalty never fires for open-ended ranges ("5+ years") |
 | 5 | Medium | Frontend | **Fixed 2026-09-13** — Typeahead pick shows "0 open roles" and a blank board link |
 | 6 | Medium | Backend | Long outbound HTTP calls run inside DB transactions |
@@ -203,9 +205,25 @@ that differ only by case can coexist.
 **Fix direction.** Trim + lower-case the email in both endpoints before lookup/save, and add
 a unique index on `LOWER(email)` (or migrate existing rows to lower case).
 
+**Fixed 2026-09-13.** `RegisterRequest` / `LoginRequest` normalize the email in their
+compact constructors via `util/Emails.normalize` (strip + `toLowerCase(Locale.ROOT)`), so
+validation, lookup and save all see the canonical form. `V7__users_email_case_insensitive.sql`
+lower-cases existing rows and adds `UNIQUE (LOWER(email))`. It aborts rather than merging if
+two existing accounts already collide. A concurrent duplicate register hits the index and
+maps to 409 through `GlobalExceptionHandler`. Tests: `AuthControllerTest`, `EmailsTest`.
+
 ---
 
 ## 4. Experience penalty never fires for open-ended ranges (Medium)
+
+> **Fixed 2026-09-13** (branch `task/experience-penalty`). `MatchScorer` now treats a null
+> bound as open (min → 0, max → ∞). A gap is counted only where a real bound exists on each
+> side of it, so a "10+ years" job against a 0–1 profile is 9 years out (70 instead of 100). A job
+> or profile with no range at all still gets the full 30, and ranges with all four bounds score
+> exactly as before. `MatchScorerTest` gained 7 open-ended cases (min-only jobs, min-only and
+> max-only profiles, both open above). Scores already stored are not rescored; stale NEW matches
+> expire with the 6-day TTL, or a profile save rescores that user immediately. The text below
+> is the original report.
 
 **Symptom.** A "10+ years" role scores the full 30 experience points for a 0–1 year profile.
 A profile with only a minimum (or only a maximum) set is likewise ignored.

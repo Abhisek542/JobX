@@ -326,6 +326,74 @@ class MatchScorerTest {
         assertEquals(100, result.score());
     }
 
+    // ---------- experience: open-ended ranges (a null bound is open) ----------
+
+    @Test
+    void openEndedJobFarAboveUserRangeAppliesPenalty() {
+        // "10+ years" against a 0–1 profile — used to score the full 30
+        MatchScorer.ScoredJob result = scorer.score(
+                profile(List.of("java"), List.of(), 0, 1),
+                job("Java Developer", "backend", 10, null));
+
+        assertEquals(70, result.score());
+        assertFalse(result.excluded());
+        assertTrue(result.reason().contains("experience 9yr outside your range"));
+    }
+
+    @Test
+    void openEndedJobJustAboveUserRangeAppliesPenalty() {
+        MatchScorer.ScoredJob result = scorer.score(
+                profile(List.of("java"), List.of(), 2, 4),
+                job("Java Developer", "backend", 5, null));
+
+        assertEquals(90, result.score());
+    }
+
+    @Test
+    void openEndedJobOverlappingUserRangeScoresFull() {
+        MatchScorer.ScoredJob result = scorer.score(
+                profile(List.of("java"), List.of(), 2, 6),
+                job("Java Developer", "backend", 3, null));
+
+        assertEquals(100, result.score());
+    }
+
+    @Test
+    void minOnlyProfileAppliesPenaltyToJobBelowIt() {
+        MatchScorer.ScoredJob result = scorer.score(
+                profile(List.of("java"), List.of(), 6, null),
+                job("Java Developer", "backend", 2, 4));
+
+        assertEquals(80, result.score());
+    }
+
+    @Test
+    void maxOnlyProfileAppliesPenaltyToJobAboveIt() {
+        MatchScorer.ScoredJob result = scorer.score(
+                profile(List.of("java"), List.of(), null, 3),
+                job("Java Developer", "backend", 5, 7));
+
+        assertEquals(80, result.score());
+    }
+
+    @Test
+    void openEndedJobAgainstMaxOnlyProfileAppliesPenalty() {
+        MatchScorer.ScoredJob result = scorer.score(
+                profile(List.of("java"), List.of(), null, 3),
+                job("Java Developer", "backend", 5, null));
+
+        assertEquals(80, result.score());
+    }
+
+    @Test
+    void bothOpenAboveAlwaysOverlap() {
+        MatchScorer.ScoredJob result = scorer.score(
+                profile(List.of("java"), List.of(), 3, null),
+                job("Java Developer", "backend", 5, null));
+
+        assertEquals(100, result.score());
+    }
+
     // ---------- null tolerance ----------
 
     @Test

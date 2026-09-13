@@ -577,6 +577,18 @@ a `Budget` now has `sharedAcrossPaths`: true for resolve (keyed on the prefix), 
 (login and register keep separate windows). A 404 (unknown board or nothing live) makes the modal
 fall back to a full resolve by name. Tests: 5 `previewCatalog` cases in `CompanyResolverTest`,
 `WatchlistControllerResolveCatalogTest`, and a shared-budget case in `RateLimitFilterTest`.
+**FIXED (2026-09-13): emails are case-insensitive (BUG_REPORT #3, migration
+`V7__users_email_case_insensitive.sql`).** Registering `Abhi@Example.com` then logging in
+as `abhi@example.com` used to 401, and case variants could be separate accounts.
+- `RegisterRequest` / `LoginRequest` normalize in their record compact constructors
+  (`util/Emails.normalize`: strip + `toLowerCase(Locale.ROOT)`). That runs at Jackson
+  construction, *before* `@Valid`, so `AuthController` is unchanged. Any new DTO that
+  carries a login email must do the same.
+- V7 aborts with the colliding addresses if existing users already differ only by case
+  (deciding which account survives is a human call), otherwise lower-cases rows and adds
+  `uq_users_email_lower` on `LOWER(email)`. A racing duplicate register → 409 via
+  `GlobalExceptionHandler`.
+- Emails returned in `AuthResponse` and the JWT `email` claim are now lower-cased.
 
 **CURRENT FOCUS (2026-09-06): nothing is mid-flight.** Add-company resolution is
 done and live-verified (above), as are the feed-reload fix, the six-day job TTL
@@ -658,7 +670,14 @@ Each user has their own `keywords`, `excludeWords`, `expMin`, `expMax`.
 *nothing* for any keyword whose first or last character isn't a word character —
 `C++`, `C#`, `.NET`. `containsWord` now applies a boundary only on the side that
 ends in a word char, so those work while "Java"/"JavaScript" stays correctly
-separated. Full story in Implementation status above. `MatchScorerTest` (29 tests)
+separated. Full story in Implementation status above.
+
+**Amended 2026-09-13 (BUG_REPORT #4):** rule 3 was only applied when all four bounds
+were set, but `ExperienceParser` sets only `expMin` for "5+ years" / "minimum X years",
+so those roles (and any min-only or max-only profile) always got the full 30. A null
+bound is now **open** (min → 0, max → ∞): a gap is counted only where a real bound
+exists on each side. A fully-null range still scores 30; four-bound behaviour is
+unchanged. `MatchScorerTest` (36 tests)
 pins down every rule in this section — change the scoring rules and it will tell
 you; that suite is the guard against a third silent-matching bug.
 
