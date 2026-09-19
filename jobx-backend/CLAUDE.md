@@ -86,7 +86,16 @@ file is the adopted improvement scope — read it alongside this one):
   `{status, code, detail, fieldErrors?}` via `GlobalExceptionHandler`
   (`@RestControllerAdvice`); `@Valid` on all request DTOs (manual null/blank checks
   in controllers removed). The 401 entry point and the 429 limiter hand-write the
-  same JSON shape — keep them in sync if `ApiError` changes.
+  same JSON shape — keep them in sync if `ApiError` changes. Since 2026-09-19 the
+  advice also covers the exceptions Spring itself throws before a controller runs
+  (see the FIXED entry below). Two rules when editing it: **an exception class may
+  appear in exactly one `@ExceptionHandler` list here** — a duplicate is an
+  `IllegalStateException: Ambiguous @ExceptionHandler method mapped for …` at context
+  refresh, which is also why this advice must never extend
+  `ResponseEntityExceptionHandler` (its `handleException` already claims
+  `MethodArgumentNotValidException` and `HttpMessageNotReadableException`) — and an
+  unknown path returns **401, not 404, for an anonymous caller** on purpose; don't
+  "fix" it.
 - **Prod safety**: `spring.profiles.default: dev`. Outside the `dev` profile,
   `JwtService` refuses to start on a missing/default `JOBX_JWT_SECRET`;
   `DevController` is `@Profile("dev")` and `/dev/**` is only permitAll in dev
@@ -589,6 +598,41 @@ as `abhi@example.com` used to 401, and case variants could be separate accounts.
   `uq_users_email_lower` on `LOWER(email)`. A racing duplicate register → 409 via
   `GlobalExceptionHandler`.
 - Emails returned in `AuthResponse` and the JWT `email` claim are now lower-cased.
+
+**FIXED (2026-09-19): framework exceptions answered 500 (BUG_REPORT #7).** An unknown path,
+a wrong method (`GET /auth/login`) or a missing request value all returned
+`500 internal_error` with an ERROR-level stack trace, because `GlobalExceptionHandler` is a
+plain advice and every exception Spring throws before or instead of a controller fell into
+the `Exception.class` catch-all.
+- One new method, `handleFrameworkRejection`, mapped to `NoResourceFoundException`,
+  `NoHandlerFoundException`, `HttpRequestMethodNotSupportedException`,
+  `HttpMediaTypeNotSupportedException`, `HttpMediaTypeNotAcceptableException` and
+  `ServletRequestBindingException`. Its **parameter is typed `ErrorResponse`** (the interface
+  all six implement), so status and response headers are read off the exception instead of
+  re-derived — that is what puts `Allow: POST` on a 405 and `Accept: application/json` on a
+  415. Spring binds the exception into a non-`Throwable` parameter via `Class.isInstance`
+  (`AnnotatedMethod.findProvidedArgument`), but the annotation must still list concrete
+  classes: its `value()` is `Class<? extends Throwable>[]`.
+- Both 404 shapes are listed so the contract doesn't depend on
+  `spring.web.resources.add-mappings` (resource handler on → `NoResourceFoundException`, off
+  → `NoHandlerFoundException`). **No property in `application.yml` was changed**, and
+  `spring.mvc.throw-exception-if-no-handler-found` is already `true` by default in Boot 3.2 —
+  don't add it.
+- Details are fixed strings, never `ex.getMessage()`:
+  `NoResourceFoundException.getMessage()` is "No static resource watchlist/nope.", which
+  reflects the caller's path back and names an internal dispatch detail.
+- Rejections log **one WARN line** (method, path, status, code) with no `Throwable` argument,
+  so no stack trace. `MissingPathVariableException` is carved back out to the 500 path on
+  purpose — Spring types it 500 because it means *our* routing is wrong, and it should keep
+  its trace.
+- Nothing shadows the existing handlers: `HttpMessageNotReadableException` and
+  `MethodArgumentTypeMismatchException` aren't `ErrorResponse`s and aren't subclasses of
+  anything listed, and `ExceptionDepthComparator` walks superclasses only.
+- Tests 240 → 253. `GlobalExceptionHandlerWiringTest` is the **first MockMvc test in the
+  backend suite** (standalone setup, no Spring context) — it exists because unit tests on the
+  advice prove the mapping but not that the exception ever reaches it, which was the bug. It
+  cannot reach `NoResourceFoundException` (standalone registers no resource handler) or
+  anything behind Spring Security; those were checked live.
 
 **CURRENT FOCUS (2026-09-06): nothing is mid-flight.** Add-company resolution is
 done and live-verified (above), as are the feed-reload fix, the six-day job TTL
