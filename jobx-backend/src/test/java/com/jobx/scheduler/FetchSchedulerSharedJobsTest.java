@@ -23,6 +23,11 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -255,6 +260,107 @@ class FetchSchedulerSharedJobsTest {
         scheduler.fetchAllCompanies();
 
         verify(fetcher, times(1)).fetch(eq(company), any());
+    }
+
+    /**
+     * BUG_REPORT #11: "Check now" landing while the cycle is mid-fetch of the
+     * same board. Both used to run off the same pre-fetch dedup set, and the
+     * loser tripped UNIQUE (company_id, external_id) and rolled back its board.
+     */
+    @Test
+    void aSecondFetchOfABoardAlreadyMidFetchIsSkipped() throws Exception {
+        CountDownLatch inFetch = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        when(fetcher.fetch(eq(company), any())).thenAnswer(invocation -> {
+            inFetch.countDown();
+            release.await(5, TimeUnit.SECONDS);
+            return List.of(posting);
+        });
+
+        ExecutorService cycle = Executors.newSingleThreadExecutor();
+        try {
+            Future<FetchScheduler.FetchResult> first = cycle.submit(() -> scheduler.fetchCompany(company, null));
+            assertTrue(inFetch.await(5, TimeUnit.SECONDS));
+
+            FetchScheduler.FetchResult second = scheduler.fetchCompany(company, new User());
+
+            assertTrue(second.inProgress());
+            assertFalse(second.failed());
+            assertEquals(0, second.newJobs());
+
+            release.countDown();
+            assertEquals(1, first.get(5, TimeUnit.SECONDS).newJobs());
+        } finally {
+            release.countDown();
+            cycle.shutdownNow();
+        }
+
+        verify(fetcher, times(1)).fetch(eq(company), any());
+        verify(jobRepository, times(1)).save(posting);
+        verify(companyRepository, times(1)).save(company);
+    }
+
+    @Test
+    void theLockIsPerBoardSoOtherBoardsStillFetch() throws Exception {
+        Company other = new Company();
+        other.setId(UUID.randomUUID());
+        other.setDisplayName("Groww");
+        other.setAtsPlatform(AtsPlatform.GREENHOUSE);
+        other.setBoardToken("groww");
+        when(fetcher.fetch(eq(other), any())).thenReturn(List.of());
+
+        CountDownLatch inFetch = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        when(fetcher.fetch(eq(company), any())).thenAnswer(invocation -> {
+            inFetch.countDown();
+            release.await(5, TimeUnit.SECONDS);
+            return List.of(posting);
+        });
+
+        ExecutorService cycle = Executors.newSingleThreadExecutor();
+        try {
+            Future<FetchScheduler.FetchResult> first = cycle.submit(() -> scheduler.fetchCompany(company, null));
+            assertTrue(inFetch.await(5, TimeUnit.SECONDS));
+
+            FetchScheduler.FetchResult result = scheduler.fetchCompany(other, null);
+
+            assertFalse(result.inProgress());
+            verify(fetcher).fetch(eq(other), any());
+
+            release.countDown();
+            first.get(5, TimeUnit.SECONDS);
+        } finally {
+            release.countDown();
+            cycle.shutdownNow();
+        }
+    }
+
+    @Test
+    void theLockIsReleasedWhenTheBoardFails() {
+        when(fetcher.fetch(eq(company), any()))
+                .thenThrow(new RuntimeException("board down"))
+                .thenReturn(List.of(posting));
+
+        assertTrue(scheduler.fetchCompany(company, null).failed());
+
+        FetchScheduler.FetchResult retry = scheduler.fetchCompany(company, null);
+        assertFalse(retry.inProgress());
+        assertEquals(1, retry.newJobs());
+    }
+
+    @Test
+    void theLockIsReleasedWhenPersistingThrows() {
+        // A DB error mid-persist propagates (fetchAllCompanies catches it); the
+        // board must not stay locked for the life of the JVM afterwards.
+        when(jobRepository.save(posting))
+                .thenThrow(new RuntimeException("db down"))
+                .thenReturn(posting);
+
+        assertThrows(RuntimeException.class, () -> scheduler.fetchCompany(company, null));
+
+        FetchScheduler.FetchResult retry = scheduler.fetchCompany(company, null);
+        assertFalse(retry.inProgress());
+        assertEquals(1, retry.newJobs());
     }
 
     @Test

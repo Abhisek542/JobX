@@ -18,8 +18,10 @@ status, login timing, N+1 on the feed) are excluded. Fixed items are marked **Fi
 | 6 | Medium | Backend | **Fixed 2026-09-19** — Long outbound HTTP calls run inside DB transactions |
 | 7 | Medium | Backend | Framework exceptions (404 path, 405 method, missing param) become 500 |
 | 8 | Low | Backend | **Fixed 2026-09-19** — Malformed `Location` header on a careers site becomes a 500 |
-| 9 | Low | Frontend | `?next=` deep link is set by the guard but ignored by the login page |
+| 9 | Low | Frontend | **Fixed 2026-09-20** — `?next=` deep link is set by the guard but ignored by the login page |
 | 10 | Low | Frontend | Copy says scores update "on the next check"; backend rescores immediately |
+| 11 | Low | Backend | **Fixed 2026-09-20** — No per-board lock between "Check now" and the scheduled cycle |
+| 10 | Low | Frontend | **Fixed 2026-09-20** — Copy says scores update "on the next check"; backend rescores immediately |
 | 11 | Low | Backend | No per-board lock between "Check now" and the scheduled cycle |
 | 12 | Low | Backend | `%` / `_` not escaped in the catalog search `LIKE` |
 
@@ -496,6 +498,22 @@ matching the "a failure is never an exception here" contract in the class commen
 
 ## 9. `?next=` deep link is ignored by the login page (Low)
 
+> **Fixed 2026-09-20** (branch `task/next-issue`). `LoginPage` reads `next` from
+> `ActivatedRoute` and navigates with `navigateByUrl(safeNext(next))`. The new pure helper
+> `core/util/redirect.ts` passes only a plain in-app absolute path, query string included. It
+> falls back to `/dashboard` for a scheme, a protocol-relative `//host` or `/\host`, control
+> characters, and `/login` / `/register`, which `guestGuard` would bounce. Two adjacent paths
+> that dropped the user's place were fixed with it:
+> - **401 expiry.** `errorInterceptor` now sends `?expired=1&next=<current url>`, so a mid-use
+>   expiry returns the user to the same page after re-login.
+> - **Register detour.** "Create one" and "Sign in" forward `next` between the two auth pages,
+>   and `RegisterPage` honours it after sign-up.
+>
+> `expired` is now read from the same `queryParamMap` snapshot instead of `location.search`.
+> Tests 53 → 57: a `safeNext` suite in `util.spec.ts`, and a 401 case in
+> `session-reset.spec.ts` asserting the `next` query param. The text below is the original
+> report.
+
 **Symptom.** Opening `/watchlist` while logged out redirects to `/login?next=/watchlist`;
 after signing in the user lands on `/dashboard`.
 
@@ -516,6 +534,12 @@ is a safe relative path, else `/dashboard`.
 ---
 
 ## 10. Copy says scores update "on the next check" (Low)
+
+> **Fixed 2026-09-20** (branch `task/score-next-check-problem`). The toast now reads
+> "Preferences saved · feed rescored". `AppShell.onPreferencesSaved` is gone, along with its
+> stale comment and the redundant forced `GET /profile/filter`. `FilterProfileStore.save()`
+> already sets the profile and reloads the feed. The modal's unused `saved` output was removed.
+> The frozen mockup still has the old string, which is expected.
 
 **Symptom.** After saving preferences the toast promises a future update, but
 `PUT /profile/filter` runs `MatchingService.rescoreForWatcher` synchronously and the feed is
@@ -551,10 +575,25 @@ sets the profile).
 
 ## 11. No per-board lock between "Check now" and the scheduled cycle (Low)
 
-> **Still open.** The snippet below predates the #2 fix. Dedup now checks in-memory sets
-> (`FetchFilter`), and the scheduler re-reads stored ids after the fetch returns. That keeps
-> the race window about as narrow as the old per-posting `existsBy`, but it doesn't close
-> it. The per-company lock below is still the fix.
+> **Fixed 2026-09-20** (branch `task/check-now-issue`). `FetchScheduler.fetchCompany` now
+> takes a per-company try-lock (a `ConcurrentHashMap`-backed set of in-flight company ids,
+> released in `finally`) around the dedup reads, the fetch and the persist. A second fetch of
+> a board that's already being fetched does nothing and returns
+> `FetchResult.alreadyRunning()`. The cycle just moves on. `fetchNow` answers it with the same
+> 200-with-zeros as the shared cooldown, so the frontend needs no change: the running fetch
+> scores for every ACTIVE watcher, the caller included. This also closes the two-watchers
+> version of the race, where both clicks passed the cooldown check before either fetch had
+> stamped `lastFetchedAt`.
+>
+> **In-memory, not `pg_try_advisory_xact_lock`:** an xact lock only lives as long as its
+> transaction, so it would have to span the outbound fetch, and a session lock would pin a
+> connection just the same. Either one brings back #6. The app is single-instance
+> (`RateLimitFilter` makes the same assumption). The post-fetch id re-read in
+> `persistFetched` stays as a cheap fallback. Tests 258 → 263: four in
+> `FetchSchedulerSharedJobsTest` (same board skipped while one fetch is blocked mid-flight,
+> other boards not blocked, lock released after a board failure and after a persist
+> exception) and one in `WatchlistControllerFetchTest`. With the lock disabled, the
+> concurrency test fails. The text below is the original report.
 
 **Symptom.** If a user clicks "Check now" while the scheduler is mid-fetch of the same board
 (Workable boards take a while), both paths pass the `existsBy` check for the same new posting.

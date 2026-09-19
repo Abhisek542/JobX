@@ -122,7 +122,6 @@ export class FilterProfileModal {
   private readonly toasts = inject(ToastService);
 
   readonly closed = output<void>();
-  readonly saved = output<void>();
 
   protected readonly keywords = signal('');
   protected readonly excludeWords = signal('');
@@ -181,9 +180,8 @@ export class FilterProfileModal {
         expMin,
         expMax,
       });
-      this.saved.emit();
       this.closed.emit();
-      this.toasts.ok('Preferences saved · scores update on the next check');
+      this.toasts.ok('Preferences saved · feed rescored');
     } catch (error) {
       const appError = error as AppError;
       this.saving.set(false);

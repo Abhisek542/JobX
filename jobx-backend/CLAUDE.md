@@ -564,7 +564,7 @@ scheduler's tombstone check ran only *after* the fetcher returned.
   4,774 DB queries a cycle; it's now three set queries per board. Stored ids are
   read once for the fetcher and **again after the fetch returns**, because a slow
   Workable fetch would otherwise widen the "Check now" vs cycle race window
-  (BUG_REPORT #11, still open: that needs a per-board lock).
+  (BUG_REPORT #11 — closed 2026-09-20 by a per-board lock; see below).
 - **Live-verified** on the dev database with no data changes. Before starting the
   build, a read-only pass over the live boards found the old cost: PhonePe 39 and
   Deloitte 267 detail calls per cycle, all tombstoned. The fixed build's first
@@ -681,7 +681,7 @@ stalled every other request. Four sites, not the two the report named:
   the existing `ObjectProvider<FetchScheduler>` proxy. `persistFetched` keeps the post-fetch id
   re-read and stamps health in the same transaction, so per-board all-or-nothing is unchanged.
   `fetchAllCompanies` now calls `fetchCompany` directly; the proxy hop moved one level down.
-  BUG_REPORT #11 is untouched — the race window is if anything shorter.
+  BUG_REPORT #11 was untouched by this — the race window got shorter; the lock came later (below).
 
 **The half of this that is invisible in the code.** Spring's Hibernate adapter defaults to
 `DELAYED_ACQUISITION_AND_HOLD`, so a session grabs a connection at its first query and keeps it
@@ -716,6 +716,25 @@ Tests 240 → 243: ordering cases (`InOrder`) proving the ATS call precedes the 
 both `WatchlistControllerSharedCompanyTest` and `FetchSchedulerSharedJobsTest`, plus the
 create-race join. There are no Spring-context tests in this suite, so ordering is the most a
 unit test can pin here — the pool behaviour itself has to be checked live, as above.
+
+**FIXED (2026-09-20): per-board lock between "Check now" and the cycle (BUG_REPORT #11).**
+Two fetches of one board (the cycle plus a "Check now", or two watchers clicking together)
+ran off the same pre-fetch dedup set. The loser tripped `UNIQUE (company_id, external_id)`,
+rolled back its whole board, and the manual caller saw a 409.
+- `FetchScheduler.fetchCompany` holds a **JVM-local try-lock** per company id
+  (`ConcurrentHashMap.newKeySet()`, released in `finally`) around the dedup reads, fetch and
+  persist. The body moved to a private `fetchLocked`. A second caller does nothing and gets
+  `FetchResult.alreadyRunning()`. `FetchResult` gained a fourth component, `inProgress`. The
+  factory can't be named `inProgress()` because that clashes with the record accessor.
+- `fetchNow` maps that to **200 with zeros**, the same contract as the shared cooldown. The
+  frontend is unchanged. The cycle just skips the board.
+- **Not a Postgres advisory lock, on purpose:** an xact lock would have to span the outbound
+  fetch, and a session lock pins a connection too. Either one is BUG_REPORT #6 again. This
+  assumes a single instance, like `RateLimitFilter`; running several would need a distributed
+  lock. `persistFetched`'s post-fetch id re-read stays as the fallback.
+- Tests 258 → 263: four concurrency/release cases in `FetchSchedulerSharedJobsTest` (latch
+  based; the same-board case fails with the lock disabled) and one in
+  `WatchlistControllerFetchTest`. **Not yet live-verified** against the dev DB.
 
 **CURRENT FOCUS (2026-09-06): nothing is mid-flight.** Add-company resolution is
 done and live-verified (above), as are the feed-reload fix, the six-day job TTL

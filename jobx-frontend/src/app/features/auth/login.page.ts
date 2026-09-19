@@ -1,8 +1,10 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
-import { Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { AppError } from '../../core/models/api-error.model';
 import { AuthStore } from '../../core/services/auth.store';
 import { AuthHero } from '../../shared/ui/auth-hero';
+import { ThemeService } from '../../core/services/theme.service';
+import { safeNext } from '../../core/util/redirect';
 import { Icon } from '../../shared/ui/icon';
 
 /**
@@ -78,6 +80,14 @@ import { Icon } from '../../shared/ui/icon';
         @if (fieldError('password'); as message) {
           <p class="sb-err">{{ message }}</p>
         }
+        <button class="btn btn-primary" type="submit" [disabled]="busy()">
+          {{ busy() ? 'Signing in…' : 'Sign in' }}
+        </button>
+
+        <p class="auth-foot">
+          No account yet?
+          <a routerLink="/register" [queryParams]="{ next: nextParam() }">Create one</a>
+        </p>
       </form>
 
       <p heroFoot class="new-here">
@@ -89,6 +99,7 @@ import { Icon } from '../../shared/ui/icon';
 export class LoginPage {
   private readonly auth = inject(AuthStore);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
 
   protected readonly email = signal('');
   protected readonly password = signal('');
@@ -97,9 +108,12 @@ export class LoginPage {
   private readonly fieldErrors = signal<Record<string, string>>({});
 
   /** Set by error.interceptor when a 401 killed the session mid-use. */
-  protected readonly expired = signal(
-    new URLSearchParams(location.search).get('expired') === '1',
-  );
+  protected readonly expired = signal(this.route.snapshot.queryParamMap.get('expired') === '1');
+
+  /** Raw ?next= from authGuard / errorInterceptor; validated by safeNext before use. */
+  protected nextParam(): string | null {
+    return this.route.snapshot.queryParamMap.get('next');
+  }
 
   protected fieldError(field: string): string | undefined {
     return this.fieldErrors()[field];
@@ -124,7 +138,7 @@ export class LoginPage {
 
     this.busy.set(true);
     this.auth.login({ email, password: this.password() }).subscribe({
-      next: () => void this.router.navigate(['/dashboard']),
+      next: () => void this.router.navigateByUrl(safeNext(this.nextParam())),
       error: (error: AppError) => {
         this.busy.set(false);
         this.fieldErrors.set(error.fieldErrors);
