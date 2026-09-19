@@ -58,7 +58,7 @@ import { Sidebar } from './sidebar';
       <app-add-company-modal (closed)="ui.closeAddCompany()" />
     }
     @if (ui.preferencesOpen()) {
-      <app-filter-profile-modal (closed)="ui.closePreferences()" (saved)="onPreferencesSaved()" />
+      <app-filter-profile-modal (closed)="ui.closePreferences()" />
     }
   `,
 })
@@ -80,11 +80,5 @@ export class AppShell {
   protected signOut(): void {
     this.auth.clear();
     void this.router.navigate(['/login']);
-  }
-
-  protected onPreferencesSaved(): void {
-    // Scores are recomputed server-side on the next fetch cycle, so the existing
-    // feed is unchanged — but the rail's preference panel is not.
-    this.profile.load({ force: true });
   }
 }
