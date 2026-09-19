@@ -599,6 +599,32 @@ as `abhi@example.com` used to 401, and case variants could be separate accounts.
   `GlobalExceptionHandler`.
 - Emails returned in `AuthResponse` and the JWT `email` claim are now lower-cased.
 
+**FIXED (2026-09-19): a careers site's malformed `Location` header no longer 500s
+(BUG_REPORT #8).** `SafeUrlFetcher` follows redirects by hand so every hop can be
+re-checked, and `current.resolve(response.location())` sat outside the try/catch
+guarding the exchange. `URI.resolve` parses the header, so a value with a raw space,
+a malformed escape pair or an unclosed IPv6 bracket threw `IllegalArgumentException`,
+which escaped `fetch` → `CompanyResolver.resolve` → the catch-all handler as
+`500 internal_error` with an ERROR stack trace — for a remote site's bad header, on a
+URL the user typed correctly. It also aborted step 4 PROBE, which would very likely
+have found the board anyway.
+- New package-private `SafeUrlFetcher.nextHop(URI, String)` returns `Optional<URI>`,
+  empty for a header we can't use. Package-private on purpose: the suite is
+  deliberately socket-free (`spring-boot-starter-test` is the only test dep, no
+  MockWebServer), so the redirect step is tested directly rather than through a server.
+- **A blank or absent `Location` is now a dead end too.** It resolved back to the page
+  being fetched, so following it re-requested the same URL `MAX_REDIRECTS` times.
+- **`UnsafeUrlException` now escapes only from hop 0.** A redirect into `mailto:`, a
+  private address or a host that won't resolve used to surface as a 400 whose message
+  blamed the address the *user* typed; the site chose that target, so it is an ordinary
+  dead end. This is what `fetch`'s javadoc already promised ("the URL"), and it narrows
+  nothing security-wise: the guard still runs on every hop and still logs the refusal
+  at INFO before returning.
+- Tests 240 → 242: `unusableLocationHeaderIsADeadEnd` (six throwing header values plus
+  null/empty/blank) and `resolvesOrdinaryRedirectTargets` (relative, protocol-relative
+  inheriting https, absolute, query+fragment, percent-encoded space, surrounding
+  whitespace) in `SafeUrlFetcherTest`. **Not covered by a test:** the `hop != 0` branch,
+  which needs a server that actually redirects — verified by inspection only.
 **FIXED (2026-09-19): framework exceptions answered 500 (BUG_REPORT #7).** An unknown path,
 a wrong method (`GET /auth/login`) or a missing request value all returned
 `500 internal_error` with an ERROR-level stack trace, because `GlobalExceptionHandler` is a

@@ -106,15 +106,31 @@ public class SafeUrlFetcher {
     /**
      * The page body at {@code url}, or empty if it could not be fetched safely.
      *
-     * @throws UnsafeUrlException only when the URL is one Jobx refuses to
-     *                            request at all — a non-HTTP scheme or a
-     *                            non-public address. That is worth telling the
-     *                            user apart from "we looked and found nothing".
+     * @throws UnsafeUrlException only when the URL THE CALLER GAVE is one Jobx
+     *                            refuses to request at all — a non-HTTP scheme
+     *                            or a non-public address. That is worth telling
+     *                            the user apart from "we looked and found
+     *                            nothing". A redirect that leads somewhere
+     *                            refused is not: the site chose that target,
+     *                            not the user, so it is an ordinary dead end.
      */
     public Optional<String> fetch(String url) {
         URI current = parse(url);
         for (int hop = 0; hop <= MAX_REDIRECTS; hop++) {
-            requirePublicHttpTarget(current);
+            try {
+                requirePublicHttpTarget(current);
+            } catch (UnsafeUrlException e) {
+                // Hop 0 is the URL the user typed, and the one they can fix. A
+                // later hop is a target the site chose, so blaming their input
+                // for it would be both confusing and wrong. The refusal is
+                // still logged inside the guard either way.
+                if (hop == 0) {
+                    throw e;
+                }
+                log.debug("Redirect from {} led to {}, which we won't fetch: {}",
+                        url, current, e.getMessage());
+                return Optional.empty();
+            }
 
             Response response;
             try {
@@ -126,17 +142,43 @@ public class SafeUrlFetcher {
             if (response == null) {
                 return Optional.empty();
             }
-
-            if (response.location() != null) {
-                // Resolve relative Location headers against the URL we just asked.
-                current = current.resolve(response.location());
-                continue;
+            if (response.location() == null) {
+                return Optional.ofNullable(response.body());
             }
-            return Optional.ofNullable(response.body());
+
+            Optional<URI> next = nextHop(current, response.location());
+            if (next.isEmpty()) {
+                log.debug("Unusable Location header from {}: [{}]", current, response.location());
+                return Optional.empty();
+            }
+            current = next.get();
         }
 
         log.debug("Gave up on {} after {} redirects", url, MAX_REDIRECTS);
         return Optional.empty();
+    }
+
+    /**
+     * Where a {@code Location} header points, resolved against the URL we just
+     * asked — or empty when the header is one we can't use.
+     *
+     * {@link URI#resolve(String)} parses the header, so a value carrying a raw
+     * space, a malformed escape pair or an unclosed IPv6 bracket throws
+     * {@link IllegalArgumentException}. A careers site sending one of those is
+     * an ordinary bad outcome of resolution, not a Jobx defect, and this class
+     * answers every bad outcome with empty rather than an exception. A blank
+     * header gets the same answer: it resolves back to the page we are already
+     * on, so following it would re-request it until the hop cap gave up.
+     */
+    static Optional<URI> nextHop(URI current, String location) {
+        if (location == null || location.isBlank()) {
+            return Optional.empty();
+        }
+        try {
+            return Optional.of(current.resolve(location.trim()));
+        } catch (IllegalArgumentException e) {
+            return Optional.empty();
+        }
     }
 
     private Response exchange(URI uri) {
