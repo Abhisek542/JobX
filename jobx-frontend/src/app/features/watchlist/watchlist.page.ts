@@ -4,6 +4,7 @@ import { UiStore } from '../../core/services/ui.store';
 import { WatchlistStore } from '../../core/services/watchlist.store';
 import { companyStatusLine } from '../../core/util/watchlist-status';
 import { ActionBar } from '../../shared/layout/action-bar';
+import { CompanyLogo } from '../../shared/ui/company-logo';
 import { EmptyState } from '../../shared/ui/empty-state';
 import { Icon } from '../../shared/ui/icon';
 
@@ -17,7 +18,7 @@ import { Icon } from '../../shared/ui/icon';
 @Component({
   selector: 'app-watchlist-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ActionBar, EmptyState, Icon],
+  imports: [ActionBar, CompanyLogo, EmptyState, Icon],
   template: `
     <main class="main">
       <app-action-bar
@@ -44,18 +45,22 @@ import { Icon } from '../../shared/ui/icon';
       } @else {
         <div class="stat-strip">
           <div class="stat good">
+            <span class="ico"><app-icon name="check-circle" /></span>
             <div class="v">{{ health().healthy }}</div>
             <div class="l">checking fine</div>
           </div>
           <div class="stat" [class.bad]="health().failing > 0">
+            <span class="ico"><app-icon name="alert" /></span>
             <div class="v">{{ health().failing }}</div>
             <div class="l">refresh issue</div>
           </div>
           <div class="stat" [class.warn]="health().pending > 0">
+            <span class="ico"><app-icon name="clock" /></span>
             <div class="v">{{ health().pending }}</div>
             <div class="l">awaiting first check</div>
           </div>
           <div class="stat">
+            <span class="ico"><app-icon name="pause" /></span>
             <div class="v">{{ health().paused + health().unsupported }}</div>
             <div class="l">paused or unsupported</div>
           </div>
@@ -71,6 +76,7 @@ import { Icon } from '../../shared/ui/icon';
           <div class="wl-list">
             @for (company of companies(); track company.id) {
               <div class="wl-row">
+                <app-company-logo [companyName]="company.companyName" [size]="40" />
                 <div class="wl-id">
                   <div class="nm">
                     <span class="status-dot" [class]="'status-dot ' + line(company).dot"></span>

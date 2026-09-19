@@ -17,7 +17,7 @@ import { WatchlistHealthCard } from '../../shared/rail/watchlist-health-card';
   imports: [ActionBar, MatchFeed, SearchPreferencesCard, WatchlistHealthCard],
   template: `
     <main class="main">
-      <app-action-bar />
+      <app-action-bar [search]="true" />
       <app-match-feed />
     </main>
 

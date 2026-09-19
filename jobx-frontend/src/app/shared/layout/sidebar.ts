@@ -16,7 +16,7 @@ import { Icon } from '../ui/icon';
   template: `
     <aside class="sidebar" [class.open]="mobileOpen()">
       <div class="brand">
-        <span class="brand-mark">j</span><span>Job<span class="x">x</span></span>
+        <span class="brand-mark">j</span><span>Job<span class="x">X</span></span>
       </div>
 
       <nav class="nav">

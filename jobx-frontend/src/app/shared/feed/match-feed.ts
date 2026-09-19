@@ -51,13 +51,11 @@ const EMPTY_TITLE: Record<StatusFilter, string> = {
   ],
   template: `
     <app-feed-toolbar
-      [query]="feed.query()"
       [status]="feed.status()"
       [sort]="feed.sort()"
       [grouped]="feed.grouped()"
       [groupOrder]="feed.groupOrder()"
       [counts]="feed.statusCounts()"
-      (queryChange)="feed.setQuery($event)"
       (statusChange)="feed.setStatusFilter($event)"
       (sortChange)="feed.setSort($event)"
       (groupedChange)="feed.setGrouped($event)"

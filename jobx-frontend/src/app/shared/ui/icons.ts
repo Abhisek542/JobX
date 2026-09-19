@@ -133,4 +133,15 @@ export const ICONS = {
     { k: 'polyline', points: '2 17 12 22 22 17' },
     { k: 'polyline', points: '2 12 12 17 22 12' },
   ],
+  // Sign-in hero (docs/newui-dark-redesign-mockup.html).
+  'arrow-right': [{ k: 'path', d: 'M5 12h14M13 6l6 6-6 6' }],
+  shield: [
+    { k: 'path', d: 'M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z' },
+    { k: 'path', d: 'm9 12 2 2 4-4' },
+  ],
+  sparkle: [{ k: 'path', d: 'M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6' }],
+  trend: [
+    { k: 'path', d: 'M3 17l6-6 4 4 8-8' },
+    { k: 'path', d: 'M15 7h6v6' },
+  ],
 } as const satisfies Record<string, readonly IconShape[]>;

@@ -435,6 +435,26 @@ location, experience range).
 
 ## UI reference (updated 2026-08-22 — supersedes the 2026-08-02 image reference, DECIDED)
 
+**Superseded visually 2026-09-20 — the violet redesign.** The app's look now follows
+`jobx-frontend/docs/newui-dark-redesign-mockup.html` (modelled on
+`jobx-backend/docs/newUi/newUi.png`). It is a **reskin only**: no backend change, no
+functional change, and every honesty constraint below still holds. The layout, states and
+behaviour described in the rest of this section are unchanged, except for these points:
+- **Tokens:** all colours are still tokens in `_tokens.scss`, with the same names. The values
+  are now the violet palette. The new tokens are `--brand-grad`, `--btn-glow`, `--bg-glow`,
+  `--info`/`--info-wash`, `--card-fill`, `--chrome`, `--scrim` and `--hero-*`.
+- **Top bar:** the action bar is now a top bar with theme toggle · Add company · the account
+  (initials, name, email). The **feed search moved from the feed toolbar into the top bar,
+  on Dashboard and Matches only** (`<app-action-bar [search]="true">`). It is bound to the
+  same `FeedStore.query()`/`setQuery()`. The page title renders as a `.page-head` below the bar.
+- **Card primary action:** "View details" is the card's violet primary button. It is the same
+  element and handler (`.act.details`).
+- **Login and register:** both sit in a landing hero (`shared/ui/auth-hero.ts`) with the
+  email + password form as one bar. They use the same form logic, validation and banners.
+  The hero stats are product facts only.
+- **Default theme:** still follows the OS until the user toggles (user decision). Both
+  themes are violet.
+
 **The canonical mockup is committed code again, not a static image.** The approved
 visual spec is `jobx-frontend/docs/jobx-focused-feed-mockup.html`, and it is
 **frozen** — do not edit it to match the app. It supersedes the `MockUp` image this
