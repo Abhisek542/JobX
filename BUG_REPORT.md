@@ -385,7 +385,7 @@ parameter all answer `500 {"code":"internal_error"}` and log a stack trace at ER
 
 ---
 
-## 8.  " (Low)
+## 8. Malformed `Location` header becomes a 500 (Low)
 
 > **Fixed 2026-09-19** (branch `task/location-header`). The resolve now goes through a new
 > package-private `SafeUrlFetcher.nextHop(URI, String)`, which answers empty instead of
