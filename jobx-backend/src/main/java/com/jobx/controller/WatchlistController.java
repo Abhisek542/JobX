@@ -226,6 +226,15 @@ public class WatchlistController {
 
         FetchScheduler.FetchResult result = fetchScheduler.fetchCompany(company, user);
 
+        // The board is mid-fetch right now (the cycle, or another watcher's
+        // click). That fetch scores for this user too, so "checked just now" is
+        // true — same 200-with-zeros as the shared cooldown above. Whatever it
+        // finds reaches the feed on its next load.
+        if (result.inProgress()) {
+            return new ManualFetchResponse(watch.getId(), company.getDisplayName(),
+                    Instant.now(), 0, 0);
+        }
+
         // Don't dress a failed fetch up as "no new roles" — the attempt is already
         // recorded as FAILED (its own transaction, committed), so say so.
         if (result.failed()) {

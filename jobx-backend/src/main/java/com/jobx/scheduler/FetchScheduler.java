@@ -23,6 +23,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Core polling loop — the engine of Jobx Discovery.
@@ -53,6 +55,14 @@ public class FetchScheduler {
     private final ObjectProvider<FetchScheduler> self;
     /** Same property JobRetentionSweeper reads, so the two can never disagree. */
     private final int ttlDays;
+    /**
+     * Companies with a fetch running right now — the per-board lock. JVM-local
+     * on purpose: a Postgres advisory lock would have to hold a pool connection
+     * across the outbound fetch, which is exactly BUG_REPORT #6. The app is
+     * single-instance (RateLimitFilter makes the same assumption); running more
+     * than one instance would need a distributed lock here.
+     */
+    private final Set<UUID> inFlight = ConcurrentHashMap.newKeySet();
 
     public FetchScheduler(CompanyRepository companyRepository,
                           JobRepository jobRepository,
@@ -78,16 +88,25 @@ public class FetchScheduler {
      *
      * failed distinguishes "the board had nothing new" from "we could not reach
      * the board" — without it both look like newJobs == 0.
+     *
+     * inProgress means this call did nothing because another fetch of the same
+     * board (the cycle, or another watcher's "Check now") was already running.
+     * That fetch stores and scores for every ACTIVE watcher, so the caller loses
+     * nothing by not running a second one.
      */
-    public record FetchResult(int newJobs, int newMatchesForOwner, boolean failed) {
-        public static final FetchResult EMPTY = new FetchResult(0, 0, false);
+    public record FetchResult(int newJobs, int newMatchesForOwner, boolean failed, boolean inProgress) {
+        public static final FetchResult EMPTY = new FetchResult(0, 0, false, false);
 
         public static FetchResult success(int newJobs, int newMatchesForOwner) {
-            return new FetchResult(newJobs, newMatchesForOwner, false);
+            return new FetchResult(newJobs, newMatchesForOwner, false, false);
         }
 
         public static FetchResult failure() {
-            return new FetchResult(0, 0, true);
+            return new FetchResult(0, 0, true, false);
+        }
+
+        public static FetchResult alreadyRunning() {
+            return new FetchResult(0, 0, false, true);
         }
     }
 
@@ -138,6 +157,24 @@ public class FetchScheduler {
      *                  count THEIR new matches; null from the scheduled cycle.
      */
     public FetchResult fetchCompany(Company company, User requester) {
+        // One fetch per board at a time (BUG_REPORT #11). Without this, "Check
+        // now" landing mid-cycle — or two watchers clicking together — ran two
+        // fetches off the same pre-fetch dedup set; the loser tripped
+        // UNIQUE (company_id, external_id) and rolled back its whole board.
+        // A try-lock, not a wait: the running fetch already stores and scores
+        // for every ACTIVE watcher, so a second one would only repeat it.
+        if (!inFlight.add(company.getId())) {
+            log.info("{} is already being fetched — skipping", company.getDisplayName());
+            return FetchResult.alreadyRunning();
+        }
+        try {
+            return fetchLocked(company, requester);
+        } finally {
+            inFlight.remove(company.getId());
+        }
+    }
+
+    private FetchResult fetchLocked(Company company, User requester) {
         Optional<AtsFetcher> fetcher = fetcherRegistry.getFetcher(company.getAtsPlatform());
 
         if (fetcher.isEmpty()) {
@@ -188,12 +225,13 @@ public class FetchScheduler {
         Set<String> known = filter.knownIds();
 
         // Re-read stored ids now that the fetch is done. The set was taken
-        // before it, and a Workable board's detail calls can take seconds — long
-        // enough for a concurrent "Check now" or cycle to store the same posting.
-        // Without this the save loop would miss that row and trip
-        // UNIQUE (company_id, external_id), rolling back this whole board (see
-        // BUG_REPORT #11, which a lock still needs to close). One query, not one
-        // per posting. Tombstones only change in the daily sweep, so they stay.
+        // before it, and a Workable board's detail calls can take seconds. The
+        // per-board lock in fetchCompany keeps a second fetch of this board out
+        // of this JVM (BUG_REPORT #11); this re-read is the cheap fallback for
+        // anything the lock can't see, so a row stored meanwhile is skipped
+        // instead of tripping UNIQUE (company_id, external_id) and rolling back
+        // this whole board. One query, not one per posting. Tombstones only
+        // change in the daily sweep, so they stay.
         known.addAll(jobRepository.findExternalIdsByCompany(company));
 
         int newCount = 0;
