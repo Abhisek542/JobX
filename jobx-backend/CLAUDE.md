@@ -633,6 +633,63 @@ the `Exception.class` catch-all.
   advice prove the mapping but not that the exception ever reaches it, which was the bug. It
   cannot reach `NoResourceFoundException` (standalone registers no resource handler) or
   anything behind Spring Security; those were checked live.
+**FIXED (2026-09-19): no DB connection is held across an outbound HTTP call (BUG_REPORT #6).**
+Ten concurrent add-company resolves took the whole default Hikari pool (10) for ~13 s each and
+stalled every other request. Four sites, not the two the report named:
+- **`CompanyResolver.resolve` and `previewCatalog`** drop `@Transactional(readOnly = true)`.
+  Both reach the network (a careers-page fetch, the 9 s probe budget, a `previewBoard` per
+  candidate) and neither writes anything — the class comment already said so. **`search` keeps
+  its transaction**: it is network-free by design and must stay that way, since the typeahead
+  fires it on every keystroke.
+- **`WatchlistController.add`** drops `@Transactional`. Its two writes moved to a new
+  `service/WatchlistService` (`createCompany`, `watchAndBackfill`), so `validateBoard`'s ATS
+  round trip runs between them with nothing open. The add is no longer atomic — a company row
+  created for a brand-new board survives a failed watch insert — which is harmless under the V4
+  rule that orphan companies are kept and skipped. One win from the split: the loser of the
+  `(ats_platform, board_token)` race can now **join the winner's row** instead of failing,
+  because the insert's transaction is over by the time the violation surfaces.
+- **`FetchScheduler.fetchCompany`** was the worst offender and was not in the report: it held a
+  connection for the entire board fetch — minutes on a Bosch-sized SmartRecruiters board — on
+  the scheduler *and* on "Check now". It is now the orchestrator (dedup reads, fetch, nothing
+  held) and the writes live in `@Transactional persistFetched` / `markFailed`, reached through
+  the existing `ObjectProvider<FetchScheduler>` proxy. `persistFetched` keeps the post-fetch id
+  re-read and stamps health in the same transaction, so per-board all-or-nothing is unchanged.
+  `fetchAllCompanies` now calls `fetchCompany` directly; the proxy hop moved one level down.
+  BUG_REPORT #11 is untouched — the race window is if anything shorter.
+
+**The half of this that is invisible in the code.** Spring's Hibernate adapter defaults to
+`DELAYED_ACQUISITION_AND_HOLD`, so a session grabs a connection at its first query and keeps it
+until the session closes. `open-in-view` is on (`GET /matches` needs it for lazy `job.company`),
+so that means the whole request — and removing `@Transactional` changed **nothing**: the first
+catalog query still pinned a connection for the full 15 s resolve. `application.yml` now sets
+`hibernate.connection.handling_mode: DELAYED_ACQUISITION_AND_RELEASE_AFTER_TRANSACTION`, which
+is what actually frees the pool; lazy loading through open-in-view still works, the session just
+reacquires. Anyone tempted to "simplify" that property away should re-run the check below first.
+
+Also added: `spring.datasource.hikari.leak-detection-threshold: 10000` and an explicit
+`maximum-pool-size: 10`. **The tripwire is what caught the above** — the first fixed build
+logged ten `Apparent connection leak` warnings, one per resolve, pointing straight at
+`CompanyResolver.searchCatalog`. Keep it; if a very large `persistFetched` ever trips it, raise
+it to 30000 rather than deleting it.
+
+Live-verified against the dev Postgres by running the pre-fix build (a temporary worktree at
+HEAD) and the fixed build side by side, ten concurrent resolves of a careers URL that stalls
+(~13 s each) while polling `GET /watchlist` continuously:
+
+| | polls in the window | slowest poll |
+|---|---|---|
+| pre-fix | 11 | **11,816 ms** (blocked on the pool) |
+| fixed | 73 | 174 ms |
+
+Also confirmed live on the fixed build: a full 12-board fetch cycle with **zero** leak warnings;
+a typo'd SmartRecruiters token still 400s with no company row left behind; a brand-new board
+201s and its first "Check now" stored 4 jobs; a second check inside the shared cooldown returned
+200-with-zeros; duplicate watch 409; profile save rescored and watch-add backfilled; `GET
+/matches` still resolves lazy `job.company`. Every row created for this was deleted afterwards.
+Tests 240 → 243: ordering cases (`InOrder`) proving the ATS call precedes the first write in
+both `WatchlistControllerSharedCompanyTest` and `FetchSchedulerSharedJobsTest`, plus the
+create-race join. There are no Spring-context tests in this suite, so ordering is the most a
+unit test can pin here — the pool behaviour itself has to be checked live, as above.
 
 **CURRENT FOCUS (2026-09-06): nothing is mid-flight.** Add-company resolution is
 done and live-verified (above), as are the feed-reload fix, the six-day job TTL
