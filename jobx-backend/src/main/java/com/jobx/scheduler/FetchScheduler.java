@@ -49,7 +49,7 @@ public class FetchScheduler {
     private final ExpiredJobRepository expiredJobRepository;
     private final FetcherRegistry fetcherRegistry;
     private final MatchingService matchingService;
-    /** Own proxy, so fetchAllCompanies gets a real transaction per company. */
+    /** Own proxy, so fetchCompany's writes get real transactions of their own. */
     private final ObjectProvider<FetchScheduler> self;
     /** Same property JobRetentionSweeper reads, so the two can never disagree. */
     private final int ttlDays;
@@ -92,10 +92,10 @@ public class FetchScheduler {
     }
 
     /**
-     * Deliberately NOT @Transactional: each company gets its own transaction via
-     * the proxy below, so a failure partway through one company can't roll back
-     * the companies already processed, and a long cycle doesn't hold a single DB
-     * connection open across every outbound ATS call.
+     * Deliberately NOT @Transactional: each company's writes commit on their own
+     * (see fetchCompany below), so a failure partway through one company can't
+     * roll back the companies already processed, and a long cycle doesn't hold a
+     * single DB connection open across every outbound ATS call.
      */
     @Scheduled(fixedDelayString = "${jobx.fetch.interval-ms:1800000}") // 30min default
     public void fetchAllCompanies() {
@@ -105,9 +105,10 @@ public class FetchScheduler {
 
         for (Company company : companies) {
             try {
-                // Through the proxy, not this.fetchCompany(...) — self-invocation
-                // would skip @Transactional and put us back in one big transaction.
-                self.getObject().fetchCompany(company, null);
+                // fetchCompany is not transactional itself — its writes are — so
+                // the per-company isolation this loop needs comes from that split
+                // rather than from a proxy hop. A direct call is correct here.
+                fetchCompany(company, null);
             } catch (Exception e) {
                 // Belt-and-braces: fetchCompany already converts board failures
                 // into FAILED health. This catches anything else (a DB error mid
@@ -124,18 +125,25 @@ public class FetchScheduler {
     /**
      * Fetch one company now — shared by the scheduled cycle above and the
      * manual POST /watchlist/{id}/fetch endpoint (same dedup + scoring flow).
-     * One transaction per company, whether called from the cycle or the endpoint.
+     *
+     * Deliberately NOT @Transactional. A board fetch is outbound HTTP, and on
+     * Workable or SmartRecruiters it pays a detail call per posting, so a
+     * transaction spanning it held one of the ten pool connections for minutes
+     * at a time — BUG_REPORT #6. Instead the dedup sets are two plain reads, the
+     * fetch itself holds nothing, and every write lands in one short transaction
+     * below. Those go through the proxy: self-invocation would skip
+     * @Transactional, the same trap fetchAllCompanies documents.
      *
      * @param requester the user behind a manual "Check now", so the result can
      *                  count THEIR new matches; null from the scheduled cycle.
      */
-    @Transactional
     public FetchResult fetchCompany(Company company, User requester) {
         Optional<AtsFetcher> fetcher = fetcherRegistry.getFetcher(company.getAtsPlatform());
 
         if (fetcher.isEmpty()) {
             log.warn("No fetcher for {} ({})", company.getDisplayName(), company.getAtsPlatform());
-            return recordFailure(company, "no fetcher for platform " + company.getAtsPlatform());
+            return self.getObject().markFailed(company,
+                    "no fetcher for platform " + company.getAtsPlatform());
         }
 
         // Everything this board already has, loaded BEFORE the fetch and handed
@@ -159,14 +167,27 @@ public class FetchScheduler {
             fetchedJobs = fetcher.get().fetch(company, filter);
         } catch (Exception e) {
             // The board is unreachable or unintelligible. Record it as FAILED and
-            // return normally: nothing has been written yet, so the transaction is
-            // clean, and the caller/cycle carries on.
+            // return normally: nothing has been written yet, so there is no
+            // half-done work to undo, and the caller/cycle carries on.
             log.error("Fetch failed for {} ({}): {}",
                     company.getDisplayName(), company.getAtsPlatform(), e.getMessage(), e);
-            return recordFailure(company, summarize(e));
+            return self.getObject().markFailed(company, summarize(e));
         }
 
-        // Re-read stored ids now that the fetch is done. The set above was taken
+        return self.getObject().persistFetched(company, requester, filter, fetchedJobs);
+    }
+
+    /**
+     * Everything the fetch produced, in one short transaction: the new jobs,
+     * their matches and the health stamp commit together or not at all —
+     * exactly as they did when the fetch itself was still inside it.
+     */
+    @Transactional
+    public FetchResult persistFetched(Company company, User requester,
+                                      FetchFilter filter, List<Job> fetchedJobs) {
+        Set<String> known = filter.knownIds();
+
+        // Re-read stored ids now that the fetch is done. The set was taken
         // before it, and a Workable board's detail calls can take seconds — long
         // enough for a concurrent "Check now" or cycle to store the same posting.
         // Without this the save loop would miss that row and trip
@@ -219,8 +240,12 @@ public class FetchScheduler {
      * Stamp a failed attempt. lastFetchedAt still moves so the manual-fetch
      * cooldown applies to failures too — a broken board must not become a way to
      * hammer an ATS by holding down "Check now".
+     *
+     * Public and transactional because fetchCompany is neither: it reaches this
+     * through the proxy, so the stamp still gets a real transaction of its own.
      */
-    private FetchResult recordFailure(Company company, String error) {
+    @Transactional
+    public FetchResult markFailed(Company company, String error) {
         company.setLastFetchedAt(Instant.now());
         company.setLastFetchStatus(Company.FetchStatus.FAILED);
         company.setLastFetchError(error);

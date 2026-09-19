@@ -13,6 +13,17 @@ spring:
     username: jobx
     password: jobx
     driver-class-name: org.postgresql.Driver
+    hikari:
+      # Stated rather than left implicit: ten is the whole budget, and it is the
+      # number that made BUG_REPORT #6 bite — ten concurrent add-company resolves
+      # each holding a connection across a ~20s outbound call stalled everything.
+      maximum-pool-size: 10
+      # The tripwire for that bug coming back. Any connection held longer than
+      # this logs a stack trace naming the holder, so "a transaction wrapped an
+      # HTTP call again" is loud instead of silent. If a Bosch-sized persist
+      # legitimately trips it, raise this to 30000 rather than removing it — a
+      # write transaction over ten seconds is itself worth seeing.
+      leak-detection-threshold: 10000
 
   jpa:
     hibernate:
@@ -22,6 +33,21 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
+        connection:
+          # Half of the BUG_REPORT #6 fix, and the half that is invisible in the
+          # code. Spring's Hibernate adapter defaults to a HOLD handling mode:
+          # the session takes a connection at its first query and keeps it until
+          # the session closes. open-in-view is on (GET /matches needs it for
+          # lazy job.company), so "the session" means the whole request — which
+          # made dropping @Transactional from CompanyResolver.resolve do nothing
+          # at all. The first catalog query still pinned a connection for the
+          # whole 15s resolve; the Hikari leak detector below is what caught it.
+          #
+          # RELEASE_AFTER_TRANSACTION hands the connection back after each
+          # transaction, and after each statement when there is no transaction,
+          # so a request only holds one while it is actually using the database.
+          # Lazy loading through open-in-view still works: the session reacquires.
+          handling_mode: DELAYED_ACQUISITION_AND_RELEASE_AFTER_TRANSACTION
 
   flyway:
     enabled: true

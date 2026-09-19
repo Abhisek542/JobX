@@ -12,7 +12,7 @@ import com.jobx.repository.WatchedCompanyRepository;
 import com.jobx.fetcher.FetcherRegistry;
 import com.jobx.scheduler.FetchScheduler;
 import com.jobx.resolve.CompanyResolver;
-import com.jobx.service.MatchingService;
+import com.jobx.service.WatchlistService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.server.ResponseStatusException;
@@ -54,7 +54,7 @@ class WatchlistControllerFetchTest {
         FetcherRegistry fetcherRegistry = mock(FetcherRegistry.class);
         when(fetcherRegistry.getFetcher(any())).thenReturn(Optional.empty());
         controller = new WatchlistController(repository, mock(CompanyRepository.class),
-                mock(MatchRepository.class), mock(MatchingService.class),
+                mock(MatchRepository.class), mock(WatchlistService.class),
                 fetchScheduler, fetcherRegistry, mock(CompanyResolver.class),
                 mock(UnsupportedBoardRequestRepository.class), COOLDOWN_MS);
 

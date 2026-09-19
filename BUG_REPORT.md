@@ -14,6 +14,8 @@ status, login timing, N+1 on the feed) are excluded. Fixed items are marked **Fi
 | 4 | Medium | Backend | Experience penalty never fires for open-ended ranges ("5+ years") |
 | 5 | Medium | Frontend | **Fixed 2026-09-13** — Typeahead pick shows "0 open roles" and a blank board link |
 | 6 | Medium | Backend | Long outbound HTTP calls run inside DB transactions |
+| 7 | Medium | Backend | **Fixed 2026-09-19** — Framework exceptions (404 path, 405 method, missing param) become 500 |
+| 6 | Medium | Backend | **Fixed 2026-09-19** — Long outbound HTTP calls run inside DB transactions |
 | 7 | Medium | Backend | Framework exceptions (404 path, 405 method, missing param) become 500 |
 | 8 | Low | Backend | **Fixed 2026-09-19** — Malformed `Location` header on a careers site becomes a 500 |
 | 9 | Low | Frontend | `?next=` deep link is set by the guard but ignored by the login page |
@@ -323,6 +325,29 @@ chec
 
 ## 6. Long outbound HTTP calls run inside DB transactions (Medium)
 
+> **Fixed 2026-09-19** (branch `task/long-outbound-http-calls`). No DB connection is held
+> across an outbound HTTP call any more. Four sites, not the two reported:
+> `CompanyResolver.resolve` and `previewCatalog` simply lose `@Transactional(readOnly = true)`
+> (`search` keeps it — it is network-free by design); `WatchlistController.add` loses
+> `@Transactional` and its two writes move to a new `WatchlistService`, so `validateBoard`'s ATS
+> round trip runs between them with nothing open; and `FetchScheduler.fetchCompany` — the worst
+> offender, unreported, which held a connection for the whole board fetch on both the scheduler
+> and "Check now" — splits into dedup reads, the fetch, and one short `persistFetched`
+> transaction.
+>
+> **Dropping `@Transactional` was only half of it.** Spring's Hibernate adapter defaults to
+> `DELAYED_ACQUISITION_AND_HOLD`, so with `open-in-view` on (and `GET /matches` needs it) the
+> session pinned a connection from its first query to the end of the request, transaction or
+> not. `hibernate.connection.handling_mode: DELAYED_ACQUISITION_AND_RELEASE_AFTER_TRANSACTION`
+> is what actually frees the pool. A Hikari `leak-detection-threshold` was added as the tripwire
+> and is what caught this: the first fixed build still logged ten leaks, one per resolve.
+>
+> Live-verified against the dev Postgres, ten concurrent resolves on a careers URL that stalls
+> (~13 s each), polling `GET /watchlist` throughout. Pre-fix: 11 polls landed in the window and
+> one blocked **11,816 ms** waiting for a connection. Post-fix: **73 polls, none over 174 ms**,
+> and a full 12-board fetch cycle ran with zero leak warnings. Tests 240 → 243. The text below
+> is the original report.
+
 **Symptom.** Ten concurrent add-company resolves hold the whole default Hikari pool (10
 connections) for up to ~20 s each, stalling every other request and the fetch scheduler.
 
@@ -363,6 +388,45 @@ persistence into a small `@Transactional` service method).
 ---
 
 ## 7. Framework exceptions become 500 (Medium)
+
+> **Fixed 2026-09-19** (branch `task/error-500`). `GlobalExceptionHandler` gained
+> `handleFrameworkRejection`, one method mapped to `NoResourceFoundException`,
+> `NoHandlerFoundException`, `HttpRequestMethodNotSupportedException`,
+> `HttpMediaTypeNotSupportedException`, `HttpMediaTypeNotAcceptableException` and
+> `ServletRequestBindingException`. Its parameter is typed `ErrorResponse` — the interface all
+> six implement — so the status and the response headers are read off the exception rather
+> than re-derived; that is what puts `Allow: POST` on the 405 and `Accept: application/json`
+> on the 415. The annotation still lists concrete classes, because its `value()` is
+> `Class<? extends Throwable>[]` and an interface is not a `Throwable`. Both 404 shapes are
+> listed so the contract no longer depends on `spring.web.resources.add-mappings`; no
+> property was changed. Details are fixed strings: `NoResourceFoundException.getMessage()` is
+> "No static resource watchlist/nope.", which echoes the caller's path and advertises an
+> internal dispatch detail that means nothing for a JSON API. These log one WARN line with
+> method, path, status and code, and no stack trace — `log.error("Unhandled exception", ex)`
+> no longer fires for them. `MissingPathVariableException` is mapped separately back to the
+> 500 path, because Spring types it 500 for a reason: it means our own routing is wrong, and
+> it should keep its trace.
+>
+> **Deliberately unchanged:** an unknown path still returns **401**, not 404, for an anonymous
+> caller. `anyRequest().authenticated()` means the entry point answers before the dispatcher
+> ever runs. Changing that would need the filter chain to second-guess which routes exist, and
+> would turn the 401/404 split into an endpoint-enumeration oracle for unauthenticated
+> scanners. The fix covers authenticated callers and everything under `/auth/**` —
+> `GET /auth/login` (405) reproduced anonymously and is fixed.
+>
+> Tests 240 → 253: nine cases in `GlobalExceptionHandlerTest`, plus
+> `GlobalExceptionHandlerWiringTest` — the suite's first MockMvc test — which proves the 405,
+> missing-param and 415 exceptions genuinely *reach* the advice, not merely that the mapping
+> is right. Standalone MockMvc registers no static resource handler, so its unmapped-path case
+> yields `NoHandlerFoundException`, not the production `NoResourceFoundException`; a
+> `@WebMvcTest` would cover that but would be the suite's first Spring context test, so that
+> one is pinned by a unit test on the real exception object plus the live run.
+> **Live-verified** against the dev database on a second port, with the pre-fix build still
+> running for comparison: unknown path authenticated 500 → 404 `not_found`, `GET /auth/login`
+> 500 → 405 with `Allow: POST`, a `text/plain` body → 415 with `Accept`, and the
+> 400 / 409 / validation / malformed paths byte-identical. Across the whole run the log had
+> zero ERROR lines, zero stack frames, and exactly one WARN per rejected request. The text
+> below is the original report.
 
 **Symptom.** An unknown path, a wrong HTTP method (`GET /auth/login`), or a missing query
 parameter all answer `500 {"code":"internal_error"}` and log a stack trace at ERROR instead of

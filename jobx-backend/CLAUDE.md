@@ -86,7 +86,16 @@ file is the adopted improvement scope — read it alongside this one):
   `{status, code, detail, fieldErrors?}` via `GlobalExceptionHandler`
   (`@RestControllerAdvice`); `@Valid` on all request DTOs (manual null/blank checks
   in controllers removed). The 401 entry point and the 429 limiter hand-write the
-  same JSON shape — keep them in sync if `ApiError` changes.
+  same JSON shape — keep them in sync if `ApiError` changes. Since 2026-09-19 the
+  advice also covers the exceptions Spring itself throws before a controller runs
+  (see the FIXED entry below). Two rules when editing it: **an exception class may
+  appear in exactly one `@ExceptionHandler` list here** — a duplicate is an
+  `IllegalStateException: Ambiguous @ExceptionHandler method mapped for …` at context
+  refresh, which is also why this advice must never extend
+  `ResponseEntityExceptionHandler` (its `handleException` already claims
+  `MethodArgumentNotValidException` and `HttpMessageNotReadableException`) — and an
+  unknown path returns **401, not 404, for an anonymous caller** on purpose; don't
+  "fix" it.
 - **Prod safety**: `spring.profiles.default: dev`. Outside the `dev` profile,
   `JwtService` refuses to start on a missing/default `JOBX_JWT_SECRET`;
   `DevController` is `@Profile("dev")` and `/dev/**` is only permitAll in dev
@@ -616,6 +625,97 @@ have found the board anyway.
   inheriting https, absolute, query+fragment, percent-encoded space, surrounding
   whitespace) in `SafeUrlFetcherTest`. **Not covered by a test:** the `hop != 0` branch,
   which needs a server that actually redirects — verified by inspection only.
+**FIXED (2026-09-19): framework exceptions answered 500 (BUG_REPORT #7).** An unknown path,
+a wrong method (`GET /auth/login`) or a missing request value all returned
+`500 internal_error` with an ERROR-level stack trace, because `GlobalExceptionHandler` is a
+plain advice and every exception Spring throws before or instead of a controller fell into
+the `Exception.class` catch-all.
+- One new method, `handleFrameworkRejection`, mapped to `NoResourceFoundException`,
+  `NoHandlerFoundException`, `HttpRequestMethodNotSupportedException`,
+  `HttpMediaTypeNotSupportedException`, `HttpMediaTypeNotAcceptableException` and
+  `ServletRequestBindingException`. Its **parameter is typed `ErrorResponse`** (the interface
+  all six implement), so status and response headers are read off the exception instead of
+  re-derived — that is what puts `Allow: POST` on a 405 and `Accept: application/json` on a
+  415. Spring binds the exception into a non-`Throwable` parameter via `Class.isInstance`
+  (`AnnotatedMethod.findProvidedArgument`), but the annotation must still list concrete
+  classes: its `value()` is `Class<? extends Throwable>[]`.
+- Both 404 shapes are listed so the contract doesn't depend on
+  `spring.web.resources.add-mappings` (resource handler on → `NoResourceFoundException`, off
+  → `NoHandlerFoundException`). **No property in `application.yml` was changed**, and
+  `spring.mvc.throw-exception-if-no-handler-found` is already `true` by default in Boot 3.2 —
+  don't add it.
+- Details are fixed strings, never `ex.getMessage()`:
+  `NoResourceFoundException.getMessage()` is "No static resource watchlist/nope.", which
+  reflects the caller's path back and names an internal dispatch detail.
+- Rejections log **one WARN line** (method, path, status, code) with no `Throwable` argument,
+  so no stack trace. `MissingPathVariableException` is carved back out to the 500 path on
+  purpose — Spring types it 500 because it means *our* routing is wrong, and it should keep
+  its trace.
+- Nothing shadows the existing handlers: `HttpMessageNotReadableException` and
+  `MethodArgumentTypeMismatchException` aren't `ErrorResponse`s and aren't subclasses of
+  anything listed, and `ExceptionDepthComparator` walks superclasses only.
+- Tests 240 → 253. `GlobalExceptionHandlerWiringTest` is the **first MockMvc test in the
+  backend suite** (standalone setup, no Spring context) — it exists because unit tests on the
+  advice prove the mapping but not that the exception ever reaches it, which was the bug. It
+  cannot reach `NoResourceFoundException` (standalone registers no resource handler) or
+  anything behind Spring Security; those were checked live.
+**FIXED (2026-09-19): no DB connection is held across an outbound HTTP call (BUG_REPORT #6).**
+Ten concurrent add-company resolves took the whole default Hikari pool (10) for ~13 s each and
+stalled every other request. Four sites, not the two the report named:
+- **`CompanyResolver.resolve` and `previewCatalog`** drop `@Transactional(readOnly = true)`.
+  Both reach the network (a careers-page fetch, the 9 s probe budget, a `previewBoard` per
+  candidate) and neither writes anything — the class comment already said so. **`search` keeps
+  its transaction**: it is network-free by design and must stay that way, since the typeahead
+  fires it on every keystroke.
+- **`WatchlistController.add`** drops `@Transactional`. Its two writes moved to a new
+  `service/WatchlistService` (`createCompany`, `watchAndBackfill`), so `validateBoard`'s ATS
+  round trip runs between them with nothing open. The add is no longer atomic — a company row
+  created for a brand-new board survives a failed watch insert — which is harmless under the V4
+  rule that orphan companies are kept and skipped. One win from the split: the loser of the
+  `(ats_platform, board_token)` race can now **join the winner's row** instead of failing,
+  because the insert's transaction is over by the time the violation surfaces.
+- **`FetchScheduler.fetchCompany`** was the worst offender and was not in the report: it held a
+  connection for the entire board fetch — minutes on a Bosch-sized SmartRecruiters board — on
+  the scheduler *and* on "Check now". It is now the orchestrator (dedup reads, fetch, nothing
+  held) and the writes live in `@Transactional persistFetched` / `markFailed`, reached through
+  the existing `ObjectProvider<FetchScheduler>` proxy. `persistFetched` keeps the post-fetch id
+  re-read and stamps health in the same transaction, so per-board all-or-nothing is unchanged.
+  `fetchAllCompanies` now calls `fetchCompany` directly; the proxy hop moved one level down.
+  BUG_REPORT #11 is untouched — the race window is if anything shorter.
+
+**The half of this that is invisible in the code.** Spring's Hibernate adapter defaults to
+`DELAYED_ACQUISITION_AND_HOLD`, so a session grabs a connection at its first query and keeps it
+until the session closes. `open-in-view` is on (`GET /matches` needs it for lazy `job.company`),
+so that means the whole request — and removing `@Transactional` changed **nothing**: the first
+catalog query still pinned a connection for the full 15 s resolve. `application.yml` now sets
+`hibernate.connection.handling_mode: DELAYED_ACQUISITION_AND_RELEASE_AFTER_TRANSACTION`, which
+is what actually frees the pool; lazy loading through open-in-view still works, the session just
+reacquires. Anyone tempted to "simplify" that property away should re-run the check below first.
+
+Also added: `spring.datasource.hikari.leak-detection-threshold: 10000` and an explicit
+`maximum-pool-size: 10`. **The tripwire is what caught the above** — the first fixed build
+logged ten `Apparent connection leak` warnings, one per resolve, pointing straight at
+`CompanyResolver.searchCatalog`. Keep it; if a very large `persistFetched` ever trips it, raise
+it to 30000 rather than deleting it.
+
+Live-verified against the dev Postgres by running the pre-fix build (a temporary worktree at
+HEAD) and the fixed build side by side, ten concurrent resolves of a careers URL that stalls
+(~13 s each) while polling `GET /watchlist` continuously:
+
+| | polls in the window | slowest poll |
+|---|---|---|
+| pre-fix | 11 | **11,816 ms** (blocked on the pool) |
+| fixed | 73 | 174 ms |
+
+Also confirmed live on the fixed build: a full 12-board fetch cycle with **zero** leak warnings;
+a typo'd SmartRecruiters token still 400s with no company row left behind; a brand-new board
+201s and its first "Check now" stored 4 jobs; a second check inside the shared cooldown returned
+200-with-zeros; duplicate watch 409; profile save rescored and watch-add backfilled; `GET
+/matches` still resolves lazy `job.company`. Every row created for this was deleted afterwards.
+Tests 240 → 243: ordering cases (`InOrder`) proving the ATS call precedes the first write in
+both `WatchlistControllerSharedCompanyTest` and `FetchSchedulerSharedJobsTest`, plus the
+create-race join. There are no Spring-context tests in this suite, so ordering is the most a
+unit test can pin here — the pool behaviour itself has to be checked live, as above.
 
 **CURRENT FOCUS (2026-09-06): nothing is mid-flight.** Add-company resolution is
 done and live-verified (above), as are the feed-reload fix, the six-day job TTL
