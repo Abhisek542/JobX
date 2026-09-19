@@ -157,6 +157,22 @@ class WatchlistControllerFetchTest {
     }
 
     @Test
+    void boardAlreadyMidFetchReturns200WithZeros() {
+        // BUG_REPORT #11: the cycle (or another watcher) is fetching this board
+        // right now. That fetch scores for this user too, so this is "checked
+        // just now" — not a 409 from a unique-key race, and not a 502.
+        company.setLastFetchedAt(null);
+        when(fetchScheduler.fetchCompany(company, owner))
+                .thenReturn(FetchScheduler.FetchResult.alreadyRunning());
+
+        ManualFetchResponse response = controller.fetchNow(watch.getId(), owner);
+
+        assertEquals(0, response.newJobs());
+        assertEquals(0, response.newMatches());
+        assertNotNull(response.checkedAt());
+    }
+
+    @Test
     void anotherUsersCompanyIs404NotLeaked() {
         User stranger = new User();
         stranger.setId(UUID.randomUUID());
