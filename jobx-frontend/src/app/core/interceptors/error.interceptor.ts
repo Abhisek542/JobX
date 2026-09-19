@@ -27,7 +27,8 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
       const isAuthCall = req.url.includes('/auth/');
       if (error.status === 401 && !isAuthCall) {
         auth.clear();
-        void router.navigate(['/login'], { queryParams: { expired: 1 } });
+        // Keep the user's place: the login page returns them here after re-auth.
+        void router.navigate(['/login'], { queryParams: { expired: 1, next: router.url } });
       }
 
       return throwError(() => error);

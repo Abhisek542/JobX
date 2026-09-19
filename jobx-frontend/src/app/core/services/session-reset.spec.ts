@@ -1,8 +1,8 @@
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { provideRouter, Router } from '@angular/router';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FeedStore } from '../../features/dashboard/feed.store';
 import { authInterceptor } from '../interceptors/auth.interceptor';
 import { errorInterceptor } from '../interceptors/error.interceptor';
@@ -58,7 +58,10 @@ describe('sign-out resets every per-user store', () => {
         provideHttpClient(withInterceptors([authInterceptor, errorInterceptor])),
         provideHttpClientTesting(),
         // errorInterceptor navigates to /login on a 401; give it somewhere to land.
-        provideRouter([{ path: 'login', children: [] }]),
+        provideRouter([
+          { path: 'login', children: [] },
+          { path: 'watchlist', children: [] },
+        ]),
       ],
     });
     http = TestBed.inject(HttpTestingController);
@@ -162,6 +165,25 @@ describe('sign-out resets every per-user store', () => {
     expect(feed.error()).toBeNull();
     expect(feed.loading()).toBe(false);
     expect(feed.loaded()).toBe(false);
+  });
+
+  // BUG_REPORT.md #9: an expired session keeps the user's place for after re-login.
+  it('sends the 401 to /login with the current URL as ?next=', async () => {
+    const router = TestBed.inject(Router);
+    await router.navigateByUrl('/watchlist?tab=2');
+    const navigate = vi.spyOn(router, 'navigate');
+
+    TestBed.inject(FeedStore).load();
+    http
+      .expectOne(`${API}/matches`)
+      .flush(
+        { status: 401, code: 'UNAUTHORIZED', detail: 'Token expired' },
+        { status: 401, statusText: 'Unauthorized' },
+      );
+
+    expect(navigate).toHaveBeenCalledWith(['/login'], {
+      queryParams: { expired: 1, next: '/watchlist?tab=2' },
+    });
   });
 
   it('keeps the collapsed-sidebar device preference', () => {
