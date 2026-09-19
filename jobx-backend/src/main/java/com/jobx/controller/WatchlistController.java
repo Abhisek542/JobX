@@ -21,7 +21,7 @@ import com.jobx.repository.UnsupportedBoardRequestRepository;
 import com.jobx.repository.WatchedCompanyRepository;
 import com.jobx.resolve.CompanyResolver;
 import com.jobx.scheduler.FetchScheduler;
-import com.jobx.service.MatchingService;
+import com.jobx.service.WatchlistService;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -35,6 +35,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -61,7 +62,7 @@ public class WatchlistController {
     private final WatchedCompanyRepository watchedCompanyRepository;
     private final CompanyRepository companyRepository;
     private final MatchRepository matchRepository;
-    private final MatchingService matchingService;
+    private final WatchlistService watchlistService;
     private final FetchScheduler fetchScheduler;
     private final FetcherRegistry fetcherRegistry;
     private final CompanyResolver companyResolver;
@@ -71,7 +72,7 @@ public class WatchlistController {
     public WatchlistController(WatchedCompanyRepository watchedCompanyRepository,
                                CompanyRepository companyRepository,
                                MatchRepository matchRepository,
-                               MatchingService matchingService,
+                               WatchlistService watchlistService,
                                FetchScheduler fetchScheduler,
                                FetcherRegistry fetcherRegistry,
                                CompanyResolver companyResolver,
@@ -80,7 +81,7 @@ public class WatchlistController {
         this.watchedCompanyRepository = watchedCompanyRepository;
         this.companyRepository = companyRepository;
         this.matchRepository = matchRepository;
-        this.matchingService = matchingService;
+        this.watchlistService = watchlistService;
         this.fetchScheduler = fetchScheduler;
         this.fetcherRegistry = fetcherRegistry;
         this.companyResolver = companyResolver;
@@ -161,33 +162,24 @@ public class WatchlistController {
                 request.query(), request.platformHint());
     }
 
+    /**
+     * Deliberately NOT @Transactional. getOrCreateCompany can make an ATS round
+     * trip (validateBoard) for a board nobody watches yet, and holding one of the
+     * ten pool connections across it is BUG_REPORT #6. Both writes below are short
+     * transactions of their own, in WatchlistService.
+     */
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @Transactional
     public WatchedCompanyResponse add(@AuthenticationPrincipal User user,
                                       @Valid @RequestBody WatchedCompanyRequest request) {
         Company company = getOrCreateCompany(request);
 
-        WatchedCompany watch = new WatchedCompany();
-        watch.setUser(user);
-        watch.setCompany(company);
-        // New watches start ACTIVE so FetchScheduler picks the board up on the next 30-min cycle.
-        watch.setStatus(WatchedCompany.CompanyStatus.ACTIVE);
-
-        WatchedCompany saved;
         try {
-            saved = watchedCompanyRepository.saveAndFlush(watch);
+            return WatchedCompanyResponse.from(watchlistService.watchAndBackfill(user, company));
         } catch (DataIntegrityViolationException e) {
             // unique (user_id, company_id) constraint
             throw new ResponseStatusException(HttpStatus.CONFLICT, "already watching this company on this ATS");
         }
-
-        // Backfill: if the board already has jobs (someone else was watching it
-        // first), score them for this user now — without this, a second watcher's
-        // feed stays empty until the board posts something NEW.
-        matchingService.backfillForWatcher(user, company);
-
-        return WatchedCompanyResponse.from(saved);
     }
 
     @PatchMapping("/{id}")
@@ -269,36 +261,50 @@ public class WatchlistController {
      * typed names are discarded — one shared label, no cross-user leakage.
      */
     private Company getOrCreateCompany(WatchedCompanyRequest request) {
+        return findCompany(request).orElseGet(() -> {
+            Company company = new Company();
+            company.setAtsPlatform(request.atsPlatform());
+            company.setBoardToken(request.boardToken());
+            company.setDisplayName(request.companyName());
+
+            // Only for a board nobody watches yet: prove the token is real
+            // before it becomes a row. Most platforms 404 a bad token so their
+            // fetchers no-op here, but SmartRecruiters answers a nonsense
+            // company id with an empty 200 — without this check a typo would
+            // sit on the watchlist looking perfectly healthy and simply never
+            // produce a job.
+            //
+            // This is an ATS round trip, and it deliberately runs before any
+            // transaction is opened (BUG_REPORT #6).
+            validateBoard(company);
+
+            try {
+                return watchlistService.createCompany(company);
+            } catch (DataIntegrityViolationException e) {
+                // Two users adding the same brand-new board in the same instant:
+                // the loser trips UNIQUE (ats_platform, board_token). The insert
+                // is its own transaction now, so unlike the pre-split version we
+                // are not inside a rollback-only one here and can simply join the
+                // winner's row.
+                return findCompany(request).orElseThrow(() -> e);
+            }
+        });
+    }
+
+    /**
+     * Exact token first, then case-insensitively.
+     *
+     * Tokens are case-sensitive at the ATS but identify one board: Lever's is
+     * "Sprinto" and 404s as "sprinto". Without the fallback a user who typed the
+     * other casing would create a second companies row for the same board —
+     * reintroducing, one row at a time, exactly the duplicate jobs and duplicate
+     * matches that the V4 rework existed to remove.
+     */
+    private Optional<Company> findCompany(WatchedCompanyRequest request) {
         return companyRepository
                 .findByAtsPlatformAndBoardToken(request.atsPlatform(), request.boardToken())
-                // Tokens are case-sensitive at the ATS but identify one board: Lever's
-                // is "Sprinto" and 404s as "sprinto". Without this fallback a user who
-                // typed the other casing would create a second companies row for the
-                // same board — reintroducing, one row at a time, exactly the duplicate
-                // jobs and duplicate matches that the V4 rework existed to remove.
                 .or(() -> companyRepository.findByPlatformAndTokenIgnoreCase(
-                        request.atsPlatform(), request.boardToken()))
-                .orElseGet(() -> {
-                    Company company = new Company();
-                    company.setAtsPlatform(request.atsPlatform());
-                    company.setBoardToken(request.boardToken());
-                    company.setDisplayName(request.companyName());
-
-                    // Only for a board nobody watches yet: prove the token is
-                    // real before it becomes a row. Most platforms 404 a bad
-                    // token so their fetchers no-op here, but SmartRecruiters
-                    // answers a nonsense company id with an empty 200 — without
-                    // this check a typo would sit on the watchlist looking
-                    // perfectly healthy and simply never produce a job.
-                    validateBoard(company);
-
-                    // Two users adding the same brand-new board in the same
-                    // instant: the loser hits the (ats_platform, board_token)
-                    // unique constraint and the request fails — recovery inside
-                    // this transaction is impossible (flush failure marks it
-                    // rollback-only), and a retry simply joins the winner's row.
-                    return companyRepository.saveAndFlush(company);
-                });
+                        request.atsPlatform(), request.boardToken()));
     }
 
     /**

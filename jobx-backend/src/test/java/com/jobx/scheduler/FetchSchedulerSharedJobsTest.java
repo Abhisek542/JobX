@@ -14,6 +14,7 @@ import com.jobx.service.MatchingService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.springframework.beans.factory.ObjectProvider;
 
 import java.time.Duration;
@@ -89,6 +90,26 @@ class FetchSchedulerSharedJobsTest {
         // The fan-out happens exactly once, from the single shared row —
         // MatchingService owns per-watcher scoring
         verify(matchingService, times(1)).scoreForActiveWatchers(company, posting, null);
+    }
+
+    /**
+     * BUG_REPORT #6. The fetch is outbound HTTP — a detail call per posting on
+     * Workable and SmartRecruiters — and it must be over before the first write,
+     * because that is what lets it run with no transaction, and so no pool
+     * connection, held. Nothing here loads a Spring context, so the ordering is
+     * the part of that invariant a test can see; it is also the part that breaks
+     * first if the writes move back around the fetch.
+     */
+    @Test
+    void theBoardIsFetchedBeforeAnythingIsWritten() {
+        scheduler.fetchCompany(company, null);
+
+        InOrder inOrder = inOrder(jobRepository, fetcher, companyRepository);
+        inOrder.verify(jobRepository).findExternalIdsByCompany(company);   // dedup set
+        inOrder.verify(fetcher).fetch(eq(company), any());
+        inOrder.verify(jobRepository).findExternalIdsByCompany(company);   // post-fetch re-read
+        inOrder.verify(jobRepository).save(posting);
+        inOrder.verify(companyRepository).save(company);                   // health stamp
     }
 
     @Test
