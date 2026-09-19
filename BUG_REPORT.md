@@ -19,7 +19,7 @@ status, login timing, N+1 on the feed) are excluded. Fixed items are marked **Fi
 | 7 | Medium | Backend | Framework exceptions (404 path, 405 method, missing param) become 500 |
 | 8 | Low | Backend | **Fixed 2026-09-19** — Malformed `Location` header on a careers site becomes a 500 |
 | 9 | Low | Frontend | `?next=` deep link is set by the guard but ignored by the login page |
-| 10 | Low | Frontend | Copy says scores update "on the next check"; backend rescores immediately |
+| 10 | Low | Frontend | **Fixed 2026-09-20** — Copy says scores update "on the next check"; backend rescores immediately |
 | 11 | Low | Backend | No per-board lock between "Check now" and the scheduled cycle |
 | 12 | Low | Backend | `%` / `_` not escaped in the catalog search `LIKE` |
 
@@ -516,6 +516,12 @@ is a safe relative path, else `/dashboard`.
 ---
 
 ## 10. Copy says scores update "on the next check" (Low)
+
+> **Fixed 2026-09-20** (branch `task/score-next-check-problem`). The toast now reads
+> "Preferences saved · feed rescored". `AppShell.onPreferencesSaved` is gone, along with its
+> stale comment and the redundant forced `GET /profile/filter`. `FilterProfileStore.save()`
+> already sets the profile and reloads the feed. The modal's unused `saved` output was removed.
+> The frozen mockup still has the old string, which is expected.
 
 **Symptom.** After saving preferences the toast promises a future update, but
 `PUT /profile/filter` runs `MatchingService.rescoreForWatcher` synchronously and the feed is
