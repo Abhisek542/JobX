@@ -18,7 +18,7 @@ status, login timing, N+1 on the feed) are excluded. Fixed items are marked **Fi
 | 6 | Medium | Backend | **Fixed 2026-09-19** — Long outbound HTTP calls run inside DB transactions |
 | 7 | Medium | Backend | Framework exceptions (404 path, 405 method, missing param) become 500 |
 | 8 | Low | Backend | **Fixed 2026-09-19** — Malformed `Location` header on a careers site becomes a 500 |
-| 9 | Low | Frontend | `?next=` deep link is set by the guard but ignored by the login page |
+| 9 | Low | Frontend | **Fixed 2026-09-20** — `?next=` deep link is set by the guard but ignored by the login page |
 | 10 | Low | Frontend | Copy says scores update "on the next check"; backend rescores immediately |
 | 11 | Low | Backend | **Fixed 2026-09-20** — No per-board lock between "Check now" and the scheduled cycle |
 | 10 | Low | Frontend | **Fixed 2026-09-20** — Copy says scores update "on the next check"; backend rescores immediately |
@@ -497,6 +497,22 @@ matching the "a failure is never an exception here" contract in the class commen
 ---
 
 ## 9. `?next=` deep link is ignored by the login page (Low)
+
+> **Fixed 2026-09-20** (branch `task/next-issue`). `LoginPage` reads `next` from
+> `ActivatedRoute` and navigates with `navigateByUrl(safeNext(next))`. The new pure helper
+> `core/util/redirect.ts` passes only a plain in-app absolute path, query string included. It
+> falls back to `/dashboard` for a scheme, a protocol-relative `//host` or `/\host`, control
+> characters, and `/login` / `/register`, which `guestGuard` would bounce. Two adjacent paths
+> that dropped the user's place were fixed with it:
+> - **401 expiry.** `errorInterceptor` now sends `?expired=1&next=<current url>`, so a mid-use
+>   expiry returns the user to the same page after re-login.
+> - **Register detour.** "Create one" and "Sign in" forward `next` between the two auth pages,
+>   and `RegisterPage` honours it after sign-up.
+>
+> `expired` is now read from the same `queryParamMap` snapshot instead of `location.search`.
+> Tests 53 → 57: a `safeNext` suite in `util.spec.ts`, and a 401 case in
+> `session-reset.spec.ts` asserting the `next` query param. The text below is the original
+> report.
 
 **Symptom.** Opening `/watchlist` while logged out redirects to `/login?next=/watchlist`;
 after signing in the user lands on `/dashboard`.

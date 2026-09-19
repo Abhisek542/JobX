@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { WatchedCompanyResponse } from '../models/watchlist.model';
 import { displayName, initials } from './identity';
 import { logoText } from './logo';
+import { safeNext } from './redirect';
 import { normalizeList, parseList } from './text-lists';
 import { relTime } from './time';
 import { companyStatusLine } from './watchlist-status';
@@ -53,6 +54,35 @@ describe('normalizeList (mirrors the backend TextLists)', () => {
   it('parses a comma-separated field the same way', () => {
     expect(parseList('Java, java , Kafka,,  ')).toEqual(['Java', 'Kafka']);
     expect(parseList('')).toEqual([]);
+  });
+});
+
+describe('safeNext (post-auth ?next= target)', () => {
+  it('keeps a plain in-app path, query string included', () => {
+    expect(safeNext('/watchlist')).toBe('/watchlist');
+    expect(safeNext('/dashboard?page=3')).toBe('/dashboard?page=3');
+  });
+
+  it('falls back to /dashboard for anything off-app or malformed', () => {
+    for (const raw of [
+      null,
+      undefined,
+      '',
+      'watchlist',
+      'https://evil.com',
+      '//evil.com',
+      '/\\evil.com',
+      'javascript:alert(1)',
+      '/watch\nlist',
+    ]) {
+      expect(safeNext(raw)).toBe('/dashboard');
+    }
+  });
+
+  it('never targets an auth page, which guestGuard would bounce', () => {
+    expect(safeNext('/login')).toBe('/dashboard');
+    expect(safeNext('/login?next=/x')).toBe('/dashboard');
+    expect(safeNext('/register#top')).toBe('/dashboard');
   });
 });
 

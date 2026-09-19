@@ -1,8 +1,9 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
-import { Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { AppError } from '../../core/models/api-error.model';
 import { AuthStore } from '../../core/services/auth.store';
 import { ThemeService } from '../../core/services/theme.service';
+import { safeNext } from '../../core/util/redirect';
 import { Icon } from '../../shared/ui/icon';
 
 /** Password rule mirrors RegisterRequest's @Size(min = 8). */
@@ -70,7 +71,10 @@ const MIN_PASSWORD = 8;
           {{ busy() ? 'Creating account…' : 'Create account' }}
         </button>
 
-        <p class="auth-foot">Already have an account? <a routerLink="/login">Sign in</a></p>
+        <p class="auth-foot">
+          Already have an account?
+          <a routerLink="/login" [queryParams]="{ next: nextParam() }">Sign in</a>
+        </p>
       </form>
     </div>
   `,
@@ -79,6 +83,7 @@ export class RegisterPage {
   protected readonly theme = inject(ThemeService);
   private readonly auth = inject(AuthStore);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
 
   protected readonly minPassword = MIN_PASSWORD;
   protected readonly email = signal('');
@@ -86,6 +91,11 @@ export class RegisterPage {
   protected readonly busy = signal(false);
   protected readonly error = signal<string | null>(null);
   private readonly fieldErrors = signal<Record<string, string>>({});
+
+  /** Raw ?next= carried over from /login; validated by safeNext before use. */
+  protected nextParam(): string | null {
+    return this.route.snapshot.queryParamMap.get('next');
+  }
 
   protected fieldError(field: string): string | undefined {
     return this.fieldErrors()[field];
@@ -112,7 +122,7 @@ export class RegisterPage {
 
     this.busy.set(true);
     this.auth.register({ email, password }).subscribe({
-      next: () => void this.router.navigate(['/dashboard']),
+      next: () => void this.router.navigateByUrl(safeNext(this.nextParam())),
       error: (error: AppError) => {
         this.busy.set(false);
         this.fieldErrors.set(error.fieldErrors);
