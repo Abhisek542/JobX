@@ -15,7 +15,7 @@ status, login timing, N+1 on the feed) are excluded. Fixed items are marked **Fi
 | 5 | Medium | Frontend | **Fixed 2026-09-13** — Typeahead pick shows "0 open roles" and a blank board link |
 | 6 | Medium | Backend | Long outbound HTTP calls run inside DB transactions |
 | 7 | Medium | Backend | Framework exceptions (404 path, 405 method, missing param) become 500 |
-| 8 | Low | Backend | Malformed `Location` header on a careers site becomes a 500 |
+| 8 | Low | Backend | **Fixed 2026-09-19** — Malformed `Location` header on a careers site becomes a 500 |
 | 9 | Low | Frontend | `?next=` deep link is set by the guard but ignored by the login page |
 | 10 | Low | Frontend | Copy says scores update "on the next check"; backend rescores immediately |
 | 11 | Low | Backend | No per-board lock between "Check now" and the scheduled cycle |
@@ -386,6 +386,18 @@ parameter all answer `500 {"code":"internal_error"}` and log a stack trace at ER
 ---
 
 ## 8. Malformed `Location` header becomes a 500 (Low)
+
+> **Fixed 2026-09-19** (branch `task/location-header`). The resolve now goes through a new
+> package-private `SafeUrlFetcher.nextHop(URI, String)`, which answers empty instead of
+> throwing, so a site's bad header ends the sniff as an ordinary dead end and step 4 PROBE
+> still runs. Two adjacent defects on the same line went with it: a **blank or absent**
+> `Location` used to resolve back to the page already being fetched and cost `MAX_REDIRECTS`
+> repeats of the same request, and a redirect to a refused target (`mailto:`, a private
+> address, a host that won't resolve) used to surface as a **400 blaming the URL the user
+> typed** — `UnsafeUrlException` now escapes only from hop 0, which is what `fetch`'s javadoc
+> already promised. The SSRF refusal still logs at INFO inside the guard on every hop. Tests:
+> `unusableLocationHeaderIsADeadEnd` and `resolvesOrdinaryRedirectTargets` in
+> `SafeUrlFetcherTest`. The text below is the original report.
 
 **Symptom.** A careers site that redirects with a syntactically invalid `Location` makes
 `POST /watchlist/resolve` return 500 for the user.

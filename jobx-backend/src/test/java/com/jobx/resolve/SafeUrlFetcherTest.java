@@ -3,24 +3,41 @@ package com.jobx.resolve;
 import org.junit.jupiter.api.Test;
 
 import java.net.InetAddress;
+import java.net.URI;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * The SSRF guard.
+ * The SSRF guard, and the redirect handling that guard depends on.
  *
  * Sniffing a careers page makes the backend an HTTP client aimed at an address
  * the user chooses, so these tests are about what Jobx REFUSES to request. They
  * deliberately assert on the guard and on {@link SafeUrlFetcher#fetch} rejecting
  * before any request leaves — never on reaching a real host, so the suite stays
- * offline and deterministic.
+ * offline and deterministic. {@link SafeUrlFetcher#nextHop} is package-private
+ * for the same reason: the redirect step is the one piece of the hop loop worth
+ * testing directly, and testing it through a socket would need a server.
  */
 class SafeUrlFetcherTest {
 
     private final SafeUrlFetcher fetcher = new SafeUrlFetcher(1000, 1000);
 
+    /** The page we just asked for, i.e. what a Location header resolves against. */
+    private static final URI ASKED = URI.create("https://careers.example.com/jobs/eng");
+
     private void refuses(String url) {
         assertThrows(SafeUrlFetcher.UnsafeUrlException.class, () -> fetcher.fetch(url), url);
+    }
+
+    private void deadEnd(String location) {
+        assertEquals(Optional.empty(), SafeUrlFetcher.nextHop(ASKED, location),
+                "Location: [" + location + "]");
+    }
+
+    private void resolvesTo(String location, String expected) {
+        assertEquals(Optional.of(URI.create(expected)), SafeUrlFetcher.nextHop(ASKED, location),
+                "Location: [" + location + "]");
     }
 
     @Test
@@ -79,6 +96,46 @@ class SafeUrlFetcherTest {
         // carrier-grade NAT is neither loopback nor site-local
         assertTrue(PrivateAddressGuard.isBlocked(InetAddress.getByName("100.64.0.1")));
         assertTrue(PrivateAddressGuard.isBlocked(null));
+    }
+
+    /**
+     * BUG_REPORT #8. Every value here made {@code URI.resolve} throw
+     * {@link IllegalArgumentException}, which escaped fetch() and reached the
+     * catch-all handler as a 500 — for a careers site's bad header, on a URL the
+     * user typed correctly. A site we can't follow is an ordinary dead end.
+     */
+    @Test
+    void unusableLocationHeaderIsADeadEnd() {
+        deadEnd("/a b/c");                    // raw space in the path
+        deadEnd("http://exa mple.com/x");     // raw space in the authority
+        deadEnd("h ttp://example.com/x");     // raw space in the scheme
+        deadEnd("://nope");                   // no scheme name
+        deadEnd("%%");                        // malformed escape pair
+        deadEnd("https://[bad/x");            // unclosed IPv6 bracket
+        // Absent or blank: resolving these lands back on the page we are already
+        // on, so following one costs MAX_REDIRECTS repeats of the same request.
+        deadEnd(null);
+        deadEnd("");
+        deadEnd("   ");
+    }
+
+    /**
+     * The other half of the fix: a redirect chain Jobx is supposed to follow
+     * must keep working. Apex → www → /careers is the case MAX_REDIRECTS exists
+     * for, and over-rejecting here would lose boards rather than 500 on them.
+     */
+    @Test
+    void resolvesOrdinaryRedirectTargets() {
+        resolvesTo("/careers", "https://careers.example.com/careers");
+        resolvesTo("openings", "https://careers.example.com/jobs/openings");
+        resolvesTo("https://boards.greenhouse.io/acme", "https://boards.greenhouse.io/acme");
+        // Protocol-relative: inherits https from the page we asked, not http.
+        resolvesTo("//jobs.example.com/x", "https://jobs.example.com/x");
+        resolvesTo("/careers?src=x#open", "https://careers.example.com/careers?src=x#open");
+        // Percent-encoded space is legal, unlike the raw one above.
+        resolvesTo("/a%20b/c", "https://careers.example.com/a%20b/c");
+        // Header values arrive with optional surrounding whitespace.
+        resolvesTo("  /careers  ", "https://careers.example.com/careers");
     }
 
     @Test
