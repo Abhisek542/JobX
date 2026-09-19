@@ -38,7 +38,7 @@
   white-space: nowrap;
 }
 .brand .x {
-  background: linear-gradient(135deg, #a78bfa, #7c3aed);
+  background: var(--wordmark-grad);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -292,7 +292,7 @@ app-match-card {
   flex: 1;
   max-width: 560px;
 }
-.top-search > .icon {
+.top-search .icon {
   position: absolute;
   left: 14px;
   color: var(--faint);

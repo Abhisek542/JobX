@@ -34,7 +34,12 @@ import { Icon } from '../ui/icon';
             (input)="feed.setQuery($any($event.target).value)"
           />
           @if (feed.query()) {
-            <button class="clear" type="button" aria-label="Clear search" (click)="feed.setQuery('')">
+            <button
+              class="clear"
+              type="button"
+              aria-label="Clear search"
+              (click)="feed.setQuery('')"
+            >
               <app-icon name="x" size="xs" />
             </button>
           }

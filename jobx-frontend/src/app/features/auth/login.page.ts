@@ -2,9 +2,8 @@ import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/cor
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { AppError } from '../../core/models/api-error.model';
 import { AuthStore } from '../../core/services/auth.store';
-import { AuthHero } from '../../shared/ui/auth-hero';
-import { ThemeService } from '../../core/services/theme.service';
 import { safeNext } from '../../core/util/redirect';
+import { AuthHero } from '../../shared/ui/auth-hero';
 import { Icon } from '../../shared/ui/icon';
 
 /**
@@ -17,7 +16,7 @@ import { Icon } from '../../shared/ui/icon';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [AuthHero, Icon, RouterLink],
   template: `
-    <app-auth-hero mode="login">
+    <app-auth-hero mode="login" [next]="nextParam()">
       <h1 heroTitle>Find a job<br />that <em>moves you</em><br />forward.</h1>
       <p heroLead class="lead">
         Watch the careers boards you care about, get every new role scored against your keywords,
@@ -80,18 +79,11 @@ import { Icon } from '../../shared/ui/icon';
         @if (fieldError('password'); as message) {
           <p class="sb-err">{{ message }}</p>
         }
-        <button class="btn btn-primary" type="submit" [disabled]="busy()">
-          {{ busy() ? 'Signing in…' : 'Sign in' }}
-        </button>
-
-        <p class="auth-foot">
-          No account yet?
-          <a routerLink="/register" [queryParams]="{ next: nextParam() }">Create one</a>
-        </p>
       </form>
 
       <p heroFoot class="new-here">
-        New to Jobx? <a routerLink="/register">Create an account →</a>
+        New to Jobx?
+        <a routerLink="/register" [queryParams]="{ next: nextParam() }">Create an account →</a>
       </p>
     </app-auth-hero>
   `,

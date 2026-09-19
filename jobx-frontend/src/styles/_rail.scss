@@ -54,7 +54,8 @@
 .pref:hover {
   background: var(--panel-2);
 }
-.pref > svg:first-child {
+/* app-icon renders its svg inside its own host, so match by size class, not by child position. */
+.pref .icon-sm {
   color: var(--brand);
   margin-top: 1px;
 }

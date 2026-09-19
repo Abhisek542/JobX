@@ -2,9 +2,8 @@ import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/cor
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { AppError } from '../../core/models/api-error.model';
 import { AuthStore } from '../../core/services/auth.store';
-import { AuthHero } from '../../shared/ui/auth-hero';
-import { ThemeService } from '../../core/services/theme.service';
 import { safeNext } from '../../core/util/redirect';
+import { AuthHero } from '../../shared/ui/auth-hero';
 import { Icon } from '../../shared/ui/icon';
 
 /** Password rule mirrors RegisterRequest's @Size(min = 8). */
@@ -15,7 +14,7 @@ const MIN_PASSWORD = 8;
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [AuthHero, Icon, RouterLink],
   template: `
-    <app-auth-hero mode="register">
+    <app-auth-hero mode="register" [next]="nextParam()">
       <h1 heroTitle>Get the first look<br />at <em>every new role</em>.</h1>
       <p heroLead class="lead">
         Create your account, pick the companies you care about, and Jobx reads their own careers
@@ -74,18 +73,11 @@ const MIN_PASSWORD = 8;
         @if (fieldError('password'); as message) {
           <p class="sb-err">{{ message }}</p>
         }
-        <button class="btn btn-primary" type="submit" [disabled]="busy()">
-          {{ busy() ? 'Creating account…' : 'Create account' }}
-        </button>
-
-        <p class="auth-foot">
-          Already have an account?
-          <a routerLink="/login" [queryParams]="{ next: nextParam() }">Sign in</a>
-        </p>
       </form>
 
       <p heroFoot class="new-here">
-        Already have an account? <a routerLink="/login">Sign in →</a>
+        Already have an account?
+        <a routerLink="/login" [queryParams]="{ next: nextParam() }">Sign in →</a>
       </p>
     </app-auth-hero>
   `,
