@@ -10,7 +10,7 @@ import com.jobx.repository.UnsupportedBoardRequestRepository;
 import com.jobx.repository.WatchedCompanyRepository;
 import com.jobx.resolve.CompanyResolver;
 import com.jobx.scheduler.FetchScheduler;
-import com.jobx.service.MatchingService;
+import com.jobx.service.WatchlistService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
@@ -39,7 +39,7 @@ class WatchlistControllerResolveCatalogTest {
         companyResolver = mock(CompanyResolver.class);
         controller = new WatchlistController(mock(WatchedCompanyRepository.class),
                 mock(CompanyRepository.class), mock(MatchRepository.class),
-                mock(MatchingService.class), mock(FetchScheduler.class), mock(FetcherRegistry.class),
+                mock(WatchlistService.class), mock(FetchScheduler.class), mock(FetcherRegistry.class),
                 companyResolver, mock(UnsupportedBoardRequestRepository.class), 300_000);
 
         user = new User();

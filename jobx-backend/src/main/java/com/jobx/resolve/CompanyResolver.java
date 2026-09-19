@@ -117,7 +117,12 @@ public class CompanyResolver {
      *         refuses to request at all — the controller turns that into a 400,
      *         because it is the one failure the user can actually act on.
      */
-    @Transactional(readOnly = true)
+    // Deliberately NOT @Transactional. Every strategy below reaches the
+    // network — a careers-page fetch, a 9s probe budget, a preview call per
+    // candidate — and a transaction here would hold one of the ten pool
+    // connections for all of it, which is what stalled every other request
+    // (BUG_REPORT #6). The repository calls are independent short reads; they
+    // do not need one consistent snapshot, so each runs on its own.
     public ResolveResponse resolve(User user, String query) {
         String trimmed = query == null ? "" : query.trim();
         if (trimmed.isEmpty()) {
@@ -235,7 +240,8 @@ public class CompanyResolver {
      * that, and the caller should fall back to a full resolve rather than offer
      * "0 open roles".
      */
-    @Transactional(readOnly = true)
+    // Not @Transactional, for the same reason as resolve above: when the board
+    // has no stored jobs, catalogCandidate falls back to a live ATS preview.
     public Optional<ResolvedBoardResponse> previewCatalog(User user, UUID companyId) {
         return companyRepository.findById(companyId)
                 .flatMap(company -> catalogCandidate(user, company));

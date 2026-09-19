@@ -13,7 +13,7 @@ status, login timing, N+1 on the feed) are excluded. Fixed items are marked **Fi
 | 3 | Medium | Backend | **Fixed 2026-09-13** — Email is case-sensitive at register and login |
 | 4 | Medium | Backend | Experience penalty never fires for open-ended ranges ("5+ years") |
 | 5 | Medium | Frontend | **Fixed 2026-09-13** — Typeahead pick shows "0 open roles" and a blank board link |
-| 6 | Medium | Backend | Long outbound HTTP calls run inside DB transactions |
+| 6 | Medium | Backend | **Fixed 2026-09-19** — Long outbound HTTP calls run inside DB transactions |
 | 7 | Medium | Backend | Framework exceptions (404 path, 405 method, missing param) become 500 |
 | 8 | Low | Backend | Malformed `Location` header on a careers site becomes a 500 |
 | 9 | Low | Frontend | `?next=` deep link is set by the guard but ignored by the login page |
@@ -322,6 +322,29 @@ chec
 ---
 
 ## 6. Long outbound HTTP calls run inside DB transactions (Medium)
+
+> **Fixed 2026-09-19** (branch `task/long-outbound-http-calls`). No DB connection is held
+> across an outbound HTTP call any more. Four sites, not the two reported:
+> `CompanyResolver.resolve` and `previewCatalog` simply lose `@Transactional(readOnly = true)`
+> (`search` keeps it — it is network-free by design); `WatchlistController.add` loses
+> `@Transactional` and its two writes move to a new `WatchlistService`, so `validateBoard`'s ATS
+> round trip runs between them with nothing open; and `FetchScheduler.fetchCompany` — the worst
+> offender, unreported, which held a connection for the whole board fetch on both the scheduler
+> and "Check now" — splits into dedup reads, the fetch, and one short `persistFetched`
+> transaction.
+>
+> **Dropping `@Transactional` was only half of it.** Spring's Hibernate adapter defaults to
+> `DELAYED_ACQUISITION_AND_HOLD`, so with `open-in-view` on (and `GET /matches` needs it) the
+> session pinned a connection from its first query to the end of the request, transaction or
+> not. `hibernate.connection.handling_mode: DELAYED_ACQUISITION_AND_RELEASE_AFTER_TRANSACTION`
+> is what actually frees the pool. A Hikari `leak-detection-threshold` was added as the tripwire
+> and is what caught this: the first fixed build still logged ten leaks, one per resolve.
+>
+> Live-verified against the dev Postgres, ten concurrent resolves on a careers URL that stalls
+> (~13 s each), polling `GET /watchlist` throughout. Pre-fix: 11 polls landed in the window and
+> one blocked **11,816 ms** waiting for a connection. Post-fix: **73 polls, none over 174 ms**,
+> and a full 12-board fetch cycle ran with zero leak warnings. Tests 240 → 243. The text below
+> is the original report.
 
 **Symptom.** Ten concurrent add-company resolves hold the whole default Hikari pool (10
 connections) for up to ~20 s each, stalling every other request and the fetch scheduler.
