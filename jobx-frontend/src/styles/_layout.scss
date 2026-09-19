@@ -21,32 +21,35 @@
   height: 100vh;
   display: flex;
   flex-direction: column;
-  background: var(--panel);
+  background: var(--chrome);
   border-right: 1px solid var(--line);
-  padding: 20px 14px 16px;
+  padding: 24px 14px 16px;
   overflow: hidden;
 }
 .brand {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 4px 8px 22px;
-  font-size: 25px;
+  padding: 4px 10px 24px;
+  font-size: 26px;
   font-weight: 800;
-  letter-spacing: -0.035em;
+  letter-spacing: -0.055em;
   color: var(--text);
   white-space: nowrap;
 }
 .brand .x {
-  color: var(--brand);
+  background: var(--wordmark-grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 .brand-mark {
   width: 30px;
   height: 30px;
   flex: none;
   border-radius: 9px;
-  background: linear-gradient(150deg, var(--brand), #5c82ff);
-  color: #fff;
+  background: var(--brand-grad);
+  color: var(--on-brand);
   display: none;
   align-items: center;
   justify-content: center;
@@ -69,8 +72,8 @@
   border: 0;
   background: none;
   border-radius: var(--r-sm);
-  color: var(--text-2);
-  font-size: 14.5px;
+  color: var(--muted);
+  font-size: 14px;
   font-weight: 500;
   cursor: pointer;
   text-align: left;
@@ -79,23 +82,17 @@
   transition: background 0.14s ease, color 0.14s ease;
 }
 .nav-item:hover {
-  background: var(--panel-3);
+  background: var(--panel-2);
   color: var(--text);
 }
 .nav-item.active {
-  background: var(--brand-wash);
-  color: var(--brand);
-  font-weight: 650;
+  background: linear-gradient(90deg, var(--brand-wash), transparent);
+  color: var(--text);
+  font-weight: 600;
+  box-shadow: inset 3px 0 0 var(--brand);
 }
-.nav-item.active::before {
-  content: '';
-  position: absolute;
-  left: -14px;
-  top: 9px;
-  bottom: 9px;
-  width: 3px;
-  border-radius: 0 3px 3px 0;
-  background: var(--brand);
+.nav-item.active .icon {
+  color: var(--brand);
 }
 .nav-item .count {
   margin-left: auto;
@@ -103,12 +100,8 @@
   font-weight: 700;
   padding: 1px 7px;
   border-radius: 999px;
-  background: var(--brand);
-  color: #fff;
-}
-.nav-item:not(.active) .count {
-  background: var(--panel-3);
-  color: var(--muted);
+  background: var(--brand-grad);
+  color: var(--on-brand);
 }
 
 .side-foot {
@@ -118,10 +111,10 @@
   gap: 6px;
 }
 .upsell {
-  border: 1px solid var(--line);
-  background: var(--panel-2);
-  border-radius: var(--r-md);
-  padding: 13px 14px;
+  border: 1px solid var(--brand-line);
+  background: linear-gradient(160deg, var(--brand-wash), transparent);
+  border-radius: 13px;
+  padding: 14px;
   margin-bottom: 6px;
 }
 .upsell h4 {
@@ -145,7 +138,7 @@
   border: 0;
   width: 100%;
   background: none;
-  border-top: 1px solid var(--line-soft);
+  border-top: 1px solid var(--line);
   border-radius: var(--r-sm);
   cursor: pointer;
   white-space: nowrap;
@@ -155,12 +148,13 @@
   background: var(--panel-2);
 }
 .avatar {
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   flex: none;
   border-radius: 50%;
-  background: linear-gradient(150deg, var(--brand), #5c82ff);
-  color: #fff;
+  background: var(--brand-wash);
+  border: 1px solid var(--brand-line);
+  color: var(--brand);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -204,7 +198,7 @@
   white-space: nowrap;
 }
 .collapse-btn:hover {
-  background: var(--panel-3);
+  background: var(--panel-2);
   color: var(--text-2);
 }
 
@@ -275,42 +269,111 @@ app-match-card {
 
 /* ---------------------------------------------------------------- main --- */
 .main {
-  padding: 26px 30px 56px;
+  padding: 22px 28px 56px;
   min-width: 0;
 }
 
-/* Change #2 (uiux_plan.md §0): no greeting. A slim right-aligned action bar. */
+/* Top bar (redesign): feed search on the left on Dashboard/Matches only, then
+   theme toggle · Add company · the signed-in account. Still no greeting
+   (uiux_plan.md §0 change #2). */
 .action-bar {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: 10px;
-  margin-bottom: 18px;
+  gap: 12px;
+  margin-bottom: 22px;
 }
-.action-bar .page-title {
+.action-bar .spacer {
+  flex: 1;
+}
+.top-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1;
+  max-width: 560px;
+}
+.top-search .icon {
+  position: absolute;
+  left: 14px;
+  color: var(--faint);
+  pointer-events: none;
+}
+.top-search input {
+  width: 100%;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  padding: 11px 38px 11px 42px;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.14s ease, box-shadow 0.14s ease;
+}
+.top-search input::placeholder {
+  color: var(--faint);
+}
+.top-search input:focus {
+  border-color: var(--brand);
+  box-shadow: var(--ring);
+}
+.top-search .clear {
+  position: absolute;
+  right: 8px;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--panel-3);
+  color: var(--muted);
+  cursor: pointer;
+}
+.top-me {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-left: 14px;
+  margin-left: 2px;
+  border-left: 1px solid var(--line);
+  white-space: nowrap;
+}
+.top-me .nm {
+  display: block;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.2;
+}
+.top-me .em {
+  display: block;
+  font-size: 11.5px;
+  color: var(--faint);
+}
+
+.page-head {
+  margin: -4px 0 20px;
+}
+.page-head .page-title {
   margin: 0;
-  margin-right: auto;
-  font-size: 28px;
+  font-size: 26px;
   font-weight: 750;
   letter-spacing: -0.03em;
   line-height: 1.15;
 }
-.action-bar .page-title .sub {
-  display: block;
-  margin-top: 4px;
-  font-size: 14.5px;
-  font-weight: 450;
-  letter-spacing: normal;
+.page-head .sub {
+  margin: 4px 0 0;
+  font-size: 14px;
   color: var(--muted);
 }
 
 .page-section {
-  background: var(--panel);
+  background: var(--card-fill);
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
-  box-shadow: var(--sh-1);
+  box-shadow: var(--sh-2);
   padding: 20px 22px;
-  margin-bottom: 15px;
+  margin-bottom: 16px;
 }
 .page-section h2 {
   margin: 0 0 4px;
@@ -324,6 +387,46 @@ app-match-card {
   font-size: 13.5px;
 }
 
+/* Profile: account + watched boards on the left, the matching rules on the right. */
+.profile-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+.profile-col {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+.profile-col .page-section {
+  margin-bottom: 0;
+}
+.pcard-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+.pcard-id {
+  min-width: 0;
+}
+.pcard-id h2 {
+  margin: 0;
+}
+.pcard-id .em {
+  color: var(--muted);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.avatar.avatar-lg {
+  width: 64px;
+  height: 64px;
+  font-size: 22px;
+  border-width: 2px;
+}
+
 .mobile-bar {
   display: none;
 }
@@ -332,6 +435,12 @@ app-match-card {
 }
 
 /* ----------------------------------------------------------- responsive -- */
+@media (max-width: 1080px) {
+  .profile-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 1280px) {
   .app {
     grid-template-columns: var(--nav-w, 248px) minmax(0, 1fr);
@@ -359,6 +468,7 @@ app-match-card {
     transform: translateX(-100%);
     transition: transform 0.24s cubic-bezier(0.2, 0.7, 0.3, 1);
     box-shadow: var(--sh-pop);
+    background: var(--panel);
   }
   .sidebar.open {
     transform: none;
@@ -368,7 +478,7 @@ app-match-card {
     position: fixed;
     inset: 0;
     z-index: 75;
-    background: rgba(8, 14, 30, 0.4);
+    background: var(--scrim);
   }
   .mobile-bar {
     display: flex;
@@ -391,11 +501,11 @@ app-match-card {
   .rail {
     padding: 0 18px 48px;
   }
-  .action-bar {
-    flex-wrap: wrap;
+  .top-me .who,
+  .action-bar .add-label {
+    display: none;
   }
-  .action-bar .page-title {
-    width: 100%;
-    margin-right: 0;
+  .top-me {
+    padding-left: 10px;
   }
 }

@@ -48,7 +48,7 @@ import { Sidebar } from './sidebar';
         >
           <app-icon name="menu" />
         </button>
-        <div class="brand"><span>Job<span class="x">x</span></span></div>
+        <div class="brand"><span>Job<span class="x">X</span></span></div>
       </div>
 
       <router-outlet />

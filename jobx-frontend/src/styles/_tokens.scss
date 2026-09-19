@@ -1,6 +1,7 @@
 /* ============================================================================
-   Design tokens — ported verbatim from docs/jobx-focused-feed-mockup.html.
-   The mockup is frozen; these values are the spec.
+   Design tokens — values from docs/newui-dark-redesign-mockup.html (the violet
+   redesign that supersedes the frozen jobx-focused-feed-mockup.html palette).
+   Token NAMES are unchanged, so every component picks the new look up for free.
 
    RULE (uiux_plan.md §2): never hardcode a colour in a component. Every colour,
    radius, shadow and elevation in the app resolves through one of these
@@ -9,85 +10,117 @@
 
 :root {
   /* surfaces */
-  --bg: #f5f7fc;
+  --bg: #f5f4fb;
+  --bg-glow: #e9e1ff;
   --panel: #ffffff;
-  --panel-2: #f7f9fd;
-  --panel-3: #eef2f9;
+  --panel-2: #f8f7fd;
+  --panel-3: #efedf8;
   /* Below --panel, not above it: the surface for content that has been set
      aside (a dismissed match). --panel-2/-3 are *raised* fills in the dark
      theme, so a recessed surface needs its own token to stay recessed in both. */
-  --sunk: #f3f6fc;
-  --line: #e4e9f2;
-  --line-soft: #eef1f7;
+  --sunk: #f3f1fa;
+  --line: #e6e3f2;
+  --line-soft: #efedf7;
+  /* the translucent sidebar and top surfaces */
+  --chrome: rgba(255, 255, 255, 0.92);
+  /* card fill: a flat colour in light, a subtle gradient in dark */
+  --card-fill: #ffffff;
 
   /* type */
-  --text: #0a1020;
-  --text-2: #33405a;
-  --muted: #5f6c84;
-  --faint: #95a1b6;
+  --text: #16132b;
+  --text-2: #3b3757;
+  --muted: #5f5b7a;
+  --faint: #938fab;
 
   /* brand + status */
-  --brand: #2455f4;
-  --brand-strong: #1a44d6;
-  --brand-wash: #eaf0ff;
-  --brand-line: #c9d8ff;
+  --brand: #6d28d9;
+  --brand-strong: #5b21b6;
+  --brand-wash: #efe9ff;
+  --brand-line: #c9b8ff;
+  --brand-grad: linear-gradient(135deg, #7c3aed, #6d28d9);
+  /* the "X" of the wordmark and the highlighted words of the sign-in headline */
+  --wordmark-grad: linear-gradient(90deg, #a78bfa, #8b5cf6 55%, #7c3aed);
+  --on-brand: #ffffff;
 
-  --good: #0f9d63;
-  --good-wash: #e6f7ef;
-  --lime: #3f9b3a;
-  --lime-wash: #ecf7ea;
-  --warn: #c07806;
-  --warn-wash: #fdf3e2;
-  --bad: #d1483c;
-  --bad-wash: #fdeceb;
+  --info: #2563eb;
+  --info-wash: #e3ecff;
+  --good: #0f9f6e;
+  --good-wash: #dcf7ec;
+  --lime: #4d8f0a;
+  --lime-wash: #ecf7e0;
+  --warn: #c2800a;
+  --warn-wash: #fdf1d6;
+  --bad: #e11d48;
+  --bad-wash: #ffe4ea;
 
-  --track: #e7ebf3;
+  --track: #ebe8f5;
 
   /* elevation */
-  --sh-1: 0 1px 2px rgba(11, 22, 48, 0.05);
-  --sh-2: 0 2px 4px rgba(11, 22, 48, 0.05), 0 8px 20px rgba(11, 22, 48, 0.06);
-  --sh-3: 0 12px 32px rgba(11, 22, 48, 0.12), 0 2px 8px rgba(11, 22, 48, 0.08);
-  --sh-pop: 0 24px 60px rgba(8, 17, 40, 0.22);
-  --ring: 0 0 0 3px rgba(36, 85, 244, 0.28);
+  --sh-1: 0 1px 2px rgba(40, 24, 110, 0.05);
+  --sh-2: 0 2px 4px rgba(40, 24, 110, 0.04), 0 10px 24px rgba(40, 24, 110, 0.07);
+  --sh-3: 0 14px 34px rgba(40, 24, 110, 0.12), 0 2px 8px rgba(40, 24, 110, 0.06);
+  --sh-pop: 0 30px 70px rgba(22, 12, 60, 0.25);
+  --btn-glow: 0 10px 22px rgba(109, 40, 217, 0.25);
+  --ring: 0 0 0 3px rgba(124, 58, 237, 0.25);
+  --scrim: rgba(22, 19, 43, 0.45);
 
-  --r-sm: 8px;
+  /* sign-in hero surface */
+  --hero-bg: linear-gradient(180deg, #ffffff, #f6f3ff);
+  --hero-glow: rgba(124, 58, 237, 0.16);
+  --hero-glow-2: rgba(124, 58, 237, 0.06);
+
+  --r-sm: 9px;
   --r-md: 12px;
-  --r-lg: 16px;
+  --r-lg: 14px;
+  --r-xl: 18px;
 }
 
 :root[data-theme='dark'] {
-  --bg: #080c14;
-  --panel: #111926;
-  --panel-2: #172232;
-  --panel-3: #1e2b3d;
-  --sunk: #0d1420;
-  --line: #25334a;
-  --line-soft: #1c2839;
+  --bg: #080b17;
+  --bg-glow: #1a1245;
+  --panel: #0e1325;
+  --panel-2: #131a30;
+  --panel-3: #19213b;
+  --sunk: #0a0e1d;
+  --line: #1f2844;
+  --line-soft: #182038;
+  --chrome: rgba(8, 11, 23, 0.72);
+  --card-fill: linear-gradient(180deg, #10162a, #0c1122);
 
-  --text: #eef3fb;
-  --text-2: #c3cfe1;
-  --muted: #94a3ba;
-  --faint: #6c7c95;
+  --text: #f4f5ff;
+  --text-2: #c9cde3;
+  --muted: #9aa5c2;
+  --faint: #67728f;
 
-  --brand: #7b98ff;
-  --brand-strong: #95adff;
-  --brand-wash: #18244a;
-  --brand-line: #2c3d6d;
+  --brand: #a78bfa;
+  --brand-strong: #c4b5fd;
+  --brand-wash: #221a47;
+  --brand-line: #4c3a99;
+  --brand-grad: linear-gradient(135deg, #8b5cf6, #7c3aed);
+  --on-brand: #ffffff;
 
-  --good: #3ecf9a;
-  --good-wash: #102e26;
-  --lime: #8fd04f;
-  --lime-wash: #1a2a17;
-  --warn: #f2b452;
-  --warn-wash: #302413;
-  --bad: #f0736a;
-  --bad-wash: #33191a;
+  --info: #7cb8ff;
+  --info-wash: #172a4d;
+  --good: #34d399;
+  --good-wash: #0f3a2f;
+  --lime: #bef264;
+  --lime-wash: #1f2c12;
+  --warn: #f5b942;
+  --warn-wash: #3d3014;
+  --bad: #fb7185;
+  --bad-wash: #43182a;
 
-  --track: #22303f;
+  --track: #19213b;
 
   --sh-1: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --sh-2: 0 2px 4px rgba(0, 0, 0, 0.35), 0 8px 20px rgba(0, 0, 0, 0.35);
-  --sh-3: 0 12px 32px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.4);
-  --sh-pop: 0 24px 60px rgba(0, 0, 0, 0.65);
-  --ring: 0 0 0 3px rgba(123, 152, 255, 0.35);
+  --sh-2: 0 18px 40px rgba(0, 0, 0, 0.35);
+  --sh-3: 0 18px 40px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.4);
+  --sh-pop: 0 40px 80px rgba(0, 0, 0, 0.6);
+  --btn-glow: 0 10px 24px rgba(124, 58, 237, 0.35);
+  --ring: 0 0 0 3px rgba(139, 92, 246, 0.35);
+  --scrim: rgba(4, 5, 12, 0.6);
+
+  --hero-bg: linear-gradient(180deg, #0b0f22, #070a17);
+  --hero-glow: rgba(124, 58, 237, 0.3);
+  --hero-glow-2: rgba(124, 58, 237, 0.14);
 }

@@ -2,8 +2,8 @@ import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/cor
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { AppError } from '../../core/models/api-error.model';
 import { AuthStore } from '../../core/services/auth.store';
-import { ThemeService } from '../../core/services/theme.service';
 import { safeNext } from '../../core/util/redirect';
+import { AuthHero } from '../../shared/ui/auth-hero';
 import { Icon } from '../../shared/ui/icon';
 
 /** Password rule mirrors RegisterRequest's @Size(min = 8). */
@@ -12,23 +12,16 @@ const MIN_PASSWORD = 8;
 @Component({
   selector: 'app-register-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [Icon, RouterLink],
+  imports: [AuthHero, Icon, RouterLink],
   template: `
-    <div class="auth-shell">
-      <button
-        class="btn btn-ghost btn-icon theme-corner"
-        type="button"
-        [attr.aria-label]="theme.isDark() ? 'Switch to light theme' : 'Switch to dark theme'"
-        (click)="theme.toggle()"
-      >
-        <app-icon [name]="theme.isDark() ? 'sun' : 'moon'" />
-      </button>
+    <app-auth-hero mode="register" [next]="nextParam()">
+      <h1 heroTitle>Get the first look<br />at <em>every new role</em>.</h1>
+      <p heroLead class="lead">
+        Create your account, pick the companies you care about, and Jobx reads their own careers
+        boards directly. No aggregators, no auto-apply.
+      </p>
 
-      <form class="auth-card" (submit)="submit($event)">
-        <div class="brand"><span>Job<span class="x">x</span></span></div>
-        <h1>Create your account</h1>
-        <p class="lede">Watch company boards directly. No aggregators, no auto-apply.</p>
-
+      <form class="auth-form" (submit)="submit($event)">
         @if (error(); as message) {
           <div class="auth-error">
             <app-icon name="alert" size="sm" />
@@ -36,51 +29,60 @@ const MIN_PASSWORD = 8;
           </div>
         }
 
-        <div class="field" [class.invalid]="fieldError('email')">
-          <label for="email">Email</label>
-          <input
-            id="email"
-            type="email"
-            autocomplete="email"
-            required
-            [value]="email()"
-            (input)="email.set($any($event.target).value)"
-          />
-          @if (fieldError('email'); as message) {
-            <p class="err">{{ message }}</p>
-          }
+        <div class="signin-bar">
+          <div class="sb-field" [class.invalid]="fieldError('email')">
+            <app-icon name="mail" size="sm" />
+            <label class="sr-only" for="email">Email</label>
+            <input
+              id="email"
+              type="email"
+              autocomplete="email"
+              placeholder="Email address"
+              required
+              [value]="email()"
+              (input)="email.set($any($event.target).value)"
+            />
+          </div>
+          <span class="sb-div"></span>
+          <div class="sb-field" [class.invalid]="fieldError('password')">
+            <app-icon name="lock" size="sm" />
+            <label class="sr-only" for="password">Password</label>
+            <input
+              id="password"
+              type="password"
+              autocomplete="new-password"
+              placeholder="Password"
+              required
+              aria-describedby="pw-hint"
+              [value]="password()"
+              (input)="password.set($any($event.target).value)"
+            />
+          </div>
+          <button class="btn btn-primary" type="submit" [disabled]="busy()">
+            {{ busy() ? 'Creating account…' : 'Create account' }}
+            @if (!busy()) {
+              <app-icon name="arrow-right" size="sm" />
+            }
+          </button>
         </div>
 
-        <div class="field" [class.invalid]="fieldError('password')">
-          <label for="password">Password</label>
-          <input
-            id="password"
-            type="password"
-            autocomplete="new-password"
-            required
-            [value]="password()"
-            (input)="password.set($any($event.target).value)"
-          />
-          <p class="hint">At least {{ minPassword }} characters.</p>
-          @if (fieldError('password'); as message) {
-            <p class="err">{{ message }}</p>
-          }
-        </div>
-
-        <button class="btn btn-primary" type="submit" [disabled]="busy()">
-          {{ busy() ? 'Creating account…' : 'Create account' }}
-        </button>
-
-        <p class="auth-foot">
-          Already have an account?
-          <a routerLink="/login" [queryParams]="{ next: nextParam() }">Sign in</a>
-        </p>
+        <p class="sb-hint" id="pw-hint">Password: at least {{ minPassword }} characters.</p>
+        @if (fieldError('email'); as message) {
+          <p class="sb-err">{{ message }}</p>
+        }
+        @if (fieldError('password'); as message) {
+          <p class="sb-err">{{ message }}</p>
+        }
       </form>
-    </div>
+
+      <p heroFoot class="new-here">
+        Already have an account?
+        <a routerLink="/login" [queryParams]="{ next: nextParam() }">Sign in →</a>
+      </p>
+    </app-auth-hero>
   `,
 })
 export class RegisterPage {
-  protected readonly theme = inject(ThemeService);
   private readonly auth = inject(AuthStore);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);

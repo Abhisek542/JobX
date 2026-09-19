@@ -10,7 +10,7 @@
   align-items: center;
   gap: 14px;
   padding: 14px 0;
-  border-top: 1px solid var(--line-soft);
+  border-top: 1px solid var(--line);
   flex-wrap: wrap;
 }
 .wl-row:first-child {
@@ -25,7 +25,7 @@
   align-items: center;
   gap: 8px;
   font-size: 14.5px;
-  font-weight: 680;
+  font-weight: 650;
   letter-spacing: -0.015em;
 }
 .wl-id .sub {
@@ -51,42 +51,71 @@
 .wl-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
 }
 .wl-confirm {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
-  font-size: 13px;
-  color: var(--bad);
-  font-weight: 600;
+  font-size: 12.5px;
+  color: var(--text);
+  font-weight: 550;
+  background: var(--bad-wash);
+  padding: 6px 6px 6px 12px;
+  border-radius: 10px;
 }
 
+/* Four health tiles (redesign "Activity overview"): a coloured icon square,
+   the number, the label. The tone class still comes from the page. */
 .stat-strip {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin-bottom: 15px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
 }
 .stat {
-  flex: 1;
-  min-width: 132px;
-  background: var(--panel);
+  min-width: 0;
+  background: var(--card-fill);
   border: 1px solid var(--line);
-  border-radius: var(--r-md);
-  padding: 12px 14px;
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-2);
+  padding: 18px;
+}
+.stat .ico {
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 14px;
+  background: var(--panel-3);
+  color: var(--muted);
+}
+.stat.good .ico {
+  background: var(--good-wash);
+  color: var(--good);
+}
+.stat.bad .ico {
+  background: var(--bad-wash);
+  color: var(--bad);
+}
+.stat.warn .ico {
+  background: var(--warn-wash);
+  color: var(--warn);
 }
 .stat .v {
-  font-size: 21px;
-  font-weight: 760;
+  font-size: 28px;
+  font-weight: 750;
   letter-spacing: -0.03em;
+  line-height: 1;
 }
 .stat .l {
-  font-size: 12px;
+  font-size: 12.5px;
   color: var(--muted);
-  margin-top: 1px;
+  margin-top: 6px;
 }
 .stat.warn .v {
   color: var(--warn);
@@ -96,6 +125,17 @@
 }
 .stat.good .v {
   color: var(--good);
+}
+
+@media (max-width: 1280px) {
+  .stat-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 480px) {
+  .stat-strip {
+    grid-template-columns: 1fr;
+  }
 }
 
 .kw-list {
@@ -111,7 +151,7 @@
   padding: 6px 12px;
   border-radius: 999px;
   border: 1px solid var(--line);
-  background: var(--panel-2);
-  font-size: 13px;
-  color: var(--text-2);
+  background: var(--panel-3);
+  font-size: 12.5px;
+  color: var(--muted);
 }

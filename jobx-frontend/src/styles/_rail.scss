@@ -2,19 +2,20 @@
    Search preferences and Watchlist health. The mockup's third "Add more
    companies" CTA card is deliberately gone. */
 
+/* The top padding lines the rail up with the pill row, under the top bar. */
 .rail {
-  width: 328px;
-  padding: 26px 26px 56px 0;
+  width: 330px;
+  padding: 86px 26px 56px 0;
   display: flex;
   flex-direction: column;
-  gap: 15px;
+  gap: 16px;
   min-width: 0;
 }
 .panel {
-  background: var(--panel);
+  background: var(--card-fill);
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
-  box-shadow: var(--sh-1);
+  box-shadow: var(--sh-2);
   overflow: hidden;
 }
 .panel-head {
@@ -22,16 +23,16 @@
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 15px 17px 12px;
+  padding: 16px 18px 10px;
 }
 .panel-head h3 {
   margin: 0;
-  font-size: 14.5px;
-  font-weight: 730;
+  font-size: 15px;
+  font-weight: 700;
   letter-spacing: -0.015em;
 }
 .panel-body {
-  padding: 0 17px 15px;
+  padding: 0 12px 14px;
 }
 
 /* preferences */
@@ -39,8 +40,9 @@
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  padding: 11px 0;
-  border-top: 1px solid var(--line-soft);
+  padding: 10px 8px;
+  border-radius: 10px;
+  border-top: 0;
   cursor: pointer;
   width: 100%;
   border-left: 0;
@@ -49,12 +51,12 @@
   background: none;
   text-align: left;
 }
-.pref:first-child {
-  border-top: 0;
-  padding-top: 2px;
+.pref:hover {
+  background: var(--panel-2);
 }
-.pref > svg:first-child {
-  color: var(--faint);
+/* app-icon renders its svg inside its own host, so match by size class, not by child position. */
+.pref .icon-sm {
+  color: var(--brand);
   margin-top: 1px;
 }
 /* The preference rows are <button>s, which may only contain phrasing content —
@@ -68,20 +70,20 @@
   display: block;
 }
 .pref-text .lb {
-  font-size: 12px;
+  font-size: 11.5px;
   color: var(--faint);
-  margin-bottom: 3px;
-  font-weight: 550;
+  margin-bottom: 2px;
+  font-weight: 500;
 }
 .pref-text .vl {
-  font-size: 13.5px;
-  font-weight: 620;
+  font-size: 13px;
+  font-weight: 600;
   color: var(--text);
   line-height: 1.4;
 }
 .pref-text .vl.exclude {
-  color: var(--muted);
-  font-weight: 550;
+  color: var(--bad);
+  font-weight: 600;
 }
 .pref .chev {
   color: var(--faint);
@@ -95,8 +97,10 @@
 .health-top {
   display: flex;
   align-items: center;
-  gap: 15px;
-  padding-bottom: 14px;
+  gap: 14px;
+  padding: 6px 8px 12px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--line);
 }
 .health-ring {
   position: relative;
@@ -119,8 +123,8 @@
   letter-spacing: -0.03em;
 }
 .health-text .st {
-  font-size: 14.5px;
-  font-weight: 730;
+  font-size: 14px;
+  font-weight: 650;
   letter-spacing: -0.015em;
 }
 .health-text .dt {
@@ -133,31 +137,30 @@
 .company-row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 9px 0;
-  border-top: 1px solid var(--line-soft);
+  gap: 12px;
+  padding: 9px 8px;
 }
 .status-dot {
-  width: 7px;
-  height: 7px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   flex: none;
 }
 .status-dot.ok {
   background: var(--good);
-  box-shadow: 0 0 0 3px var(--good-wash);
+  box-shadow: 0 0 0 4px var(--good-wash);
 }
 .status-dot.warn {
   background: var(--warn);
-  box-shadow: 0 0 0 3px var(--warn-wash);
+  box-shadow: 0 0 0 4px var(--warn-wash);
 }
 .status-dot.bad {
   background: var(--bad);
-  box-shadow: 0 0 0 3px var(--bad-wash);
+  box-shadow: 0 0 0 4px var(--bad-wash);
 }
 .status-dot.idle {
   background: var(--faint);
-  box-shadow: 0 0 0 3px var(--panel-3);
+  box-shadow: 0 0 0 4px var(--panel-3);
 }
 .company-row .cn {
   flex: 1;
@@ -166,7 +169,7 @@
 .company-row .cn b {
   display: block;
   font-size: 13px;
-  font-weight: 640;
+  font-weight: 600;
   letter-spacing: -0.01em;
 }
 .company-row .cn i {
@@ -183,20 +186,19 @@
 }
 .check-btn {
   border: 1px solid var(--line);
-  background: var(--panel);
-  color: var(--text-2);
+  background: transparent;
+  color: var(--muted);
   font-size: 11.5px;
-  font-weight: 650;
-  padding: 5px 9px;
+  font-weight: 500;
+  padding: 4px 9px;
   border-radius: 7px;
   cursor: pointer;
   flex: none;
   transition: all 0.14s ease;
 }
 .check-btn:hover:not([disabled]) {
-  border-color: var(--brand);
+  border-color: var(--brand-line);
   color: var(--brand);
-  background: var(--brand-wash);
 }
 .check-btn[disabled] {
   opacity: 0.5;
@@ -206,13 +208,14 @@
 .panel-foot {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
+  gap: 6px;
   padding: 12px 17px;
-  border-top: 1px solid var(--line-soft);
-  background: var(--panel-2);
+  border-top: 1px solid var(--line);
+  background: transparent;
   color: var(--brand);
-  font-size: 13px;
-  font-weight: 650;
+  font-size: 12.5px;
+  font-weight: 600;
   cursor: pointer;
   border-radius: 0;
   width: 100%;
@@ -222,11 +225,11 @@
   text-decoration: none;
 }
 .panel-foot:hover {
-  background: var(--panel-3);
+  background: var(--panel-2);
 }
 
 .panel-empty {
-  padding: 4px 0 10px;
+  padding: 4px 8px 10px;
   color: var(--muted);
   font-size: 12.5px;
   line-height: 1.5;

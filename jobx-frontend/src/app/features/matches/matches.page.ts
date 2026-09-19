@@ -13,6 +13,7 @@ import { ActionBar } from '../../shared/layout/action-bar';
   template: `
     <main class="main">
       <app-action-bar
+        [search]="true"
         title="Matches"
         subtitle="Every role Jobx has scored for you, newest checks included."
       />

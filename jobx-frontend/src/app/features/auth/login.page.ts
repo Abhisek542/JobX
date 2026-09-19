@@ -2,30 +2,28 @@ import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/cor
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { AppError } from '../../core/models/api-error.model';
 import { AuthStore } from '../../core/services/auth.store';
-import { ThemeService } from '../../core/services/theme.service';
 import { safeNext } from '../../core/util/redirect';
+import { AuthHero } from '../../shared/ui/auth-hero';
 import { Icon } from '../../shared/ui/icon';
 
+/**
+ * Sign-in, laid out in the landing hero (AuthHero). The form is the same
+ * email + password form as before — one "search bar" shaped row in the
+ * redesign — with the same validation, banners and busy state.
+ */
 @Component({
   selector: 'app-login-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [Icon, RouterLink],
+  imports: [AuthHero, Icon, RouterLink],
   template: `
-    <div class="auth-shell">
-      <button
-        class="btn btn-ghost btn-icon theme-corner"
-        type="button"
-        [attr.aria-label]="theme.isDark() ? 'Switch to light theme' : 'Switch to dark theme'"
-        (click)="theme.toggle()"
-      >
-        <app-icon [name]="theme.isDark() ? 'sun' : 'moon'" />
-      </button>
+    <app-auth-hero mode="login" [next]="nextParam()">
+      <h1 heroTitle>Find a job<br />that <em>moves you</em><br />forward.</h1>
+      <p heroLead class="lead">
+        Watch the careers boards you care about, get every new role scored against your keywords,
+        and apply on the employer's own page — before it reaches the aggregators.
+      </p>
 
-      <form class="auth-card" (submit)="submit($event)">
-        <div class="brand"><span>Job<span class="x">x</span></span></div>
-        <h1>Welcome back</h1>
-        <p class="lede">New roles from the boards you watch, scored against your keywords.</p>
-
+      <form class="auth-form" (submit)="submit($event)">
         @if (expired()) {
           <div class="auth-error">
             <app-icon name="alert" size="sm" />
@@ -39,50 +37,58 @@ import { Icon } from '../../shared/ui/icon';
           </div>
         }
 
-        <div class="field" [class.invalid]="fieldError('email')">
-          <label for="email">Email</label>
-          <input
-            id="email"
-            type="email"
-            autocomplete="email"
-            required
-            [value]="email()"
-            (input)="email.set($any($event.target).value)"
-          />
-          @if (fieldError('email'); as message) {
-            <p class="err">{{ message }}</p>
-          }
+        <div class="signin-bar">
+          <div class="sb-field" [class.invalid]="fieldError('email')">
+            <app-icon name="mail" size="sm" />
+            <label class="sr-only" for="email">Email</label>
+            <input
+              id="email"
+              type="email"
+              autocomplete="email"
+              placeholder="Email address"
+              required
+              [value]="email()"
+              (input)="email.set($any($event.target).value)"
+            />
+          </div>
+          <span class="sb-div"></span>
+          <div class="sb-field" [class.invalid]="fieldError('password')">
+            <app-icon name="lock" size="sm" />
+            <label class="sr-only" for="password">Password</label>
+            <input
+              id="password"
+              type="password"
+              autocomplete="current-password"
+              placeholder="Password"
+              required
+              [value]="password()"
+              (input)="password.set($any($event.target).value)"
+            />
+          </div>
+          <button class="btn btn-primary" type="submit" [disabled]="busy()">
+            {{ busy() ? 'Signing in…' : 'Sign in' }}
+            @if (!busy()) {
+              <app-icon name="arrow-right" size="sm" />
+            }
+          </button>
         </div>
 
-        <div class="field" [class.invalid]="fieldError('password')">
-          <label for="password">Password</label>
-          <input
-            id="password"
-            type="password"
-            autocomplete="current-password"
-            required
-            [value]="password()"
-            (input)="password.set($any($event.target).value)"
-          />
-          @if (fieldError('password'); as message) {
-            <p class="err">{{ message }}</p>
-          }
-        </div>
-
-        <button class="btn btn-primary" type="submit" [disabled]="busy()">
-          {{ busy() ? 'Signing in…' : 'Sign in' }}
-        </button>
-
-        <p class="auth-foot">
-          No account yet?
-          <a routerLink="/register" [queryParams]="{ next: nextParam() }">Create one</a>
-        </p>
+        @if (fieldError('email'); as message) {
+          <p class="sb-err">{{ message }}</p>
+        }
+        @if (fieldError('password'); as message) {
+          <p class="sb-err">{{ message }}</p>
+        }
       </form>
-    </div>
+
+      <p heroFoot class="new-here">
+        New to Jobx?
+        <a routerLink="/register" [queryParams]="{ next: nextParam() }">Create an account →</a>
+      </p>
+    </app-auth-hero>
   `,
 })
 export class LoginPage {
-  protected readonly theme = inject(ThemeService);
   private readonly auth = inject(AuthStore);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);

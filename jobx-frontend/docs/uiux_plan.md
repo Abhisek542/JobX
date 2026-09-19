@@ -10,6 +10,11 @@
 
 ## 0. Read-me-first: the mockup is frozen and deliberately out of date
 
+> **2026-09-20:** the visual spec is now `docs/newui-dark-redesign-mockup.html`, the violet
+> redesign. It is a reskin only: every decision, state, contract and honesty rule in this plan
+> still applies. What changed is recorded under "UI reference" in CLAUDE.md. In short: the feed
+> search moved to the top bar on Dashboard and Matches, and login/register moved into a landing hero.
+
 The approved visual reference is `docs/jobx-focused-feed-mockup.html`. It is
 **frozen** — do not edit it to match the app.
 

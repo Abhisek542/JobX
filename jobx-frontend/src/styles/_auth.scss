@@ -1,61 +1,230 @@
-/* Login / register. Not in the frozen mockup (it starts logged in), so this is
-   built from the same tokens and primitives rather than invented styling. */
+/* Login / register, laid out in the landing hero (shared/ui/auth-hero.ts) —
+   docs/newui-dark-redesign-mockup.html, modelled on docs/newUi/newUi.png.
+   Surfaces resolve through tokens; only the illustration keeps its own night-sky
+   colours, because it is a picture and reads the same in both themes. */
 
-.auth-shell {
+app-auth-hero {
+  display: block;
+}
+
+.landing {
   min-height: 100vh;
-  display: grid;
-  place-items: center;
-  padding: 32px 20px;
-  background: radial-gradient(
-      1100px 520px at 50% -10%,
-      var(--brand-wash),
-      transparent 70%
-    ),
-    var(--bg);
+  padding: 18px;
 }
-.auth-card {
-  width: 100%;
-  max-width: 420px;
-  background: var(--panel);
+.hero {
+  position: relative;
+  max-width: 1440px;
+  margin: 0 auto;
+  overflow: hidden;
   border: 1px solid var(--line);
-  border-radius: var(--r-lg);
-  box-shadow: var(--sh-2);
-  padding: 28px 26px 24px;
+  border-radius: 24px;
+  background: radial-gradient(700px 480px at 78% 38%, var(--hero-glow), transparent 65%),
+    radial-gradient(500px 300px at 10% 0%, var(--hero-glow-2), transparent 70%), var(--hero-bg);
 }
-.auth-card .brand {
-  padding: 0 0 18px;
-  justify-content: center;
+
+/* ------------------------------------------------------------------ nav --- */
+.hero-nav {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 40px;
+  padding: 24px 44px;
 }
-.auth-card h1 {
-  margin: 0 0 4px;
-  font-size: 22px;
-  font-weight: 750;
-  letter-spacing: -0.03em;
-  text-align: center;
+.hero-nav .brand {
+  padding: 0;
 }
-.auth-card .lede {
-  margin: 0 0 22px;
-  text-align: center;
+.hero-nav .links {
+  display: flex;
+  gap: 30px;
+}
+.hero-nav .links button {
+  border: 0;
+  background: none;
+  padding: 0;
   color: var(--muted);
-  font-size: 13.5px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
 }
-.auth-card .btn-primary {
-  width: 100%;
-  margin-top: 4px;
+.hero-nav .links button:hover {
+  color: var(--text);
 }
-.auth-foot {
-  margin: 18px 0 0;
-  text-align: center;
+.hero-nav .sp {
+  flex: 1;
+}
+.hero-nav .right {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+.hero-nav .login {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--brand);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+.hero-nav .login:hover {
+  color: var(--text);
+}
+.hero-nav a.btn {
+  text-decoration: none;
+}
+
+/* ----------------------------------------------------------------- copy --- */
+.hero-body {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  min-height: 560px;
+}
+.hero-copy {
+  position: relative;
+  z-index: 2;
+  padding: 28px 0 28px 44px;
+}
+.eyebrow {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--brand);
+  background: var(--brand-wash);
+  border: 1px solid var(--brand-line);
+  border-radius: 999px;
+  padding: 6px 12px;
+}
+.hero-copy h1 {
+  font-size: clamp(42px, 5.4vw, 74px);
+  font-weight: 800;
+  line-height: 1.02;
+  letter-spacing: -0.04em;
+  margin: 26px 0 22px;
+}
+.hero-copy h1 em {
+  font-style: normal;
+  background: var(--wordmark-grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.hero-copy .lead {
+  color: var(--muted);
+  font-size: 17px;
+  line-height: 1.6;
+  max-width: 500px;
+  margin: 0 0 28px;
+}
+
+/* ----------------------------------------------------------------- form --- */
+/* The sign-in form takes the shape of the reference's search bar. */
+.auth-form {
+  max-width: 580px;
+}
+.signin-bar {
+  display: flex;
+  align-items: stretch;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  padding: 6px;
+  box-shadow: var(--sh-2);
+  transition: border-color 0.14s ease, box-shadow 0.14s ease;
+}
+.signin-bar:focus-within {
+  border-color: var(--brand);
+  box-shadow: var(--ring);
+}
+.sb-field {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+  border-radius: 9px;
+}
+.sb-field .icon-sm {
+  color: var(--faint);
+}
+.sb-field.invalid {
+  box-shadow: inset 0 0 0 1px var(--bad);
+}
+.sb-field.invalid .icon-sm {
+  color: var(--bad);
+}
+.sb-field input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  padding: 12px 0;
+}
+.sb-field input::placeholder {
+  color: var(--faint);
+}
+.sb-div {
+  width: 1px;
+  background: var(--line);
+  margin: 8px 0;
+}
+.signin-bar .btn-primary {
+  border-radius: 10px;
+  padding: 0 22px;
+}
+.sb-hint {
+  margin: 10px 2px 0;
+  font-size: 12px;
+  color: var(--faint);
+}
+.sb-err {
+  margin: 8px 2px 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--bad);
+}
+
+.popular {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 18px;
   font-size: 13px;
   color: var(--muted);
 }
-.auth-foot a {
-  font-weight: 650;
+.pchip {
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 5px 13px;
+  font-size: 12px;
+}
+.new-here {
+  margin: 18px 0 0;
+  font-size: 13.5px;
+  color: var(--muted);
+}
+.new-here a {
+  color: var(--brand);
+  font-weight: 600;
   text-decoration: none;
 }
-.auth-foot a:hover {
+.new-here a:hover {
   text-decoration: underline;
 }
+
 .auth-error {
   display: flex;
   gap: 9px;
@@ -68,14 +237,180 @@
   font-size: 13px;
   font-weight: 550;
   line-height: 1.45;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
 }
 .auth-error svg {
   flex: none;
   margin-top: 1px;
 }
-.theme-corner {
-  position: fixed;
-  top: 18px;
-  right: 18px;
+
+/* ---------------------------------------------------------- illustration --- */
+.hero-art {
+  position: absolute;
+  top: -90px;
+  right: 0;
+  bottom: 0;
+  width: 56%;
+  z-index: 1;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, transparent 1%, #000 22%),
+    linear-gradient(180deg, #000 78%, transparent);
+  -webkit-mask-composite: source-in;
+  mask-image: linear-gradient(90deg, transparent 0, transparent 1%, #000 22%),
+    linear-gradient(180deg, #000 78%, transparent);
+  mask-composite: intersect;
+}
+.hero-art svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.art-caption {
+  position: absolute;
+  z-index: 2;
+  right: 22%;
+  top: 30%;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  color: #fff;
+}
+.art-caption .icon {
+  width: 30px;
+  height: 30px;
+  color: #c4b0ff;
+}
+.art-caption b {
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1.35;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
+}
+
+/* ---------------------------------------------------------------- stats --- */
+.hero-stats {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 24px;
+  padding: 26px 44px 40px;
+}
+.hstat {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.hstat .tile {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  color: var(--brand);
+  background: var(--brand-wash);
+  border: 1px solid var(--brand-line);
+}
+.hstat .v {
+  font-size: 26px;
+  font-weight: 750;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+.hstat .l {
+  font-size: 13.5px;
+  color: var(--muted);
+}
+
+/* ----------------------------------------------------------- responsive --- */
+/* Wide screens: the right of the nav sits on the (always dark) illustration. */
+@media (min-width: 1081px) {
+  :root:not([data-theme='dark']) .hero-nav .login {
+    color: #efe9ff;
+  }
+  :root:not([data-theme='dark']) .hero-nav .right .btn-ghost {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.25);
+    color: #fff;
+  }
+}
+@media (max-width: 1080px) {
+  .hero-body {
+    grid-template-columns: 1fr;
+    min-height: 0;
+  }
+  .hero-copy {
+    padding: 20px 32px 0;
+  }
+  .hero-art {
+    position: relative;
+    top: 0;
+    width: 100%;
+    height: 380px;
+    -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 18%);
+    mask-image: linear-gradient(180deg, transparent 0, #000 18%);
+  }
+  .art-caption {
+    top: auto;
+    bottom: 30px;
+  }
+  .hero-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: 20px 32px 32px;
+  }
+  .hero-nav {
+    padding: 20px 32px;
+  }
+}
+@media (max-width: 760px) {
+  .landing {
+    padding: 0;
+  }
+  .hero {
+    border-radius: 0;
+    border-left: 0;
+    border-right: 0;
+  }
+  .hero-nav {
+    padding: 16px;
+    gap: 12px;
+  }
+  .hero-nav .links {
+    display: none;
+  }
+  .hero-copy {
+    padding: 12px 16px 0;
+  }
+  .hero-copy h1 {
+    letter-spacing: -0.03em;
+  }
+  .signin-bar {
+    flex-direction: column;
+    padding: 8px;
+    gap: 4px;
+  }
+  .sb-div {
+    width: auto;
+    height: 1px;
+    margin: 0 8px;
+  }
+  .signin-bar .btn-primary {
+    padding: 12px;
+  }
+  .hero-art {
+    height: 300px;
+  }
+  .hero-stats {
+    padding: 16px 16px 28px;
+    gap: 18px;
+  }
+}
+@media (max-width: 480px) {
+  .hero-nav .login {
+    display: none;
+  }
+  .hero-stats {
+    grid-template-columns: 1fr;
+  }
 }

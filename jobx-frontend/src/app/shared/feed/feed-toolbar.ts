@@ -16,29 +16,17 @@ const PILLS: Pill[] = [
   { key: 'DISMISSED', label: 'Dismissed' },
 ];
 
+/**
+ * Status pills, the List / By company toggle and the sort menu. The search box
+ * that used to sit here now lives in the top bar (ActionBar with search=true)
+ * and drives the same FeedStore query.
+ */
 @Component({
   selector: 'app-feed-toolbar',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [Icon],
   template: `
     <div class="toolbar">
-      <div class="search">
-        <app-icon name="search" />
-        <input
-          type="text"
-          autocomplete="off"
-          aria-label="Search matches by title, company or keyword"
-          placeholder="Search matches by title, company or keyword"
-          [value]="query()"
-          (input)="queryChange.emit($any($event.target).value)"
-        />
-        @if (query()) {
-          <button class="clear" type="button" aria-label="Clear search" (click)="queryChange.emit('')">
-            <app-icon name="x" size="xs" />
-          </button>
-        }
-      </div>
-
       <div class="filter-row">
         <div class="pills" role="tablist" aria-label="Filter matches by status">
           @for (pill of pills; track pill.key) {
@@ -120,7 +108,6 @@ const PILLS: Pill[] = [
   `,
 })
 export class FeedToolbar {
-  readonly query = input('');
   readonly status = input<StatusFilter>('ALL');
   readonly sort = input<SortMode>('score');
   readonly grouped = input(false);
@@ -128,7 +115,6 @@ export class FeedToolbar {
   /** Counts describe the whole feed, never the current page (uiux_plan.md §4). */
   readonly counts = input.required<Record<StatusFilter, number>>();
 
-  readonly queryChange = output<string>();
   readonly statusChange = output<StatusFilter>();
   readonly sortChange = output<SortMode>();
   readonly groupedChange = output<boolean>();
