@@ -318,7 +318,7 @@ Rendered unconditionally at `add-company-modal.ts:205` and `:225`:
 **Fix direction.** On pick, either call `resolve(option.companyName)` (which returns a real
 preview) or make the count/titles/link conditional and build `boardUrl` client-side from the
 platform + token.
-
+chec
 ---
 
 ## 6. Long outbound HTTP calls run inside DB transactions (Medium)
@@ -385,7 +385,7 @@ parameter all answer `500 {"code":"internal_error"}` and log a stack trace at ER
 
 ---
 
-## 8. Malformed `Location` header becomes a 500 (Low)
+## 8.  " (Low)
 
 **Symptom.** A careers site that redirects with a syntactically invalid `Location` makes
 `POST /watchlist/resolve` return 500 for the user.
