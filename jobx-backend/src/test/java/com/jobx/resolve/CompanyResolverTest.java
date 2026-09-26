@@ -152,6 +152,12 @@ class CompanyResolverTest {
         verify(companyRepository, never()).searchByNameOrToken(anyString(), any());
     }
 
+    /** A typed "%" would otherwise return the whole companies table. */
+    @Test
+    void catalogEscapesLikeWildcards() {
+        resolver.search(user, "50%_off!");
+        verify(companyRepository).searchByNameOrToken(eq("50!%!_off!!"), any());
+    }
 
     /**
      * A seeded catalog entry has no stored jobs yet, and offering it with "0 open

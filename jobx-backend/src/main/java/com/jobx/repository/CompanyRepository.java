@@ -28,9 +28,13 @@ public interface CompanyRepository extends JpaRepository<Company, UUID> {
      * PhonePe's Greenhouse token went from 68 live jobs to a hard 404 in six
      * days. Offering one as a confident suggestion would be worse than offering
      * nothing.
+     *
+     * {@code query} must already be LIKE-escaped with {@code !} (see
+     * {@code CompanyResolver.escapeLike}); {@code !} rather than a backslash
+     * because HQL string literals give the backslash a meaning of their own.
      */
-    @Query("SELECT c FROM Company c WHERE LOWER(c.displayName) LIKE LOWER(CONCAT('%', :query, '%')) "
-            + "OR LOWER(c.boardToken) LIKE LOWER(CONCAT('%', :query, '%'))")
+    @Query("SELECT c FROM Company c WHERE LOWER(c.displayName) LIKE LOWER(CONCAT('%', :query, '%')) ESCAPE '!' "
+            + "OR LOWER(c.boardToken) LIKE LOWER(CONCAT('%', :query, '%')) ESCAPE '!'")
     List<Company> searchByNameOrToken(@Param("query") String query, Pageable pageable);
 
     /**

@@ -198,7 +198,7 @@ public class CompanyResolver {
             return List.of();
         }
         List<Company> found = companyRepository.searchByNameOrToken(
-                trimmed, PageRequest.of(0, catalogPageSize * 3));
+                escapeLike(trimmed), PageRequest.of(0, catalogPageSize * 3));
 
         String lower = trimmed.toLowerCase(Locale.ROOT);
         return found.stream()
@@ -208,6 +208,15 @@ public class CompanyResolver {
                         .thenComparing(Company::getDisplayName, String.CASE_INSENSITIVE_ORDER))
                 .limit(catalogPageSize)
                 .toList();
+    }
+
+    /**
+     * Makes typed text match literally inside the catalog LIKE: without this a
+     * bare "%" returns the whole companies table and "_" matches any character.
+     * The escape character is escaped first so it can't pair with what follows.
+     */
+    static String escapeLike(String text) {
+        return text.replace("!", "!!").replace("%", "!%").replace("_", "!_");
     }
 
     /**

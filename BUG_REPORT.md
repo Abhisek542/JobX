@@ -8,22 +8,16 @@ status, login timing, N+1 on the feed) are excluded. Fixed items are marked **Fi
 |---|----------|------|---------|
 | 1 | High | Frontend | **Fixed 2026-09-12** — Sign-out does not clear the data stores — next user sees the previous user's data |
 | 2 | High | Backend | **Fixed 2026-09-13** — Workable / SmartRecruiters re-fetch detail for every tombstoned posting, every cycle |
-| 3 | Medium | Backend | Email is case-sensitive at register and login |
-| 4 | Medium | Backend | **Fixed 2026-09-13** — Experience penalty never fires for open-ended ranges ("5+ years") |
 | 3 | Medium | Backend | **Fixed 2026-09-13** — Email is case-sensitive at register and login |
-| 4 | Medium | Backend | Experience penalty never fires for open-ended ranges ("5+ years") |
+| 4 | Medium | Backend | **Fixed 2026-09-13** — Experience penalty never fires for open-ended ranges ("5+ years") |
 | 5 | Medium | Frontend | **Fixed 2026-09-13** — Typeahead pick shows "0 open roles" and a blank board link |
-| 6 | Medium | Backend | Long outbound HTTP calls run inside DB transactions |
-| 7 | Medium | Backend | **Fixed 2026-09-19** — Framework exceptions (404 path, 405 method, missing param) become 500 |
 | 6 | Medium | Backend | **Fixed 2026-09-19** — Long outbound HTTP calls run inside DB transactions |
-| 7 | Medium | Backend | Framework exceptions (404 path, 405 method, missing param) become 500 |
+| 7 | Medium | Backend | **Fixed 2026-09-19** — Framework exceptions (404 path, 405 method, missing param) become 500 |
 | 8 | Low | Backend | **Fixed 2026-09-19** — Malformed `Location` header on a careers site becomes a 500 |
 | 9 | Low | Frontend | **Fixed 2026-09-20** — `?next=` deep link is set by the guard but ignored by the login page |
-| 10 | Low | Frontend | Copy says scores update "on the next check"; backend rescores immediately |
-| 11 | Low | Backend | **Fixed 2026-09-20** — No per-board lock between "Check now" and the scheduled cycle |
 | 10 | Low | Frontend | **Fixed 2026-09-20** — Copy says scores update "on the next check"; backend rescores immediately |
-| 11 | Low | Backend | No per-board lock between "Check now" and the scheduled cycle |
-| 12 | Low | Backend | `%` / `_` not escaped in the catalog search `LIKE` |
+| 11 | Low | Backend | **Fixed 2026-09-20** — No per-board lock between "Check now" and the scheduled cycle |
+| 12 | Low | Backend | **Fixed 2026-09-26** — `%` / `_` not escaped in the catalog search `LIKE` |
 
 ---
 
@@ -625,6 +619,14 @@ an in-memory `ConcurrentHashMap<UUID, Lock>` at the top of `fetchCompany`, and h
 ---
 
 ## 12. `%` / `_` not escaped in the catalog search `LIKE` (Low)
+
+> **Fixed 2026-09-26** (branch `task/like-escape-fix`). `CompanyResolver.searchCatalog` now
+> passes the query through a new `escapeLike` helper, and both `LIKE`s in
+> `CompanyRepository.searchByNameOrToken` carry `ESCAPE '!'`. `!` rather than the suggested
+> backslash, because HQL string literals give the backslash a meaning of their own. Verified
+> against the dev database: a raw `%` returned all 29 companies, the escaped `%` and `_`
+> return 0, and `ra` still returns its 3. Tests 263 → 264 (`catalogEscapesLikeWildcards` in
+> `CompanyResolverTest`). The text below is the original report.
 
 **Symptom.** Typing `%` in the add-company field returns the whole companies table (capped at
 24 rows by the page size); `_` matches any single character.
