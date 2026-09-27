@@ -365,12 +365,30 @@ Detect ATS from careers URL, hit that platform's public job API directly:
 - Lever: `api.lever.co/v0/postings/{company}?mode=json`
 - Ashby: `api.ashbyhq.com/posting-api/job-board/{token}` (public, no-auth path — not `jobPosting.list`)
 - Workable: `apply.workable.com/api/v1/widget/accounts/{token}` (embed-widget endpoint)
-- Trickier/later: Rippling, Recruitee, BambooHR, Workday — no clean public API, mark "portal unsupported" rather than faking support
+- SmartRecruiters: `api.smartrecruiters.com/v1/companies/{id}/postings` (two-call; built 2026-08-29)
+- Next wave (PLANNED 2026-09-27): Workday, Rippling, BambooHR (JSON APIs) and Jobvite, JazzHR (HTML).
+  iCIMS and Gusto depend on recon. The backend CLAUDE.md "ATS integration approach" section has the
+  order and rules. The UI lists a platform only once its fetcher ships.
 
-**All four platforms are now implemented and live-verified (2026-08-02).** Verified
+**All five platforms are implemented and live-verified** (four on 2026-08-02, SmartRecruiters 2026-08-29). Verified
 field-level details (JSON shapes, date formats, Workable's two-call design, per-board
 quirks, dead board tokens) are in `jobx-backend/docs/ats-api-reference.md` — read that file before
 touching any fetcher code, not this one.
+
+**Add-company improvements (PLANNED 2026-09-27, not built yet)**, plan in
+`jobx-backend/add-company-improvements.md`. Frontend impact:
+- the add-company modal gets two modes, **Company name** (with typeahead) and
+  **Careers page link**, and sends `{ mode, query }` to `/watchlist/resolve`;
+- the confirm card gets a "no open roles right now" state (`jobCount === 0`) and
+  a "Read from their careers page" state for `CUSTOM` crawled boards;
+- feed cards and the detail drawer show department and employment type when
+  present, plus a **"Crawled"** badge when `MatchResponse.atsPlatform ===
+  'CUSTOM'`;
+- a watchlist row with `movedTo` shows a banner with Switch and Dismiss buttons.
+  The copy depends on `movedTo.reason`:
+  - `FAILING`: "moved to {Platform}";
+  - `NATIVE_AVAILABLE` (a healthy crawled board): "careers page now uses
+    {Platform}. Switch to the direct feed?"
 
 ## The matching engine — VERIFIED, port this logic, don't redesign it
 
@@ -516,7 +534,8 @@ resuming multi-ATS work.
 3. More fetchers: Ashby, Workable, Lever, then harder ones if time allows. **Done and
    verified 2026-08-02** (order actually built: Ashby → Lever → Workable) — each
    verified against a live board as built, per-platform notes in
-   `jobx-backend/docs/ats-api-reference.md`. Harder platforms (Rippling, Recruitee, Workday) still
+   `jobx-backend/docs/ats-api-reference.md`. Next wave (Workday, Rippling, BambooHR, Jobvite,
+   JazzHR, iCIMS, Gusto) PLANNED 2026-09-27; see "ATS integration approach". Recruitee still
    out of scope.
 4. Auth (Spring Security) + multi-tenant data, before handing app to other test users.
    **Done and verified 2026-07-30** — see Implementation status above for the full

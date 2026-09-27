@@ -188,3 +188,20 @@ What sniffing a live careers page actually yields, measured across four boards:
 So sniffing hits about half of careers pages, and slug probing covers exactly the
 half it misses (atlan → `atlan`, fampay → `fampay`). Neither is sufficient alone.
 Page fixtures for the first three are in `src/test/resources/fixtures/careers-*.html`.
+
+## Candidate platforms — recon 2026-09-27 (NOT BUILT YET)
+
+These are first-pass curl checks, not verified fetcher notes. Each platform's PR
+must re-capture fixtures and replace its row below with a proper `## {Platform} —
+VERIFIED` section. The build order and rules are in the backend CLAUDE.md, under
+"ATS integration approach".
+
+| Platform | Endpoint(s) seen | Dead-board signal | Notes |
+|---|---|---|---|
+| Workday | List: `POST https://{tenant}.{wdN}.myworkdayjobs.com/wday/cxs/{tenant}/{site}/jobs`, body `{"appliedFacets":{},"limit":20,"offset":0,"searchText":""}` → `{total, jobPostings[{title, externalPath, locationsText, postedOn, bulletFields}]}`. Detail: `GET …/wday/cxs/{tenant}/{site}{externalPath}` → `jobPostingInfo{jobDescription (HTML), startDate (date-only), timeType, jobReqId, location}` | TBD | Token is composite `tenant/wdN/site`, e.g. `salesforce/wd12/External_Career_Site` (1,522 jobs, 20 per page). `postedOn` is relative text ("Posted Today", "Posted 30+ Days Ago"). Still to check: is `total` only set on page 0? Is the list newest-first? |
+| Rippling | List (one call, whole board): `GET https://api.rippling.com/platform/api/ats/v1/board/{slug}/jobs` → `[{uuid, name, department, url, workLocation}]`. Paged alternative: `ats.rippling.com/api/v2/board/{slug}/jobs` (`page, pageSize=20, totalItems`). Detail: `GET ats.rippling.com/api/v2/board/{slug}/jobs/{uuid}` → `description{company, role}` (HTML), `createdOn` (ISO), `employmentType`, `companyName` | v2 → 404 `RESOURCE_NOT_FOUND` | Page URL: `ats.rippling.com/{slug}/jobs` |
+| BambooHR | `GET https://{sub}.bamboohr.com/careers/list` → `{"meta":{"totalCount":N},"result":[…]}` | 302 → `www.bamboohr.com` | `andela` is real but has 0 jobs. Still need a live tenant with openings to capture the item and detail shapes. |
+| Jobvite | `GET https://jobs.jobvite.com/{co}/jobs`: server-rendered HTML with `.jv-job-list-name`, `.jv-job-list-location` and links to `/{co}/job/{id}` | Redirects to `jobvite.com/support/…?invalid=1` | Live boards: `nutanix`, `egnyte`. Detail pages have no JSON-LD. |
+| JazzHR | `https://{sub}.applytojob.com/apply` (HTML) | Redirects to `jazzhr.com/job-seekers`, or `<title>` "Inactive Career Page" | Still need a live tenant |
+| iCIMS | Guessed `https://{host}.icims.com/jobs/search?ss=1&in_iframe=1` | — | Every host tried returned 404. Find the real URL form from an actual customer's careers page. |
+| Gusto | `jobs.gusto.com/boards/{slug}` | — | 403 Cloudflare "Just a moment…" challenge. Don't bypass it; stays UNSUPPORTED unless a public URL without the challenge exists. |

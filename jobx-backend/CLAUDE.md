@@ -783,7 +783,33 @@ Detect ATS from careers URL, hit that platform's public job API directly:
 - Workable: `apply.workable.com/api/v1/widget/accounts/{token}` (embed-widget endpoint)
 - SmartRecruiters: `api.smartrecruiters.com/v1/companies/{id}/postings` (public, two-call;
   list is capped at 100/page and a bogus id returns an empty 200, not a 404)
-- Trickier/later: Rippling, Recruitee, BambooHR, Workday — no clean public API, mark "portal unsupported" rather than faking support
+- **Next wave (PLANNED 2026-09-27, not built yet)** — the old "no clean public API"
+  verdict on Workday/Rippling/BambooHR was wrong; live recon found usable public
+  endpoints. The full plan is in `jobx-backend/new-ats-add.md`. Recon notes are under
+  "Candidate platforms" in `docs/ats-api-reference.md`. Build them one PR each, in this order, with a recon step
+  (fixtures + a docs section) at the start of each:
+  1. PR 0: groundwork. Add enum values (`ats_platform` is TEXT with no CHECK, so no
+     migration), a `BoardTokens` validator, and multi-part token rules in `AtsUrlParser`.
+  2. **API tier (JSON):** Workday → Rippling → BambooHR.
+  3. **HTML tier (jsoup):** Jobvite → JazzHR.
+  4. **Recon-gated:** iCIMS (no working public URL found yet) and Gusto (behind a
+     Cloudflare challenge). Each stays UNSUPPORTED unless a public URL without a bot
+     challenge turns up.
+- Rules for the next wave:
+  - **Tokens that end up in a hostname go through `BoardTokens`.** This covers the
+    BambooHR/JazzHR/iCIMS subdomain and Workday's `tenant/wdN/site`. Existing
+    fetchers only put the token in a URL *path*. `POST /watchlist` takes
+    `boardToken` straight from the user, so an unvalidated host token is SSRF.
+  - **HTML-tier fetchers fail loudly.** A 200 page where the selector finds zero
+    job cards, and which lacks the platform's known "no openings" / "inactive"
+    marker, throws `AtsFetchException`. A layout change must show up as FAILED,
+    never as a silently empty feed.
+  - **Never bypass bot protection** (Cloudflare challenges, CAPTCHAs). If that is
+    the only way in, the platform stays UNSUPPORTED.
+  - Probing stays bounded: only Rippling and BambooHR are candidates for
+    `PROBEABLE`. Workday and iCIMS tokens can't be guessed from a name.
+- Recruitee: not on the next-wave list. `{sub}.recruitee.com/api/offers/` is
+  unverified.
 
 **All five platforms are implemented and live-verified** (the first four 2026-08-02,
 SmartRecruiters 2026-08-29). Verified field-level details (JSON shapes, date formats,
@@ -794,6 +820,67 @@ code, not this one.
 Board tokens rot: PhonePe's Greenhouse board went from 68 live jobs to a hard 404
 in six days when they moved to SmartRecruiters. Treat a sudden FAILED board as
 "check where the company's careers page points now", not as a bug in the fetcher.
+
+## Add-company improvements + custom careers-page crawler (PLANNED 2026-09-27, not built yet)
+
+Full plan: `jobx-backend/add-company-improvements.md`. Suggested order:
+A → B → C → E1 → E2 → D. Until each PR ships, the add-company and ATS sections
+above still describe the code that is live. Update them as each PR lands.
+
+- **A: two add-company modes.** `ResolveRequest.mode` is `NAME` (catalog →
+  probe, never fetches a page) or `URL` (parse → sniff → probe). URL mode may
+  follow **at most 3 same-site careers links, one hop**, each through
+  `SafeUrlFetcher`. This deliberately amends `SafeUrlFetcher`'s "no crawling"
+  rule; the link-following lives in the resolver, not the fetcher.
+- **B: empty boards.** A board with 0 roles is watchable only if it came from
+  URL/SNIFF **and** its platform 404s unknown tokens
+  (`AtsFetcher.distinguishesMissingBoard()`: Greenhouse, Lever, Ashby).
+  Workable and SmartRecruiters keep the strict rule. PROBE/CATALOG always
+  require live roles.
+- **C: new job fields.** `department`, `team`, `employment_type` on jobs. Display
+  only; `MatchScorer` is unchanged.
+- **D: ATS moves.** `companies.failing_since` → `BoardRedetector` (12h failing,
+  at most once a day) re-sniffs `careers_url` or re-probes → stores a
+  `moved_to_*` **proposal**. The user confirms via `POST /watchlist/{id}/move`.
+  Never switch silently. Moves work in both directions between native and custom:
+  - native → `CUSTOM`, when a company leaves its ATS for an in-house page;
+  - `CUSTOM` → native (`NATIVE_AVAILABLE`), checked weekly even on healthy
+    boards, because native API data beats crawled data.
+- **E: `CUSTOM` smart crawler** for companies without a standard ATS. Last
+  resort in URL mode only. `board_token` is the canonical careers URL.
+  - E1: static extraction. JSON-LD `JobPosting` first, then a repeated-DOM-
+    structure heuristic with title and URL filters.
+  - E2: Playwright rendering for JS-heavy pages. Also used for "rendered
+    SNIFF", which finds ATS links that are loaded in JavaScript.
+    **Playwright Java is not thread-safe**, so `BrowserRenderer` confines each
+    `Playwright`/Chromium to its own single-thread lane, and callers get a
+    `Future<String>`:
+    - `interactive` (1 thread) serves resolve requests where a user is waiting;
+    - `background` (1 thread) serves scheduler `RENDER` boards;
+    - the split exists so a user never queues behind a scheduler cycle;
+    - it's one thread each because every thread costs a Chromium process
+      (~100–200 MB). Both sizes are configurable.
+  - Rules:
+    - **Every CUSTOM request goes through `SafeUrlFetcher`**, because the
+      scheduler fetches a user-supplied URL forever.
+    - **Every in-browser request goes through a `PrivateAddressGuard`
+      route.**
+    - Zero recognised jobs without a "no openings" phrase → `AtsFetchException`
+      (fail loudly).
+    - Honour robots.txt.
+    - **Never bypass bot protection.**
+    - The scheduler renders only `crawl_mode = RENDER` boards.
+    - Crawled jobs carry a visible **"Crawled"** badge
+      (`MatchResponse.atsPlatform`).
+    - **`CrawlerBenchmarkTest`** measures precision and recall against
+      hand-labelled snapshots of 15–20 real careers pages, stored in
+      `src/test/resources/crawler-bench/`. Floors are set from the first
+      baseline and never lowered silently. Every extractor change must keep it
+      green.
+  - E3 (later, only if the benchmark shows it's needed): pagination / "Load
+    more" (cap 5 pages) and job lists inside iframes.
+- Out of scope for now: email alerts, and guessing a website from a company
+  name.
 
 ## The matching engine — VERIFIED, port this logic, don't redesign it
 
@@ -955,7 +1042,8 @@ resuming multi-ATS work.
 3. More fetchers: Ashby, Workable, Lever, then harder ones if time allows. **Done and
    verified 2026-08-02** (order actually built: Ashby → Lever → Workable) — each
    verified against a live board as built, per-platform notes in
-   `jobx-backend/docs/ats-api-reference.md`. Harder platforms (Rippling, Recruitee, Workday) still
+   `jobx-backend/docs/ats-api-reference.md`. Next wave (Workday, Rippling, BambooHR, Jobvite,
+   JazzHR, iCIMS, Gusto) PLANNED 2026-09-27; see "ATS integration approach". Recruitee still
    out of scope.
 4. Auth (Spring Security) + multi-tenant data, before handing app to other test users.
    **Done and verified 2026-07-30** — see Implementation status above for the full
