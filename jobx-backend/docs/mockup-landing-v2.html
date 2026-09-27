@@ -1,0 +1,1018 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JobX — See the role before the rush</title>
+<!--
+  Landing page mockup, v2 ("JobX's own direction"). Self-contained: open it in a browser.
+  Colour tokens mirror jobx-frontend/src/styles/_tokens.scss (light + dark).
+  The receipt playground runs the same rules as com.jobx.scorer.MatchScorer.
+  Everything else (watchlist, countdown, radar catches) is simulated sample data.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f5f4fb; --panel: #ffffff; --panel-2: #fbfaff; --sunk: #f3f1fa;
+  --line: #e6e3f2; --line-soft: #efedf7;
+  --text: #16132b; --muted: #5f5b7a; --faint: #938fab;
+  --brand: #6d28d9; --brand-strong: #5b21b6; --brand-wash: #efe9ff; --brand-line: #c9b8ff;
+  --brand-grad: linear-gradient(135deg, #7c3aed, #6d28d9);
+  --good: #0b7a55; --good-wash: #dcf7ec; --warn: #8a5a00; --warn-wash: #fdf1d6;
+  --bad: #be123c; --bad-wash: #ffe4ea; --track: #ebe8f5;
+  --sh-2: 0 2px 4px rgba(40,24,110,.04), 0 10px 24px rgba(40,24,110,.07);
+  --sh-3: 0 14px 34px rgba(40,24,110,.12), 0 2px 8px rgba(40,24,110,.06);
+  --sh-pop: 0 30px 70px rgba(22,12,60,.25);
+  --ring: 0 0 0 3px rgba(124,58,237,.25);
+  --scrim: rgba(22,19,43,.5);
+  --receipt: #fdfcff;
+  /* always-dark surfaces (hero, promises) */
+  --night: #0b0f22; --night-2: #070a17; --night-panel: #0e1325; --night-line: #1f2844;
+  --night-text: #f4f5ff; --night-muted: #9aa5c2; --night-faint: #67728f; --night-brand: #c4b5fd;
+  /* hero + nav: follow the theme */
+  --hero-bg: radial-gradient(900px 600px at 78% 45%, rgba(124,58,237,.16), transparent 65%), linear-gradient(180deg, #ffffff, #f3effd);
+  --hero-text: #16132b; --hero-muted: #5f5b7a; --hero-faint: #938fab; --hero-brand: #6d28d9; --hero-line: #e6e3f2;
+  --hero-good: #0b7a55; --hero-nav: rgba(255,255,255,.85); --hero-ticker: #f3effd;
+  --hero-cta-bg: #16132b; --hero-cta-ink: #ffffff; --hero-underline: #c9b8ff;
+  --radar-ring: rgba(124,58,237,.22); --radar-axis: rgba(124,58,237,.1);
+  --radar-sweep: conic-gradient(from -70deg, transparent 0deg, rgba(124,58,237,.05) 20deg, rgba(139,92,246,.32) 70deg, transparent 70.5deg);
+  --radar-core: #6d28d9; --radar-core-ink: #ffffff; --radar-core-glow: rgba(124,58,237,.45); --radar-blip: #8b5cf6;
+  --catch-bg: rgba(255,255,255,.96); --catch-line: #c9b8ff; --catch-shadow: 0 24px 60px rgba(40,24,110,.18); --catch-track: #ebe8f5;
+  --serif: 'Instrument Serif', Georgia, serif;
+  --mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+  --sans: Inter, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  --bg: #080b17; --panel: #0e1325; --panel-2: #10162a; --sunk: #0a0e1d;
+  --line: #1f2844; --line-soft: #182038;
+  --text: #f4f5ff; --muted: #9aa5c2; --faint: #67728f;
+  --brand: #a78bfa; --brand-strong: #c4b5fd; --brand-wash: #221a47; --brand-line: #4c3a99;
+  --brand-grad: linear-gradient(135deg, #8b5cf6, #7c3aed);
+  --good: #34d399; --good-wash: #0f3a2f; --warn: #f5b942; --warn-wash: #3d3014;
+  --bad: #fb7185; --bad-wash: #43182a; --track: #19213b;
+  --sh-2: 0 18px 40px rgba(0,0,0,.35); --sh-3: 0 18px 40px rgba(0,0,0,.45);
+  --sh-pop: 0 40px 80px rgba(0,0,0,.6);
+  --ring: 0 0 0 3px rgba(139,92,246,.35);
+  --scrim: rgba(4,5,12,.65);
+  --receipt: #10162a;
+  --hero-bg: radial-gradient(900px 600px at 78% 45%, rgba(124,58,237,.32), transparent 65%), linear-gradient(180deg, #0b0f22, #070a17);
+  --hero-text: #f4f5ff; --hero-muted: #9aa5c2; --hero-faint: #67728f; --hero-brand: #c4b5fd; --hero-line: #1f2844;
+  --hero-good: #34d399; --hero-nav: rgba(8,11,23,.78); --hero-ticker: #070a17;
+  --hero-cta-bg: #f4f5ff; --hero-cta-ink: #16132b; --hero-underline: #4c3a99;
+  --radar-ring: rgba(167,139,250,.2); --radar-axis: rgba(167,139,250,.12);
+  --radar-sweep: conic-gradient(from -70deg, transparent 0deg, rgba(124,58,237,.12) 20deg, rgba(167,139,250,.55) 70deg, transparent 70.5deg);
+  --radar-core: #f4f5ff; --radar-core-ink: #6d28d9; --radar-core-glow: rgba(196,181,253,.9); --radar-blip: #a78bfa;
+  --catch-bg: rgba(14,19,37,.94); --catch-line: #4c3a99; --catch-shadow: 0 24px 60px rgba(0,0,0,.5); --catch-track: #19213b;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; font-family: var(--sans); background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased; transition: background .25s, color .25s; }
+a { color: var(--brand); }
+button { font: inherit; cursor: pointer; }
+.serif { font-family: var(--serif); font-style: italic; font-weight: 400; letter-spacing: -0.01em; }
+.mono { font-family: var(--mono); }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.wrap { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
+:focus-visible { outline: 2px solid #8b5cf6; outline-offset: 2px; }
+
+/* ---------------------------------------------------------------- buttons */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 9px; height: 52px; padding: 0 26px; border-radius: 999px; border: 0; font-weight: 700; font-size: 15.5px; text-decoration: none; transition: transform .15s, box-shadow .15s, background .15s; white-space: nowrap; }
+.btn:active { transform: translateY(1px); }
+.btn-primary { background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: #fff; box-shadow: 0 14px 34px rgba(124,58,237,.4); }
+.btn-primary:hover { box-shadow: 0 18px 40px rgba(124,58,237,.55); }
+.btn-light { background: #fff; color: #5b21b6; }
+.btn-sm { height: 42px; padding: 0 18px; font-size: 14px; }
+.icon { width: 16px; height: 16px; flex: none; }
+
+/* -------------------------------------------------------------------- nav */
+.nav { position: fixed; inset: 0 0 auto; z-index: 50; transition: background .25s, border-color .25s, backdrop-filter .25s; border-bottom: 1px solid transparent; }
+.nav.scrolled { background: var(--hero-nav); backdrop-filter: blur(14px); border-color: var(--hero-line); }
+.nav .wrap { display: flex; align-items: center; gap: 30px; height: 76px; max-width: 1280px; }
+.logo { font-size: 23px; font-weight: 800; letter-spacing: -0.03em; color: var(--hero-text); text-decoration: none; }
+.logo span { color: #a78bfa; }
+.nav .sp { flex: 1; }
+.nav .links { display: flex; gap: 30px; }
+.nav-link { color: var(--hero-muted); font-size: 14px; font-weight: 500; text-decoration: none; background: none; border: 0; padding: 0; }
+.nav-link:hover { color: var(--hero-text); }
+.nav .login { color: var(--hero-text); font-weight: 600; }
+.nav .cta { height: 42px; padding: 0 20px; border-radius: 999px; background: var(--hero-cta-bg); color: var(--hero-cta-ink); font-weight: 700; font-size: 14px; border: 0; }
+.theme-btn { width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--hero-line); background: transparent; color: var(--hero-muted); display: grid; place-items: center; }
+.theme-btn:hover { color: var(--hero-text); }
+
+/* ------------------------------------------------------------------- hero */
+.hero { position: relative; min-height: 900px; background: var(--hero-bg); color: var(--hero-text); overflow: hidden; transition: color .25s; }
+.hero .wrap { position: relative; max-width: 1280px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: center; gap: 40px; min-height: 836px; padding-top: 76px; }
+.live { display: inline-flex; align-items: center; gap: 10px; font-family: var(--mono); font-size: 12.5px; letter-spacing: .05em; color: var(--hero-brand); }
+.pulse { position: relative; width: 8px; height: 8px; }
+.pulse::before, .pulse::after { content: ""; position: absolute; inset: 0; border-radius: 50%; background: #34d399; }
+.pulse::before { animation: ping 1.8s ease-out infinite; }
+@keyframes ping { to { transform: scale(3.2); opacity: 0; } }
+.hero h1 { margin: 26px 0 0; font-size: clamp(52px, 7vw, 94px); font-weight: 800; line-height: .98; letter-spacing: -0.05em; }
+.hero h1 .serif { color: var(--hero-brand); }
+.hero .lead { margin: 26px 0 0; max-width: 520px; font-size: 19px; line-height: 1.6; color: var(--hero-muted); }
+.hero .actions { display: flex; align-items: center; gap: 22px; margin-top: 34px; flex-wrap: wrap; }
+.underline-link { color: var(--hero-text); font-weight: 600; font-size: 15px; text-decoration: none; border-bottom: 1px solid var(--hero-underline); padding-bottom: 3px; }
+
+.radar { position: relative; width: min(620px, 100%); aspect-ratio: 1; margin-left: auto; }
+.radar .ring { position: absolute; border-radius: 50%; border: 1px solid var(--radar-ring); }
+.radar .axis { position: absolute; background: var(--radar-axis); }
+.radar .sweep { position: absolute; inset: 0; border-radius: 50%; background: var(--radar-sweep); will-change: transform; }
+.radar .core { position: absolute; left: 50%; top: 50%; width: 26px; height: 26px; margin: -13px 0 0 -13px; border-radius: 50%; background: var(--radar-core); box-shadow: 0 0 30px var(--radar-core-glow); display: grid; place-items: center; font-size: 11px; font-weight: 800; color: var(--radar-core-ink); }
+.blip { position: absolute; display: flex; align-items: center; gap: 8px; transform: translate(-4px, -4px); opacity: .35; transition: opacity 1.4s ease; }
+.blip.lit { opacity: 1; transition: opacity .1s; }
+.blip i { width: 9px; height: 9px; border-radius: 50%; background: var(--radar-blip); box-shadow: 0 0 12px var(--radar-blip); }
+.blip.new i { background: #34d399; box-shadow: 0 0 16px #34d399; }
+.blip span { font-family: var(--mono); font-size: 10.5px; color: var(--hero-muted); white-space: nowrap; }
+.catch { position: absolute; width: 260px; padding: 16px; border-radius: 16px; background: var(--catch-bg); border: 1px solid var(--catch-line); box-shadow: var(--catch-shadow); display: flex; flex-direction: column; gap: 10px; opacity: 0; transform: translateY(10px) scale(.97); transition: opacity .4s, transform .4s; pointer-events: none; }
+.catch.show { opacity: 1; transform: none; }
+.catch .tag { display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 10.5px; letter-spacing: .06em; color: var(--hero-good); }
+.catch .tag::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--hero-good); }
+.catch b { font-size: 15px; line-height: 1.3; }
+.catch small { font-size: 12px; color: var(--hero-muted); }
+.meter { display: flex; align-items: center; gap: 10px; }
+.meter .bar { flex: 1; height: 5px; border-radius: 5px; background: var(--catch-track); overflow: hidden; }
+.meter .bar i { display: block; height: 100%; width: 0; border-radius: 5px; background: linear-gradient(90deg, #8b5cf6, #c4b5fd); transition: width 1s cubic-bezier(.2,.8,.2,1); }
+.meter .num { font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--hero-brand); min-width: 22px; text-align: right; }
+
+.ticker { position: absolute; left: 0; right: 0; bottom: 0; height: 64px; border-top: 1px solid var(--hero-line); overflow: hidden; display: flex; align-items: center; }
+.ticker .label { flex: none; padding: 0 24px 0 max(24px, calc((100vw - 1280px) / 2 + 24px)); font-family: var(--mono); font-size: 12.5px; color: var(--hero-brand); background: var(--hero-ticker); position: relative; z-index: 1; height: 100%; display: flex; align-items: center; }
+.ticker .track { display: flex; gap: 48px; white-space: nowrap; font-family: var(--mono); font-size: 12.5px; color: var(--hero-faint); animation: marquee 28s linear infinite; padding-left: 24px; }
+@keyframes marquee { to { transform: translateX(-50%); } }
+
+/* --------------------------------------------------------------- sections */
+section { position: relative; }
+.eyebrow { font-family: var(--mono); font-size: 12.5px; letter-spacing: .06em; color: var(--brand); }
+h2 { margin: 0; font-size: clamp(40px, 5vw, 60px); font-weight: 800; line-height: 1.02; letter-spacing: -0.045em; }
+h2 .serif { color: var(--brand); }
+.muted { color: var(--muted); }
+.reveal { opacity: 0; transform: translateY(24px); transition: opacity .7s ease, transform .7s ease; }
+.reveal.in { opacity: 1; transform: none; }
+
+/* life of a posting */
+.life { padding: 140px 0 120px; }
+.life-head { display: grid; grid-template-columns: 7fr 5fr; gap: 60px; align-items: end; }
+.life-head p { margin: 0; font-size: 17px; line-height: 1.65; }
+.steps { position: relative; margin-top: 70px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 28px; }
+.steps .rail { position: absolute; left: 28px; right: 28px; top: 27px; height: 2px; background: var(--line); }
+.steps .rail i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #7c3aed, #a78bfa); transition: width .2s linear; }
+.step { position: relative; display: flex; flex-direction: column; gap: 14px; }
+.step .node { width: 56px; height: 56px; border-radius: 50%; border: 2px solid var(--line); background: var(--bg); color: var(--faint); display: grid; place-items: center; font-family: var(--mono); font-weight: 700; font-size: 14px; transition: all .35s; }
+.step.on .node { background: #7c3aed; border-color: #7c3aed; color: #fff; box-shadow: 0 0 0 6px rgba(124,58,237,.15); }
+.step.you.on .node { background: var(--bg); color: var(--brand); box-shadow: 0 0 0 6px rgba(124,58,237,.25), 0 0 30px rgba(124,58,237,.35); }
+.step .when { font-family: var(--mono); font-size: 12px; letter-spacing: .05em; color: var(--faint); transition: color .35s; }
+.step.on .when { color: var(--brand); }
+.step h3 { margin: 0; font-size: 22px; font-weight: 750; letter-spacing: -0.02em; line-height: 1.2; }
+.step p { margin: 0; font-size: 15px; line-height: 1.6; color: var(--muted); }
+
+/* receipt playground */
+.play { padding: 120px 0; background: var(--panel); border-block: 1px solid var(--line-soft); }
+.play .wrap { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 80px; align-items: start; }
+.play .intro { display: flex; flex-direction: column; gap: 22px; }
+.play .intro p { margin: 0; font-size: 17px; line-height: 1.65; }
+.panel { border: 1px solid var(--line); border-radius: 20px; background: var(--panel-2); padding: 22px; display: flex; flex-direction: column; gap: 18px; }
+.panel .try { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; }
+.panel .try em { font-style: normal; font-weight: 500; color: var(--faint); font-size: 12px; margin-left: auto; }
+.field-label { font-size: 12.5px; font-weight: 650; color: var(--muted); margin-bottom: 8px; display: block; }
+.seg { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; background: var(--sunk); border: 1px solid var(--line); border-radius: 12px; padding: 4px; }
+.seg button { border: 0; border-radius: 9px; background: transparent; color: var(--muted); padding: 9px 8px; font-size: 12.5px; font-weight: 600; line-height: 1.25; min-height: 44px; }
+.seg button[aria-pressed="true"] { background: var(--panel); color: var(--text); box-shadow: var(--sh-2); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 8px; min-height: 48px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+.chips:focus-within { border-color: var(--brand); box-shadow: var(--ring); }
+.chip { display: inline-flex; align-items: center; gap: 4px; padding: 5px 6px 5px 11px; border-radius: 999px; font-size: 12.5px; font-weight: 600; background: var(--brand-wash); color: var(--brand); border: 1px solid var(--brand-line); }
+.chip.ex { background: var(--bad-wash); color: var(--bad); border-color: color-mix(in srgb, var(--bad) 30%, transparent); }
+.chip button { width: 20px; height: 20px; border: 0; border-radius: 50%; background: transparent; color: inherit; display: grid; place-items: center; padding: 0; }
+.chip button:hover { background: rgba(0,0,0,.08); }
+.chips input { flex: 1; min-width: 110px; border: 0; outline: 0; background: transparent; color: var(--text); font-size: 13.5px; padding: 6px 4px; }
+.exp { display: flex; align-items: center; gap: 10px; }
+.exp input { width: 76px; height: 44px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--text); font: inherit; font-size: 14px; padding: 0 10px; }
+.exp span { font-size: 13px; color: var(--muted); }
+
+.receipt-wrap { position: sticky; top: 110px; display: flex; justify-content: center; }
+.receipt { width: 440px; max-width: 100%; transform: rotate(-2deg); background: var(--receipt); border: 1px solid var(--line); border-radius: 6px; box-shadow: var(--sh-pop); padding: 32px 30px 28px; font-family: var(--mono); font-size: 13px; display: flex; flex-direction: column; gap: 13px; transition: transform .3s; position: relative; }
+.receipt:hover { transform: rotate(0); }
+.receipt::after { content: ""; position: absolute; left: 0; right: 0; bottom: -10px; height: 10px; background: radial-gradient(circle at 5px 0, transparent 5px, var(--receipt) 5.5px) 0 0 / 10px 10px repeat-x; }
+.receipt .head { text-align: center; display: flex; flex-direction: column; gap: 4px; }
+.receipt .head b { font-family: var(--sans); font-size: 20px; font-weight: 800; letter-spacing: -0.03em; }
+.receipt .head b span { color: #7c3aed; }
+.receipt .head small { font-size: 11px; color: var(--faint); text-transform: uppercase; }
+.dash { border-top: 1px dashed color-mix(in srgb, var(--faint) 70%, transparent); }
+.rline { display: flex; gap: 10px; animation: print .35s both; }
+.rline span:first-child { flex: 1; }
+.rline b { font-weight: 700; }
+.rline.dim { color: var(--faint); }
+.rline.ok b { color: var(--good); }
+.rline.bad { color: var(--bad); }
+@keyframes print { from { opacity: 0; transform: translateY(-4px); } }
+.total { display: flex; align-items: baseline; }
+.total span { flex: 1; font-weight: 700; font-size: 14px; }
+.total b { font-family: var(--sans); font-size: 44px; font-weight: 800; letter-spacing: -0.04em; color: var(--brand); font-variant-numeric: tabular-nums; }
+.receipt .foot { text-align: center; font-size: 11px; color: var(--faint); line-height: 1.6; }
+.barcode { height: 34px; background: repeating-linear-gradient(90deg, var(--text) 0 2px, transparent 2px 5px, var(--text) 5px 6px, transparent 6px 9px, var(--text) 9px 12px, transparent 12px 14px); opacity: .85; }
+.stamp { position: absolute; right: 22px; top: 150px; transform: rotate(-14deg) scale(1.4); opacity: 0; border: 3px solid var(--bad); color: var(--bad); font-family: var(--mono); font-weight: 700; font-size: 20px; letter-spacing: .1em; padding: 6px 12px; border-radius: 8px; transition: all .3s cubic-bezier(.2,1.6,.4,1); pointer-events: none; }
+.stamp.show { opacity: .9; transform: rotate(-14deg) scale(1); }
+
+/* bento */
+.bento-sec { padding: 130px 0 120px; }
+.bento { margin-top: 48px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-rows: minmax(280px, auto); gap: 20px; }
+.tile { border-radius: 24px; padding: 28px; background: var(--panel); border: 1px solid var(--line); display: flex; flex-direction: column; gap: 14px; }
+.tile h3 { margin: 0; font-size: 21px; font-weight: 750; letter-spacing: -0.02em; }
+.tile p { margin: 0; font-size: 14px; line-height: 1.55; color: var(--muted); }
+.tile.watch { grid-row: span 2; }
+.wrow { display: flex; align-items: center; gap: 12px; padding: 11px 12px; border-radius: 14px; background: var(--sunk); transition: background .3s; }
+.wrow.flash { background: var(--brand-wash); }
+.wrow .ini { width: 34px; height: 34px; border-radius: 9px; background: var(--panel); border: 1px solid var(--line); display: grid; place-items: center; font-weight: 750; font-size: 13px; flex: none; }
+.wrow .who { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.wrow .who b { font-size: 14px; font-weight: 650; }
+.wrow .who small { font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pill { font-family: var(--mono); font-size: 10.5px; font-weight: 700; letter-spacing: .04em; padding: 4px 9px; border-radius: 999px; white-space: nowrap; }
+.pill.watching { background: var(--good-wash); color: var(--good); }
+.pill.checking { background: var(--brand-wash); color: var(--brand); }
+.pill.paused { background: var(--warn-wash); color: var(--warn); }
+.pill.unsupported { background: var(--sunk); color: var(--muted); border: 1px solid var(--line); }
+.pill.new { background: #7c3aed; color: #fff; }
+.rowbtn { width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); color: var(--muted); display: grid; place-items: center; flex: none; }
+.rowbtn:hover:not(:disabled) { color: var(--brand); border-color: var(--brand-line); }
+.rowbtn:disabled { opacity: .4; cursor: not-allowed; }
+.spin { animation: spin .9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.tile.clock { background: #16132b; border-color: #16132b; color: var(--night-text); flex-direction: row; align-items: center; gap: 24px; }
+:root[data-theme="dark"] .tile.clock { background: #1a1540; border-color: #2c2270; }
+.dial { position: relative; width: 132px; height: 132px; flex: none; border-radius: 50%; display: grid; place-items: center; }
+.dial .face { width: 106px; height: 106px; border-radius: 50%; background: inherit; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.dial .face b { font-family: var(--mono); font-size: 22px; font-variant-numeric: tabular-nums; }
+.dial .face small { font-size: 10.5px; color: var(--night-muted); }
+.tile.clock h3 { font-size: 30px; font-weight: 800; letter-spacing: -0.03em; }
+.tile.clock p { color: #b9b4d6; }
+
+.tile.now { background: var(--brand-wash); border-color: var(--brand-line); justify-content: space-between; }
+.tile.now .btn { align-self: flex-start; height: 46px; padding: 0 20px; font-size: 14px; background: #6d28d9; color: #fff; box-shadow: 0 10px 22px rgba(109,40,217,.3); }
+.tile.now .result { font-size: 13px; font-weight: 600; color: var(--brand); min-height: 18px; }
+
+.tile.fresh { grid-column: span 2; justify-content: center; gap: 18px; }
+.fresh-top { display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; }
+.fresh-top h3 { font-size: 30px; font-weight: 800; letter-spacing: -0.03em; }
+.days { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+.day { height: 46px; border-radius: 10px; display: grid; place-items: center; font-family: var(--mono); font-size: 12px; background: var(--sunk); color: var(--faint); border: 1px solid var(--line); transition: all .3s; }
+.day.lit { color: #fff; border-color: transparent; }
+.day.today { outline: 2px solid var(--text); outline-offset: 2px; }
+.fresh-ctl { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; font-size: 13.5px; color: var(--muted); }
+.fresh-ctl input[type=range] { flex: 1; min-width: 180px; accent-color: #7c3aed; }
+.fresh-ctl output { font-weight: 700; color: var(--text); min-width: 210px; }
+
+/* promises */
+.promises { margin: 0 24px; border-radius: 36px; padding: 110px 0; background: radial-gradient(700px 400px at 90% 0%, rgba(124,58,237,.35), transparent 70%), var(--night); color: var(--night-text); }
+.promises .wrap { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 80px; }
+.promises .eyebrow { color: var(--night-brand); }
+.promises h2 .serif { color: var(--night-brand); }
+.promises p { margin: 0; font-size: 17px; line-height: 1.65; color: var(--night-muted); }
+.plist { display: flex; flex-direction: column; }
+.prom { display: flex; align-items: center; gap: 22px; padding: 24px 0; border-bottom: 1px solid var(--night-line); }
+.prom .n { font-family: var(--mono); font-size: 13px; color: var(--night-faint); }
+.prom .t { flex: 1; font-size: clamp(20px, 2.2vw, 26px); font-weight: 700; letter-spacing: -0.02em; position: relative; }
+.prom .t::after { content: ""; position: absolute; left: 0; top: 52%; height: 2px; width: 0; background: #a78bfa; transition: width .6s cubic-bezier(.6,0,.2,1); }
+.prom.in .t::after { width: 100%; }
+.prom .x { width: 34px; height: 34px; border-radius: 50%; border: 1px solid #4c3a99; color: var(--night-brand); display: grid; place-items: center; transform: scale(0); transition: transform .35s .45s cubic-bezier(.2,1.6,.4,1); }
+.prom.in .x { transform: scale(1); }
+
+/* answers */
+.answers { padding: 130px 0 110px; }
+.answers .wrap { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 56px 48px; }
+.answers h2 { grid-row: span 2; font-size: clamp(38px, 4vw, 48px); }
+.qa { display: flex; flex-direction: column; gap: 10px; padding-top: 18px; border-top: 2px solid var(--text); }
+.qa b { font-size: 18px; letter-spacing: -0.01em; }
+.qa p { margin: 0; font-size: 15px; line-height: 1.6; color: var(--muted); }
+
+/* closing */
+.closing { position: relative; padding: 130px 0 120px; background: linear-gradient(135deg, #6d28d9, #3b1a8a); color: #fff; overflow: hidden; }
+.closing .orb { position: absolute; border-radius: 50%; border: 1px solid rgba(255,255,255,.18); animation: breathe 6s ease-in-out infinite; }
+@keyframes breathe { 50% { transform: scale(1.06); opacity: .6; } }
+.closing h2 { position: relative; max-width: 1000px; font-size: clamp(56px, 8vw, 108px); line-height: .96; letter-spacing: -0.055em; }
+.closing h2 .serif { color: #e4dcff; }
+.closing .row { position: relative; margin-top: 40px; display: flex; align-items: center; gap: 28px; flex-wrap: wrap; font-size: 15px; color: #e4dcff; }
+.closing .row button.link { background: none; border: 0; color: #fff; font-weight: 700; text-decoration: underline; padding: 0; }
+footer { background: var(--night-2); color: var(--night-muted); font-size: 13px; }
+footer .wrap { display: flex; align-items: center; gap: 28px; min-height: 96px; flex-wrap: wrap; }
+footer a { color: var(--night-muted); text-decoration: none; }
+footer a:hover { color: var(--night-text); }
+footer .logo { color: var(--night-text); }
+
+/* ------------------------------------------------------------ login modal */
+.modal { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 16px; background: var(--scrim); backdrop-filter: blur(6px); opacity: 0; pointer-events: none; transition: opacity .2s; }
+.modal.open { opacity: 1; pointer-events: auto; }
+.card { width: 440px; max-width: 100%; background: var(--panel); border: 1px solid var(--line); border-radius: 20px; box-shadow: var(--sh-pop); padding: 28px 30px 24px; display: flex; flex-direction: column; gap: 18px; transform: translateY(14px) scale(.98); transition: transform .25s cubic-bezier(.2,.8,.2,1); }
+.modal.open .card { transform: none; }
+.card-top { display: flex; align-items: center; gap: 10px; }
+.mark { width: 30px; height: 30px; border-radius: 9px; background: var(--brand-grad); color: #fff; display: grid; place-items: center; font-weight: 800; font-size: 15px; }
+.card-top .word { font-size: 18px; font-weight: 800; letter-spacing: -0.03em; }
+.card-top .word span { color: #7c3aed; }
+.card-top .x { margin-left: auto; width: 36px; height: 36px; border: 0; border-radius: 9px; background: transparent; color: var(--faint); display: grid; place-items: center; }
+.card-top .x:hover { background: var(--sunk); color: var(--text); }
+.tabs { display: grid; grid-template-columns: 1fr 1fr; background: var(--sunk); border: 1px solid var(--line); border-radius: 12px; padding: 4px; }
+.tabs button { height: 38px; border: 0; border-radius: 9px; background: transparent; color: var(--muted); font-weight: 600; font-size: 13.5px; }
+.tabs button[aria-selected="true"] { background: var(--panel); color: var(--text); box-shadow: var(--sh-2); }
+.card h2 { font-size: 26px; letter-spacing: -0.03em; }
+.card .sub { margin: 6px 0 0; font-size: 14px; line-height: 1.5; color: var(--muted); }
+.banner { display: flex; gap: 9px; align-items: flex-start; border-radius: 10px; padding: 11px 13px; font-size: 13px; font-weight: 550; line-height: 1.45; }
+.banner.err { background: var(--bad-wash); color: var(--bad); border: 1px solid color-mix(in srgb, var(--bad) 30%, transparent); }
+.banner.ok { background: var(--good-wash); color: var(--good); border: 1px solid color-mix(in srgb, var(--good) 30%, transparent); }
+.fld { display: flex; flex-direction: column; gap: 6px; }
+.fld label { font-size: 13px; font-weight: 600; }
+.box { display: flex; align-items: center; gap: 10px; height: 48px; padding: 0 6px 0 14px; background: var(--sunk); border: 1px solid var(--line); border-radius: 12px; transition: border-color .15s, box-shadow .15s; }
+.box:focus-within { border-color: var(--brand); box-shadow: var(--ring); }
+.box.invalid { border-color: var(--bad); }
+.box.invalid > .icon { color: var(--bad); }
+.box > .icon { color: var(--faint); }
+.box input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text); font: inherit; font-size: 14.5px; }
+.box input::placeholder { color: var(--faint); }
+.eye { width: 36px; height: 36px; border: 0; border-radius: 9px; background: transparent; color: var(--faint); display: grid; place-items: center; }
+.eye:hover { color: var(--text); }
+.ferr { font-size: 12.5px; font-weight: 600; color: var(--bad); }
+.submit { height: 50px; border: 0; border-radius: 12px; background: var(--brand-grad); color: #fff; font-weight: 650; font-size: 15px; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 10px 22px rgba(109,40,217,.25); }
+.submit:disabled { opacity: .7; cursor: progress; }
+.card .alt { display: flex; justify-content: space-between; align-items: center; font-size: 13.5px; color: var(--muted); }
+.card .alt button { background: none; border: 0; color: var(--brand); font-weight: 600; padding: 8px 0; }
+.card .boards { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; padding-top: 14px; border-top: 1px solid var(--line-soft); }
+.card .boards span { font-size: 11.5px; color: var(--muted); border: 1px solid var(--line); background: var(--sunk); padding: 4px 10px; border-radius: 999px; }
+.hint { font-size: 11.5px; color: var(--faint); text-align: center; }
+
+.toast { position: fixed; left: 50%; bottom: 28px; z-index: 120; transform: translate(-50%, 20px); opacity: 0; padding: 12px 18px; border-radius: 12px; background: #16132b; color: #f4f5ff; font-size: 14px; font-weight: 550; box-shadow: var(--sh-pop); transition: all .3s; pointer-events: none; }
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+/* ------------------------------------------------------------- responsive */
+@media (max-width: 1000px) {
+  .nav .links { display: none; }
+  .hero .wrap { grid-template-columns: 1fr; padding-top: 120px; padding-bottom: 110px; gap: 20px; }
+  .radar { margin: 0 auto; width: min(520px, 100%); }
+  .life-head, .play .wrap, .promises .wrap { grid-template-columns: 1fr; gap: 40px; }
+  .steps { grid-template-columns: 1fr 1fr; row-gap: 44px; }
+  .steps .rail { display: none; }
+  .receipt-wrap { position: static; }
+  .bento { grid-template-columns: 1fr 1fr; }
+  .tile.watch { grid-row: auto; grid-column: span 2; }
+  .answers .wrap { grid-template-columns: 1fr 1fr; }
+  .answers h2 { grid-row: auto; grid-column: span 2; }
+}
+@media (max-width: 640px) {
+  .nav .login { display: none; }
+  .nav .wrap { gap: 12px; }
+  .hero .lead { font-size: 17px; }
+  .catch { width: 210px; }
+  .blip span { display: none; }
+  .steps, .bento, .answers .wrap { grid-template-columns: 1fr; }
+  .tile.watch, .tile.fresh, .answers h2 { grid-column: auto; }
+  .tile.clock { flex-direction: column; align-items: flex-start; }
+  .promises { margin: 0; border-radius: 0; }
+  .receipt { transform: none; }
+  .fresh-ctl output { min-width: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+  .reveal { opacity: 1; transform: none; }
+}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-out" viewBox="0 0 24 24"><path d="M7 17L17 7M9 7h8v8" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></g></symbol>
+  <symbol id="i-mail" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></g></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></g></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></g></symbol>
+  <symbol id="i-eye-off" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l18 18"/><path d="M10.6 5.1A10 10 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3.2 4.2M6.6 6.6C3.8 8.4 2 12 2 12s3.5 7 10 7a9.7 9.7 0 0 0 4.4-1"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></g></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></g></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+</svg>
+
+<!-- ============================================================== NAV -->
+<header class="nav" id="nav">
+  <div class="wrap">
+    <a class="logo" href="#top">Job<span>X</span></a>
+    <span class="sp"></span>
+    <nav class="links" aria-label="Sections">
+      <a class="nav-link" href="#life">How it works</a>
+      <a class="nav-link" href="#receipt">Scoring</a>
+      <a class="nav-link" href="#watchlist">Watchlist</a>
+      <a class="nav-link" href="#promises">Our promises</a>
+    </nav>
+    <button class="theme-btn" id="themeBtn" type="button" aria-label="Switch to dark theme"><svg class="icon"><use href="#i-moon"/></svg></button>
+    <button class="nav-link login" type="button" data-open="login">Log in</button>
+    <button class="cta" type="button" data-open="register">Get started</button>
+  </div>
+</header>
+
+<main id="top">
+<!-- ============================================================= HERO -->
+<section class="hero" aria-labelledby="heroTitle">
+  <div class="wrap">
+    <div>
+      <div class="live"><span class="pulse"></span><span>NEXT BOARD CHECK IN <b id="heroClock">12:48</b></span></div>
+      <h1 id="heroTitle">See the role <span class="serif">before</span> the rush.</h1>
+      <p class="lead">JobX keeps a quiet watch on the careers boards of companies you pick. The moment a role appears, it's scored against your keywords and on your screen — while the queue is still short.</p>
+      <div class="actions">
+        <button class="btn btn-primary" type="button" data-open="register">Start your watchlist <svg class="icon"><use href="#i-arrow"/></svg></button>
+        <a class="underline-link" href="#life">Follow one job posting ↓</a>
+      </div>
+    </div>
+
+    <div class="radar" id="radar" aria-hidden="true">
+      <div class="ring" style="inset:0"></div>
+      <div class="ring" style="inset:12.5%"></div>
+      <div class="ring" style="inset:25%"></div>
+      <div class="ring" style="inset:37.5%"></div>
+      <div class="axis" style="left:0;right:0;top:50%;height:1px"></div>
+      <div class="axis" style="top:0;bottom:0;left:50%;width:1px"></div>
+      <div class="sweep" id="sweep"></div>
+      <div class="core">X</div>
+      <div class="catch" id="catch">
+        <div class="tag" id="catchTag">JUST POSTED · 6 MIN AGO</div>
+        <b id="catchTitle">Senior Backend Engineer</b>
+        <small id="catchMeta">[Company] · Remote · Ashby</small>
+        <div class="meter"><div class="bar"><i id="catchBar"></i></div><span class="num" id="catchNum">0</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="ticker" aria-label="Supported boards: Greenhouse, Lever, Ashby, Workable, SmartRecruiters">
+    <div class="label">READS BOARDS ON →</div>
+    <div class="track" aria-hidden="true" id="track"></div>
+  </div>
+</section>
+
+<!-- ============================================================= LIFE -->
+<section class="life" id="life" aria-labelledby="lifeTitle">
+  <div class="wrap">
+    <div class="life-head reveal">
+      <h2 id="lifeTitle">The life of a job posting, <span class="serif">and where you come in.</span></h2>
+      <p class="muted">Most people meet a role after it has travelled to the big job sites. JobX meets it where it's born — on the company's own board.</p>
+    </div>
+    <div class="steps" id="steps">
+      <div class="rail"><i id="rail"></i></div>
+      <div class="step"><div class="node">01</div><div class="when">HOUR 0</div><h3>The company posts it</h3><p>The role goes live on the employer's own careers board — Greenhouse, Lever, Ashby, Workable or SmartRecruiters.</p></div>
+      <div class="step"><div class="node">02</div><div class="when">WITHIN 30 MIN</div><h3>JobX reads the board</h3><p>Your watchlist is re-read every half hour. The new role is scored against your keywords the moment it's found.</p></div>
+      <div class="step you"><div class="node">03</div><div class="when">YOU</div><h3>You apply at the source</h3><p>One click takes you to the employer's own posting — while the applicant pile is still small.</p></div>
+      <div class="step"><div class="node">04</div><div class="when">LATER</div><h3>Everyone else hears about it</h3><p>The listing spreads to the big job sites and the rush begins. You're already in the queue.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ========================================================== RECEIPT -->
+<section class="play" id="receipt" aria-labelledby="rcTitle">
+  <div class="wrap">
+    <div class="intro reveal">
+      <span class="eyebrow">NOTHING HIDDEN</span>
+      <h2 id="rcTitle">Every score comes with a <span class="serif">receipt.</span></h2>
+      <p class="muted">Up to 70 points for keywords — a hit in the title counts double — and up to 30 for experience, minus 10 for every year outside your range. Any exclude word knocks a role out. No model in the loop: change the inputs and watch the maths.</p>
+
+      <div class="panel">
+        <div class="try">Try it <em>same rules as the real scorer · sample postings</em></div>
+        <div>
+          <span class="field-label" id="jobLbl">Sample posting</span>
+          <div class="seg" role="group" aria-labelledby="jobLbl" id="jobSeg"></div>
+        </div>
+        <div>
+          <label class="field-label" for="kwIn">Your keywords <span style="font-weight:500;color:var(--faint)">· press Enter to add</span></label>
+          <div class="chips" id="kwChips"><input id="kwIn" placeholder="e.g. kotlin" autocomplete="off"></div>
+        </div>
+        <div>
+          <label class="field-label" for="exIn">Exclude words</label>
+          <div class="chips" id="exChips"><input id="exIn" placeholder="e.g. principal" autocomplete="off"></div>
+        </div>
+        <div>
+          <span class="field-label">Your experience (years)</span>
+          <div class="exp">
+            <label class="sr-only" for="expMin">Minimum years</label><input id="expMin" type="number" min="0" max="40" value="4">
+            <span>to</span>
+            <label class="sr-only" for="expMax">Maximum years</label><input id="expMax" type="number" min="0" max="40" value="7">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="receipt-wrap">
+      <div class="receipt" aria-live="polite">
+        <div class="head"><b>Job<span>X</span> match receipt</b><small id="rcJob">Sample</small></div>
+        <div class="dash"></div>
+        <div id="rcLines" style="display:flex;flex-direction:column;gap:11px"></div>
+        <div class="dash"></div>
+        <div class="total"><span>MATCH SCORE</span><b id="rcTotal">0%</b></div>
+        <div class="dash"></div>
+        <div class="foot" id="rcFoot">No model in the loop.<br>Apply on the employer's own page.</div>
+        <div class="barcode"></div>
+        <div class="stamp" id="stamp">EXCLUDED</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ BENTO -->
+<section class="bento-sec" id="watchlist" aria-labelledby="wlTitle">
+  <div class="wrap">
+    <h2 id="wlTitle" class="reveal">A watchlist that <span class="serif">never blinks.</span></h2>
+    <div class="bento">
+      <div class="tile watch reveal">
+        <h3>Your companies, at a glance</h3>
+        <p>Every board shows its real state. Nothing is silently skipped. Try the refresh buttons.</p>
+        <div id="wlRows" style="display:flex;flex-direction:column;gap:10px;margin-top:6px"></div>
+      </div>
+
+      <div class="tile clock reveal">
+        <div class="dial" id="dial"><div class="face"><b id="dialTime">12:48</b><small>until next check</small></div></div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <h3>Every 30 min</h3>
+          <p>Each board you watch is re-read around the clock — this countdown is live.</p>
+        </div>
+      </div>
+
+      <div class="tile now reveal">
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <h3>Can't wait? Don't.</h3>
+          <p>Just added a company? Read its board right now, on demand.</p>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <button class="btn" type="button" id="checkAll"><svg class="icon" id="checkAllIcon"><use href="#i-refresh"/></svg><span>Check all now</span></button>
+          <div class="result" id="checkResult" aria-live="polite"></div>
+        </div>
+      </div>
+
+      <div class="tile fresh reveal">
+        <div class="fresh-top"><h3>Six days fresh</h3><p>then a role clears itself out, so your feed never goes stale.</p></div>
+        <div class="days" id="days"></div>
+        <div class="fresh-ctl">
+          <label for="age">Posted</label>
+          <input id="age" type="range" min="0" max="7" value="1" step="1">
+          <output id="ageOut" for="age"></output>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========================================================= PROMISES -->
+<section class="promises" id="promises" aria-labelledby="prTitle">
+  <div class="wrap">
+    <div style="display:flex;flex-direction:column;gap:22px" class="reveal">
+      <span class="eyebrow">FOUR THINGS JOBX WILL NEVER DO</span>
+      <h2 id="prTitle">Built on what we <span class="serif">won't</span> do.</h2>
+      <p>A job search is personal. JobX does the watching and the maths — every decision stays yours.</p>
+    </div>
+    <ul class="plist" style="list-style:none;margin:0;padding:0" id="plist">
+      <li class="prom"><span class="n">01</span><span class="t">Apply on your behalf</span><span class="x"><svg class="icon" style="width:14px;height:14px"><use href="#i-x"/></svg></span></li>
+      <li class="prom"><span class="n">02</span><span class="t">Invent a skill you don't have</span><span class="x"><svg class="icon" style="width:14px;height:14px"><use href="#i-x"/></svg></span></li>
+      <li class="prom"><span class="n">03</span><span class="t">Hide how a score was made</span><span class="x"><svg class="icon" style="width:14px;height:14px"><use href="#i-x"/></svg></span></li>
+      <li class="prom"><span class="n">04</span><span class="t">Pad the numbers to impress you</span><span class="x"><svg class="icon" style="width:14px;height:14px"><use href="#i-x"/></svg></span></li>
+    </ul>
+  </div>
+</section>
+
+<!-- ========================================================== ANSWERS -->
+<section class="answers" aria-labelledby="qaTitle">
+  <div class="wrap">
+    <h2 id="qaTitle">Quick <span class="serif">answers.</span></h2>
+    <div class="qa reveal"><b>Which boards can it read?</b><p>Greenhouse, Lever, Ashby, Workable and SmartRecruiters. Anything else is clearly marked unsupported.</p></div>
+    <div class="qa reveal"><b>How fresh is fresh?</b><p>Boards are re-read every 30 minutes, and you can hit Check now whenever you don't want to wait.</p></div>
+    <div class="qa reveal"><b>Does it apply for me?</b><p>Never. JobX links you to the employer's own posting and you apply there yourself.</p></div>
+    <div class="qa reveal"><b>How long do roles stay?</b><p>Six days in your feed, then they clear out so what you see is always current.</p></div>
+  </div>
+</section>
+
+<!-- ========================================================== CLOSING -->
+<section class="closing" aria-labelledby="endTitle">
+  <div class="orb" style="right:-160px;top:-160px;width:620px;height:620px"></div>
+  <div class="orb" style="right:-60px;top:-60px;width:420px;height:420px;animation-delay:-2s"></div>
+  <div class="orb" style="right:40px;top:40px;width:220px;height:220px;animation-delay:-4s"></div>
+  <div class="wrap">
+    <h2 id="endTitle">Your next job is <span class="serif">already</span> posted.</h2>
+    <div class="row">
+      <button class="btn btn-light" type="button" data-open="register">Let JobX find it <svg class="icon"><use href="#i-arrow"/></svg></button>
+      <span>Already watching? <button class="link" type="button" data-open="login">Log in</button></span>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <a class="logo" href="#top" style="font-size:18px">Job<span>X</span></a>
+    <span>Your career companion.</span>
+    <span style="flex:1"></span>
+    <a href="#life">How it works</a><a href="#receipt">Scoring</a><a href="#watchlist">Watchlist</a><a href="#promises">Promises</a>
+  </div>
+</footer>
+
+<!-- ============================================================ MODAL -->
+<div class="modal" id="modal" aria-hidden="true">
+  <div class="card" role="dialog" aria-modal="true" aria-labelledby="mTitle">
+    <div class="card-top">
+      <span class="mark">X</span><span class="word">Job<span>X</span></span>
+      <button class="x" type="button" id="mClose" aria-label="Close"><svg class="icon"><use href="#i-x"/></svg></button>
+    </div>
+    <div class="tabs" role="tablist">
+      <button type="button" role="tab" id="tabLogin" aria-selected="true">Sign in</button>
+      <button type="button" role="tab" id="tabReg" aria-selected="false">Create account</button>
+    </div>
+    <div>
+      <h2 id="mTitle">Welcome back to JobX</h2>
+      <p class="sub" id="mSub">Watch careers boards. Get new roles scored against your keywords.</p>
+    </div>
+    <div id="mBanner" hidden></div>
+    <form id="mForm" novalidate style="display:flex;flex-direction:column;gap:14px;margin:0">
+      <div class="fld">
+        <label for="mEmail">Email</label>
+        <div class="box" id="boxEmail"><svg class="icon"><use href="#i-mail"/></svg><input id="mEmail" type="email" autocomplete="email" placeholder="you@example.com"></div>
+        <span class="ferr" id="errEmail" hidden></span>
+      </div>
+      <div class="fld">
+        <label for="mPass">Password</label>
+        <div class="box" id="boxPass"><svg class="icon"><use href="#i-lock"/></svg><input id="mPass" type="password" autocomplete="current-password" placeholder="Your password">
+          <button class="eye" type="button" id="eye" aria-label="Show password"><svg class="icon"><use href="#i-eye"/></svg></button></div>
+        <span class="ferr" id="errPass" hidden></span>
+      </div>
+      <button class="submit" type="submit" id="mSubmit"><span id="mSubmitText">Sign in</span><svg class="icon"><use href="#i-arrow"/></svg></button>
+    </form>
+    <div class="alt"><span id="altText">New to JobX?</span><button type="button" id="altBtn">Create an account →</button></div>
+    <div class="boards"><span>Greenhouse</span><span>Lever</span><span>Ashby</span><span>Workable</span><span>SmartRecruiters</span></div>
+    <div class="hint">Mockup — nothing is sent anywhere. Try a wrong password to see the error state.</div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+(() => {
+  const $ = (s, r = document) => r.querySelector(s);
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+  /* ---------------------------------------------------------------- theme */
+  const themeBtn = $('#themeBtn');
+  function setTheme(t) {
+    document.documentElement.dataset.theme = t;
+    themeBtn.innerHTML = `<svg class="icon"><use href="#i-${t === 'dark' ? 'sun' : 'moon'}"/></svg>`;
+    themeBtn.setAttribute('aria-label', t === 'dark' ? 'Switch to light theme' : 'Switch to dark theme');
+    try { localStorage.setItem('jobx-mock-theme', t); } catch (e) {}
+  }
+  let saved = null; try { saved = localStorage.getItem('jobx-mock-theme'); } catch (e) {}
+  setTheme(saved || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+  themeBtn.onclick = () => setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
+
+  /* ------------------------------------------------------------------ nav */
+  const nav = $('#nav');
+  const onScroll = () => nav.classList.toggle('scrolled', scrollY > 30);
+  addEventListener('scroll', onScroll, { passive: true }); onScroll();
+
+  /* ---------------------------------------------------------------- toast */
+  let toastT;
+  function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 2600); }
+
+  /* ------------------------------------------------------ shared countdown */
+  const CYCLE = 30 * 60;
+  let remaining = 12 * 60 + 48;
+  const fmt = s => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+  function paintClock() {
+    $('#heroClock').textContent = fmt(remaining);
+    $('#dialTime').textContent = fmt(remaining);
+    const pct = (1 - remaining / CYCLE) * 100;
+    $('#dial').style.background = `conic-gradient(#a78bfa 0 ${pct}%, #2a2550 ${pct}% 100%)`;
+  }
+  setInterval(() => {
+    remaining -= 1;
+    if (remaining <= 0) { remaining = CYCLE; scheduledCheck(); }
+    paintClock();
+  }, 1000);
+  paintClock();
+
+  /* ---------------------------------------------------------------- radar */
+  const ATS = ['GREENHOUSE', 'LEVER', 'ASHBY', 'WORKABLE', 'SMARTRECRUITERS'];
+  $('#track').innerHTML = [...ATS, ...ATS, ...ATS, ...ATS].map(a => `<span>${a}</span><span>·</span>`).join('');
+  const radar = $('#radar');
+  // angle: degrees clockwise from 12 o'clock; r: 0..1 of radius
+  const blips = [
+    { a: 32, r: .78, label: 'ASHBY · [Co A]' }, { a: 78, r: .55, label: 'GREENHOUSE · [Co B]' },
+    { a: 128, r: .82, label: 'LEVER · [Co C]' }, { a: 176, r: .4, label: 'WORKABLE · [Co D]' },
+    { a: 222, r: .74, label: 'SMARTRECRUITERS · [Co E]' }, { a: 268, r: .6, label: 'GREENHOUSE · [Co F]' },
+    { a: 312, r: .86, label: 'LEVER · [Co G]' }, { a: 350, r: .45, label: 'ASHBY · [Co H]' },
+  ].map(b => {
+    const el = document.createElement('div');
+    el.className = 'blip';
+    const rad = (b.a - 90) * Math.PI / 180;
+    el.style.left = `${50 + Math.cos(rad) * b.r * 50}%`;
+    el.style.top = `${50 + Math.sin(rad) * b.r * 50}%`;
+    el.innerHTML = `<i></i><span>${esc(b.label)}</span>`;
+    radar.appendChild(el);
+    return { ...b, el };
+  });
+  const catches = [
+    { title: 'Senior Backend Engineer', meta: '[Company] · Remote · Ashby', score: 92 },
+    { title: 'Java Platform Engineer', meta: '[Company] · Berlin · Greenhouse', score: 87 },
+    { title: 'Software Engineer, APIs', meta: '[Company] · Remote · Lever', score: 74 },
+    { title: 'Staff Engineer, Payments', meta: '[Company] · London · SmartRecruiters', score: 81 },
+  ];
+  let catchIdx = 0, catchBlip = null;
+  function showCatch(b) {
+    const c = catches[catchIdx++ % catches.length];
+    const card = $('#catch');
+    card.classList.remove('show');
+    blips.forEach(x => x.el.classList.remove('new'));
+    b.el.classList.add('new'); catchBlip = b;
+    setTimeout(() => {
+      // place the card beside the blip, inside the radar
+      const left = parseFloat(b.el.style.left), top = parseFloat(b.el.style.top);
+      card.style.left = left > 50 ? `calc(${left}% - 280px)` : `calc(${left}% + 20px)`;
+      card.style.top = `calc(${Math.min(Math.max(top, 8), 70)}% - 20px)`;
+      $('#catchTitle').textContent = c.title;
+      $('#catchMeta').textContent = c.meta;
+      $('#catchTag').textContent = 'JUST POSTED · FOUND NOW';
+      $('#catchBar').style.width = '0';
+      countTo($('#catchNum'), c.score, 900);
+      card.classList.add('show');
+      requestAnimationFrame(() => requestAnimationFrame(() => { $('#catchBar').style.width = c.score + '%'; }));
+    }, 250);
+  }
+  const SWEEP_MS = 6000;
+  let last = -1, rounds = 0, target = blips[1];
+  function frame(t) {
+    const ang = (t % SWEEP_MS) / SWEEP_MS * 360;
+    $('#sweep').style.transform = `rotate(${ang}deg)`;
+    if (ang < last) { rounds++; if (rounds % 2 === 0) target = blips[Math.floor(Math.random() * blips.length)]; }
+    blips.forEach(b => {
+      const passed = last <= ang ? (b.a > last && b.a <= ang) : (b.a > last || b.a <= ang);
+      if (passed) {
+        b.el.classList.add('lit');
+        setTimeout(() => b.el.classList.remove('lit'), 120);
+        if (b === target && rounds % 2 === 0 && b !== catchBlip) showCatch(b);
+      }
+    });
+    last = ang;
+    requestAnimationFrame(frame);
+  }
+  if (!reduced) requestAnimationFrame(frame); else showCatch(blips[1]);
+
+  function countTo(el, to, ms, suffix = '') {
+    const from = parseInt(el.textContent) || 0;
+    if (reduced) { el.textContent = to + suffix; return; }
+    const t0 = performance.now();
+    const step = now => {
+      const p = Math.min(1, (now - t0) / ms), e = 1 - Math.pow(1 - p, 3);
+      el.textContent = Math.round(from + (to - from) * e) + suffix;
+      if (p < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
+
+  /* --------------------------------------------------------------- reveal */
+  const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } }), { threshold: .2 });
+  document.querySelectorAll('.reveal, .prom').forEach((el, i) => { if (el.classList.contains('prom')) el.style.transitionDelay = (i % 4) * .15 + 's'; io.observe(el); });
+  document.querySelectorAll('.prom').forEach((el, i) => { el.querySelector('.t').style.setProperty('transition-delay', i * .18 + 's'); });
+
+  /* ------------------------------------------------------------- timeline */
+  const steps = [...document.querySelectorAll('.step')];
+  function paintSteps() {
+    const r = $('#steps').getBoundingClientRect();
+    const p = Math.min(1, Math.max(0, (innerHeight * .75 - r.top) / (r.height + innerHeight * .2)));
+    $('#rail').style.width = (p * 100) + '%';
+    steps.forEach((s, i) => s.classList.toggle('on', p >= i / steps.length + .02));
+  }
+  addEventListener('scroll', paintSteps, { passive: true }); paintSteps();
+
+  /* ------------------------------------------------ receipt = MatchScorer */
+  // Mirrors com.jobx.scorer.MatchScorer: exclude words hard-drop; OR keyword
+  // match; title hit = 2, description-only = 1; keywordScore = round(70 * min(1,
+  // weight / (n*2))); experience = max(0, 30 - distanceYears*10); total 0–100.
+  const jobs = [
+    { id: 'a', short: 'Sr. Backend · Ashby', title: 'Senior Backend Java Engineer', ats: 'Ashby · Remote',
+      desc: 'You will design Spring services and REST APIs for our payments platform. We are a remote-first team working with Postgres, Kafka and AWS.', expMin: 5, expMax: null },
+    { id: 'b', short: 'Principal · Lever', title: 'Principal Platform Engineer', ats: 'Lever · Berlin',
+      desc: 'Lead the backend platform group. Deep Java and Kubernetes experience; mentor senior engineers across teams.', expMin: 10, expMax: null },
+    { id: 'c', short: 'Frontend · Workable', title: 'Frontend Engineer', ats: 'Workable · London',
+      desc: 'Build our Angular and TypeScript product UI with the design team. Some Node on the backend. Hybrid, London office.', expMin: 2, expMax: 4 },
+  ];
+  const state = { job: 'a', kw: ['backend', 'java', 'spring', 'remote'], ex: ['principal'] };
+  const isW = c => /[A-Za-z0-9_]/.test(c);
+  function containsWord(text, word) {
+    const w = word.trim().toLowerCase(); if (!w) return false;
+    const re = new RegExp((isW(w[0]) ? '(?<![A-Za-z0-9_])' : '') + w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + (isW(w[w.length - 1]) ? '(?![A-Za-z0-9_])' : ''));
+    return re.test(text);
+  }
+  function score(job, kw, ex, uMin, uMax) {
+    const t = job.title.toLowerCase(), d = job.desc.toLowerCase();
+    for (const e of ex) if (containsWord(t, e) || containsWord(d, e)) return { excluded: true, why: `contains "${e}"`, lines: [] };
+    const lines = []; let th = 0, dh = 0;
+    kw.forEach(k => {
+      if (containsWord(t, k)) { th++; lines.push({ l: `+ ${k}`, v: 'TITLE ×2', c: 'ok' }); }
+      else if (containsWord(d, k)) { dh++; lines.push({ l: `+ ${k}`, v: 'DESC ×1', c: 'ok' }); }
+      else lines.push({ l: `  ${k}`, v: '—', c: 'dim' });
+    });
+    if (!th && !dh) return { excluded: true, why: 'matched none of your keywords', lines };
+    const weight = th * 2 + dh, max = kw.length * 2;
+    const kScore = Math.round(70 * Math.min(1, weight / max));
+    let dist = 0;
+    if (job.expMax != null && uMin != null && job.expMax < uMin) dist = uMin - job.expMax;
+    else if (job.expMin != null && uMax != null && job.expMin > uMax) dist = job.expMin - uMax;
+    const eScore = Math.max(0, 30 - dist * 10);
+    return { excluded: false, kScore, eScore, dist, weight, max, lines, total: kScore + eScore };
+  }
+  const seg = $('#jobSeg');
+  seg.innerHTML = jobs.map(j => `<button type="button" data-job="${j.id}">${esc(j.short)}</button>`).join('');
+  seg.onclick = e => { const b = e.target.closest('button'); if (b) { state.job = b.dataset.job; renderReceipt(); } };
+
+  function chipInput(boxId, inputId, key, cls) {
+    const box = $(boxId), input = $(inputId);
+    const paint = () => {
+      box.querySelectorAll('.chip').forEach(c => c.remove());
+      state[key].forEach((w, i) => {
+        const c = document.createElement('span'); c.className = 'chip' + (cls ? ' ' + cls : '');
+        c.innerHTML = `${esc(w)}<button type="button" aria-label="Remove ${esc(w)}"><svg class="icon" style="width:12px;height:12px"><use href="#i-x"/></svg></button>`;
+        c.querySelector('button').onclick = () => { state[key].splice(i, 1); paint(); renderReceipt(); input.focus(); };
+        box.insertBefore(c, input);
+      });
+    };
+    input.addEventListener('keydown', e => {
+      if ((e.key === 'Enter' || e.key === ',') && input.value.trim()) {
+        e.preventDefault();
+        const v = input.value.trim().replace(/,$/, '').toLowerCase();
+        if (!state[key].includes(v)) state[key].push(v);
+        input.value = ''; paint(); renderReceipt();
+      } else if (e.key === 'Backspace' && !input.value && state[key].length) { state[key].pop(); paint(); renderReceipt(); }
+    });
+    box.addEventListener('click', e => { if (e.target === box) input.focus(); });
+    paint();
+  }
+  chipInput('#kwChips', '#kwIn', 'kw');
+  chipInput('#exChips', '#exIn', 'ex', 'ex');
+  ['#expMin', '#expMax'].forEach(s => $(s).addEventListener('input', renderReceipt));
+
+  function renderReceipt() {
+    const job = jobs.find(j => j.id === state.job);
+    seg.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b.dataset.job === state.job));
+    const num = v => v === '' ? null : Math.max(0, parseInt(v, 10));
+    const uMin = num($('#expMin').value), uMax = num($('#expMax').value);
+    const r = score(job, state.kw, state.ex, uMin, uMax);
+    $('#rcJob').textContent = `${job.title} · ${job.ats}`;
+    const L = [];
+    if (r.excluded && !r.lines.length) {
+      L.push({ l: `× exclude word`, v: 'FOUND', c: 'bad' }, { l: `  ${r.why}`, v: '', c: 'bad' });
+    } else {
+      L.push(...r.lines);
+      if (!r.excluded) {
+        L.push({ l: `  keyword points (${r.weight}/${r.max})`, v: `${r.kScore}/70`, c: '' });
+        const jr = job.expMin != null ? (job.expMax != null ? `${job.expMin}–${job.expMax}` : `${job.expMin}+`) : 'any';
+        L.push({ l: `~ experience ${jr} yrs (you ${uMin ?? 0}–${uMax ?? '∞'})`, v: r.dist ? `-${r.dist * 10}` : 'FITS', c: r.dist ? 'bad' : 'ok' });
+        L.push({ l: `  experience points`, v: `${r.eScore}/30`, c: '' });
+        L.push({ l: `× exclude words found`, v: 'NONE', c: 'ok' });
+      } else {
+        L.push({ l: `× ${r.why}`, v: '', c: 'bad' });
+      }
+    }
+    $('#rcLines').innerHTML = L.map((x, i) => `<div class="rline ${x.c}" style="animation-delay:${i * 45}ms"><span>${esc(x.l)}</span><b>${esc(x.v)}</b></div>`).join('');
+    countTo($('#rcTotal'), r.excluded ? 0 : r.total, 600, '%');
+    $('#stamp').classList.toggle('show', r.excluded);
+    $('#rcFoot').innerHTML = r.excluded ? 'Excluded roles never reach your feed.<br>No model in the loop.' : 'No model in the loop.<br>Apply on the employer\'s own page.';
+  }
+  renderReceipt();
+
+  /* ------------------------------------------------------------ watchlist */
+  const wl = [
+    { ini: 'A', name: '[Company A]', ats: 'Ashby', status: 'watching', ago: 4 },
+    { ini: 'G', name: '[Company B]', ats: 'Greenhouse', status: 'watching', ago: 17 },
+    { ini: 'L', name: '[Company C]', ats: 'Lever', status: 'watching', ago: 11 },
+    { ini: 'W', name: '[Company D]', ats: 'Workable', status: 'paused', ago: null },
+    { ini: 'C', name: '[Company E]', ats: 'Custom careers site', status: 'unsupported', ago: null },
+  ];
+  const label = { watching: 'WATCHING', checking: 'CHECKING', paused: 'PAUSED', unsupported: 'UNSUPPORTED' };
+  function sub(w) {
+    if (w.status === 'paused') return `${w.ats} · paused by you`;
+    if (w.status === 'unsupported') return `${w.ats} · not a supported board`;
+    if (w.status === 'checking') return `${w.ats} · reading board…`;
+    const when = w.ago === 0 ? 'just now' : `${w.ago} min ago`;
+    return `${w.ats} · checked ${when}${w.found ? ` · ${w.found} new role${w.found > 1 ? 's' : ''}` : ''}`;
+  }
+  function renderWl() {
+    $('#wlRows').innerHTML = wl.map((w, i) => `
+      <div class="wrow${w.flash ? ' flash' : ''}">
+        <span class="ini">${w.ini}</span>
+        <span class="who"><b>${esc(w.name)}</b><small>${esc(sub(w))}</small></span>
+        <span class="pill ${w.found ? 'new' : w.status}">${w.found ? `+${w.found} NEW` : label[w.status]}</span>
+        ${w.status === 'unsupported' ? '' : `<button class="rowbtn" type="button" data-i="${i}" ${w.status !== 'watching' ? 'disabled' : ''} aria-label="${w.status === 'paused' ? 'Paused — resume to check' : 'Check ' + esc(w.name) + ' now'}"><svg class="icon${w.status === 'checking' ? ' spin' : ''}"><use href="#i-refresh"/></svg></button>`}
+      </div>`).join('');
+  }
+  $('#wlRows').onclick = e => { const b = e.target.closest('button[data-i]'); if (b) checkOne(+b.dataset.i); };
+  function checkOne(i) {
+    return new Promise(res => {
+      const w = wl[i]; if (w.status !== 'watching') return res(0);
+      w.status = 'checking'; w.found = 0; renderWl();
+      setTimeout(() => {
+        w.status = 'watching'; w.ago = 0;
+        w.found = Math.random() < .45 ? 1 + Math.floor(Math.random() * 2) : 0;
+        w.flash = true; renderWl();
+        setTimeout(() => { w.flash = false; renderWl(); }, 900);
+        res(w.found);
+      }, 900 + Math.random() * 900);
+    });
+  }
+  const checkAll = $('#checkAll');
+  checkAll.onclick = async () => {
+    checkAll.disabled = true; $('#checkAllIcon').classList.add('spin'); $('#checkResult').textContent = 'Reading boards…';
+    const found = (await Promise.all(wl.map((_, i) => checkOne(i)))).reduce((a, b) => a + b, 0);
+    checkAll.disabled = false; $('#checkAllIcon').classList.remove('spin');
+    $('#checkResult').textContent = found ? `${found} new role${found > 1 ? 's' : ''} scored and added to your feed.` : 'No new roles since the last check.';
+  };
+  function scheduledCheck() { wl.forEach((_, i) => checkOne(i)); toast('Scheduled board check ran'); }
+  setInterval(() => { wl.forEach(w => { if (w.status === 'watching' && w.ago != null) w.ago++; }); renderWl(); }, 60000);
+  renderWl();
+
+  /* ------------------------------------------------------------ freshness */
+  const shades = ['#6d28d9', '#7c3aed', '#8b5cf6', '#a78bfa', '#b9a4ff', '#c9b8ff'];
+  function renderDays() {
+    const age = +$('#age').value;
+    $('#days').innerHTML = shades.map((c, i) => {
+      const lit = age <= 5 && i >= age;
+      return `<div class="day${lit ? ' lit' : ''}${i === age ? ' today' : ''}" style="${lit ? `background:${c};color:${i > 2 ? '#16132b' : '#fff'}` : ''}">DAY ${i + 1}</div>`;
+    }).join('');
+    $('#ageOut').textContent = age === 0 ? 'today — six days in your feed ahead'
+      : age <= 5 ? `${age} day${age > 1 ? 's' : ''} ago — ${6 - age} day${6 - age > 1 ? 's' : ''} left in your feed`
+      : `${age} days ago — cleared from your feed`;
+  }
+  $('#age').addEventListener('input', renderDays); renderDays();
+
+  /* ---------------------------------------------------------------- modal */
+  const modal = $('#modal'); let mode = 'login', lastFocus = null;
+  function setMode(m) {
+    mode = m;
+    $('#tabLogin').setAttribute('aria-selected', m === 'login');
+    $('#tabReg').setAttribute('aria-selected', m === 'register');
+    $('#mTitle').textContent = m === 'login' ? 'Welcome back to JobX' : 'Start your watchlist';
+    $('#mSub').textContent = m === 'login' ? 'Watch careers boards. Get new roles scored against your keywords.' : 'Create an account, add the companies you care about, set your keywords.';
+    $('#mSubmitText').textContent = m === 'login' ? 'Sign in' : 'Create account';
+    $('#mPass').autocomplete = m === 'login' ? 'current-password' : 'new-password';
+    $('#mPass').placeholder = m === 'login' ? 'Your password' : 'At least 8 characters';
+    $('#altText').textContent = m === 'login' ? 'New to JobX?' : 'Already have an account?';
+    $('#altBtn').textContent = m === 'login' ? 'Create an account →' : 'Sign in →';
+    clearErrors();
+  }
+  function open(m) { lastFocus = document.activeElement; setMode(m); modal.classList.add('open'); modal.setAttribute('aria-hidden', 'false'); setTimeout(() => $('#mEmail').focus(), 60); }
+  function close() { modal.classList.remove('open'); modal.setAttribute('aria-hidden', 'true'); lastFocus && lastFocus.focus(); }
+  document.querySelectorAll('[data-open]').forEach(b => b.addEventListener('click', () => open(b.dataset.open)));
+  $('#mClose').onclick = close;
+  modal.addEventListener('mousedown', e => { if (e.target === modal) close(); });
+  modal.addEventListener('keydown', e => {
+    if (e.key === 'Escape') close();
+    if (e.key === 'Tab') { // keep focus inside the dialog
+      const f = [...modal.querySelectorAll('button, input')].filter(x => !x.disabled && x.offsetParent);
+      if (e.shiftKey && document.activeElement === f[0]) { e.preventDefault(); f[f.length - 1].focus(); }
+      else if (!e.shiftKey && document.activeElement === f[f.length - 1]) { e.preventDefault(); f[0].focus(); }
+    }
+  });
+  $('#tabLogin').onclick = () => setMode('login');
+  $('#tabReg').onclick = () => setMode('register');
+  $('#altBtn').onclick = () => setMode(mode === 'login' ? 'register' : 'login');
+  $('#eye').onclick = () => {
+    const p = $('#mPass'), show = p.type === 'password';
+    p.type = show ? 'text' : 'password';
+    $('#eye').innerHTML = `<svg class="icon"><use href="#i-${show ? 'eye-off' : 'eye'}"/></svg>`;
+    $('#eye').setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+  };
+  function fieldErr(which, msg) {
+    const box = which === 'email' ? '#boxEmail' : '#boxPass', err = which === 'email' ? '#errEmail' : '#errPass';
+    $(box).classList.toggle('invalid', !!msg); $(err).hidden = !msg; $(err).textContent = msg || '';
+    $(which === 'email' ? '#mEmail' : '#mPass').setAttribute('aria-invalid', !!msg);
+  }
+  function banner(kind, msg) {
+    const b = $('#mBanner');
+    if (!msg) { b.hidden = true; return; }
+    b.hidden = false; b.className = 'banner ' + kind;
+    b.innerHTML = `<svg class="icon" style="margin-top:1px"><use href="#i-${kind === 'ok' ? 'check' : 'alert'}"/></svg><span>${esc(msg)}</span>`;
+  }
+  function clearErrors() { fieldErr('email'); fieldErr('pass'); banner(); }
+  $('#mEmail').addEventListener('input', () => fieldErr('email'));
+  $('#mPass').addEventListener('input', () => fieldErr('pass'));
+  $('#mForm').addEventListener('submit', e => {
+    e.preventDefault(); clearErrors();
+    const email = $('#mEmail').value.trim(), pass = $('#mPass').value;
+    let bad = false;
+    if (!email) { fieldErr('email', 'Email is required'); bad = true; }
+    else if (!/^\S+@\S+\.\S+$/.test(email)) { fieldErr('email', 'Enter a valid email address'); bad = true; }
+    if (!pass) { fieldErr('pass', 'Password is required'); bad = true; }
+    else if (mode === 'register' && pass.length < 8) { fieldErr('pass', 'Use at least 8 characters'); bad = true; }
+    if (bad) return;
+    const btn = $('#mSubmit'); btn.disabled = true;
+    $('#mSubmitText').textContent = mode === 'login' ? 'Signing in…' : 'Creating account…';
+    setTimeout(() => {
+      btn.disabled = false; setMode(mode);
+      if (mode === 'login' && /wrong/i.test(pass)) { banner('err', 'Invalid email or password'); return; }
+      banner('ok', mode === 'login' ? 'Signed in — the real app would open your feed now.' : 'Account created — next you would add your first company.');
+      setTimeout(() => { close(); toast(mode === 'login' ? 'Mockup: signed in' : 'Mockup: account created'); }, 1400);
+    }, 900);
+  });
+})();
+</script>
+</body>
+</html>
