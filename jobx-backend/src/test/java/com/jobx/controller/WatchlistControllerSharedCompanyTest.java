@@ -180,12 +180,12 @@ class WatchlistControllerSharedCompanyTest {
      */
     @Test
     void aPlatformWithNoFetcherIsRefusedBeforeAnythingIsWritten() {
-        for (AtsPlatform platform : new AtsPlatform[]{AtsPlatform.WORKDAY, AtsPlatform.UNSUPPORTED}) {
+        for (AtsPlatform platform : new AtsPlatform[]{AtsPlatform.RIPPLING, AtsPlatform.UNSUPPORTED}) {
             when(fetcherRegistry.getFetcher(platform)).thenReturn(Optional.empty());
 
             ResponseStatusException e = assertThrows(ResponseStatusException.class,
                     () -> controller.add(user, new WatchedCompanyRequest(
-                            "Salesforce", platform, "salesforce/wd12/External_Career_Site")));
+                            "Rippling", platform, "rippling")));
 
             assertEquals(HttpStatus.BAD_REQUEST, e.getStatusCode());
         }

@@ -228,11 +228,10 @@ class CompanyResolverTest {
      */
     @Test
     void aPastedLinkToAnUnwatchablePlatformIsNamedWithoutAnyNetwork() {
-        ResolveResponse response = resolver.resolve(user,
-                "https://salesforce.wd12.myworkdayjobs.com/en-US/External_Career_Site");
+        ResolveResponse response = resolver.resolve(user, "https://ats.rippling.com/acme/jobs");
 
         assertTrue(response.candidates().isEmpty());
-        assertEquals(AtsPlatform.WORKDAY, response.platformHint());
+        assertEquals(AtsPlatform.RIPPLING, response.platformHint());
         verifyNoInteractions(safeUrlFetcher);
         verifyNoInteractions(boardProbe);
     }
@@ -297,15 +296,18 @@ class CompanyResolverTest {
 
         assertTrue(response.candidates().isEmpty());
         assertEquals(AtsPlatform.BAMBOOHR, response.platformHint());
-        verify(boardProbe).probe(eq(List.of(AtsPlatform.BAMBOOHR)), any());
+        verifyNoInteractions(boardProbe);
     }
 
     /**
-     * A hint naming a platform that can't be probed (no fetcher; Workday's token
-     * can't be guessed anyway) ends in the honest empty answer, hint attached.
+     * A hint naming a platform that can't be probed ends in the honest empty
+     * answer, hint attached — even once that platform has a fetcher. Workday's
+     * tenant/wdN/site token can't be guessed from a name, so a probe would only
+     * try slugs it can't possibly accept.
      */
     @Test
     void aHintForANonProbeablePlatformIsAnHonestEmptyAnswer() {
+        stubBoard(AtsPlatform.WORKDAY, new BoardPreview(null, 1523, List.of("Engineer")));
         when(safeUrlFetcher.fetch("https://acme.com/careers/"))
                 .thenReturn(Optional.of("<link rel=\"preconnect\" href=\"https://myworkdayjobs.com\">"));
 
@@ -313,6 +315,22 @@ class CompanyResolverTest {
 
         assertTrue(response.candidates().isEmpty());
         assertEquals(AtsPlatform.WORKDAY, response.platformHint());
+        verifyNoInteractions(boardProbe);
+    }
+
+    /** With its fetcher shipped, a pasted Workday link resolves straight to its board. */
+    @Test
+    void aPastedWorkdayLinkResolvesToTheCompositeToken() {
+        stubBoard(AtsPlatform.WORKDAY, new BoardPreview(null, 1523, List.of("Software Engineering MTS")));
+
+        ResolveResponse response = resolver.resolve(user,
+                "https://salesforce.wd12.myworkdayjobs.com/en-US/External_Career_Site");
+
+        ResolvedBoardResponse candidate = response.candidates().get(0);
+        assertEquals(AtsPlatform.WORKDAY, candidate.atsPlatform());
+        assertEquals("salesforce/wd12/External_Career_Site", candidate.boardToken());
+        assertEquals(1523, candidate.jobCount());
+        verifyNoInteractions(boardProbe);
     }
 
     // ------------------------------------------------------------------ probe

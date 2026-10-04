@@ -116,7 +116,19 @@ Built as planned below, with these differences:
 
 ---
 
-## PR 1 — Workday (API tier, highest value)
+## PR 1 — Workday (API tier, highest value) — DONE 2026-10-04
+
+Built as planned below, with these differences, all from recon:
+- **Paging stops early.** The list is newest-first, so paging ends after two
+  consecutive pages that are entirely past the TTL (~16 pages on Salesforce, not
+  76). `max-pages` only bounds boards whose dates can't be read.
+- **`postedOn` is read as that day's midnight UTC, not generously.** The stored
+  `startDate` uses the same clock, and so does the scheduler's re-check. A
+  generous reading cost a repeated detail call every cycle for each last-day
+  posting.
+- **Resolver:** probing runs only when the platform hint is in `PROBEABLE`.
+- `limit` > 20 is a 400. `Content-Type` is required. An unknown site is a 404 and
+  an unknown tenant a 422.
 
 - **Recon**: capture `workday-salesforce-list.json` (page 0, limit 20) and
   `workday-salesforce-detail.json`; confirm (a) whether `total` is only

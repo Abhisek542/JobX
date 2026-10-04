@@ -782,6 +782,11 @@ Detect ATS from careers URL, hit that platform's public job API directly:
 - Workable: `apply.workable.com/api/v1/widget/accounts/{token}` (embed-widget endpoint)
 - SmartRecruiters: `api.smartrecruiters.com/v1/companies/{id}/postings` (public, two-call;
   list is capped at 100/page and a bogus id returns an empty 200, not a 404)
+- Workday: `POST {tenant}.{wdN}.myworkdayjobs.com/wday/cxs/{tenant}/{site}/jobs` (public,
+  two-call, built 2026-10-04). The token is the composite `tenant/wdN/site`. Pages are
+  20, and `limit` > 20 is a 400. The list is newest-first, so paging stops once it is
+  past the TTL. `postedOn` is relative text and is read before the detail call. Never
+  probed.
 - **Next wave (PLANNED 2026-09-27, not built yet)** — the old "no clean public API"
   verdict on Workday/Rippling/BambooHR was wrong; live recon found usable public
   endpoints. The full plan is in `jobx-backend/new-ats-add.md`. Recon notes are under
@@ -801,6 +806,15 @@ Detect ATS from careers URL, hit that platform's public job API directly:
        hint. `POST /watchlist` returns **400 for any platform with no registered
        fetcher**, UNSUPPORTED included. The modal's dead end names the platform.
   2. **API tier (JSON):** Workday → Rippling → BambooHR.
+     - **Workday (PR 1) done 2026-10-04.** `fetcher/workday/WorkdayFetcher` was
+       live-verified on Salesforce (1,523 listed). `externalPath` is the
+       `external_id`. `WorkdayPostedOn` reads "Posted N Days Ago" onto the same
+       midnight-UTC clock as the stored `startDate`. A more generous reading was
+       tried first, and live it cost a repeated detail call every cycle for each
+       last-day posting, because those postings were never stored.
+       `CompanyResolver` now probes only when the hint is in `PROBEABLE`, so a
+       bare `myworkdayjobs.com` mention names the platform without probing it.
+       Notes are in `docs/ats-api-reference.md` under "## Workday".
   3. **HTML tier (jsoup):** Jobvite → JazzHR.
   4. **Recon-gated:** iCIMS (no working public URL found yet) and Gusto (behind a
      Cloudflare challenge). Each stays UNSUPPORTED unless a public URL without a bot
@@ -823,8 +837,8 @@ Detect ATS from careers URL, hit that platform's public job API directly:
 - Recruitee: not on the next-wave list. `{sub}.recruitee.com/api/offers/` is
   unverified.
 
-**All five platforms are implemented and live-verified** (the first four 2026-08-02,
-SmartRecruiters 2026-08-29). Verified field-level details (JSON shapes, date formats,
+**Six platforms are implemented and live-verified** (the first four 2026-08-02,
+SmartRecruiters 2026-08-29, Workday 2026-10-04). Verified field-level details (JSON shapes, date formats,
 the two-call designs, per-board quirks, dead board tokens) are in
 `jobx-backend/docs/ats-api-reference.md` — read that file before touching any fetcher
 code, not this one.

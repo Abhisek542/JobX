@@ -64,6 +64,23 @@ fetches details for shortcodes not already stored.
 | Foodics   | `foodics`   | 22        | 21          | MENA; 1 duplicate shortcode |
 | Apna      | `apna`      | 158       | 126         | India; 32 duplicate rows — the board that proves shortcode dedup works |
 
+### WORKDAY — `WorkdayFetcher` (verified 2026-10-04)
+
+The token has three parts, `tenant/wdN/site`, all read off the careers URL
+`https://{tenant}.{wdN}.myworkdayjobs.com/en-US/{site}`. Pasting that URL into
+the add-company modal fills them in. Like Workable, the first fetch makes one
+detail call per posting, but only for postings inside the 6-day TTL. The list is
+newest-first, so paging stops once it has run past that window.
+
+| Company    | Board token                            | Listed (`total`) | Notes |
+|------------|----------------------------------------|------------------|-------|
+| Salesforce | `salesforce/wd12/External_Career_Site` | 1,523            | The recon board; ~300 postings inside 6 days, so the first fetch pages ~16 times |
+| NVIDIA     | `nvidia/wd5/NVIDIAExternalCareerSite`  | 2,000            | `total` looks capped at 2000; paging is bounded by `jobx.fetch.workday.max-pages` anyway |
+
+Dead boards fail loudly: an unknown site is a 404 (`salesforce/wd12/NoSuchSite`)
+and an unknown tenant is a 422. Both give a 400 at add time and FAILED health on a
+watched board.
+
 ---
 
 ## Fast manual run (clean DB)

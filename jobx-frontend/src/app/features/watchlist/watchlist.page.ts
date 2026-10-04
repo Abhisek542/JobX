@@ -158,8 +158,8 @@ import { Icon } from '../../shared/ui/icon';
           <app-icon name="info" size="sm" />
           <div>
             A board marked <b>Refresh issue</b> means the last attempt failed — Jobx keeps retrying
-            on the normal cycle. Boards on Workday, Rippling or BambooHR have no public API, so
-            Jobx marks them <b>unsupported</b> instead of pretending to watch them.
+            on the normal cycle. Boards on platforms Jobx can't read yet (Rippling or BambooHR, for
+            now) are marked <b>unsupported</b> instead of pretending to watch them.
           </div>
         </div>
       }
