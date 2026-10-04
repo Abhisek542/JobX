@@ -61,7 +61,11 @@ public class CompanyResolver {
         CATALOG, URL, SNIFF, PROBE
     }
 
-    /** The platforms worth probing. UNSUPPORTED has no fetcher and no API. */
+    /**
+     * The platforms worth probing: guessable from a name, one cheap request, and
+     * a clean dead-board signal. Platforms without a fetcher can never be probed;
+     * Workday and iCIMS never will be (their tokens can't be guessed).
+     */
     private static final List<AtsPlatform> PROBEABLE = List.of(
             AtsPlatform.GREENHOUSE, AtsPlatform.LEVER, AtsPlatform.ASHBY,
             AtsPlatform.WORKABLE, AtsPlatform.SMARTRECRUITERS);
@@ -138,6 +142,13 @@ public class CompanyResolver {
         // 2. URL — the user pasted the ATS link itself.
         Optional<BoardRef> direct = AtsUrlParser.parse(trimmed);
         if (direct.isPresent()) {
+            if (fetcherRegistry.getFetcher(direct.get().platform()).isEmpty()) {
+                // A board on a platform Jobx recognises but can't watch yet
+                // (Workday before its fetcher ships, say). Sniffing the ATS page
+                // or probing other platforms can't change that, so say so now
+                // and name the platform.
+                return new ResolveResponse(List.of(), direct.get().platform());
+            }
             Optional<ResolvedBoardResponse> confirmed =
                     previewCandidate(user, direct.get(), Source.URL, null);
             if (confirmed.isPresent()) {
@@ -155,19 +166,30 @@ public class CompanyResolver {
             Optional<String> html = safeUrlFetcher.fetch(trimmed);
             if (html.isPresent()) {
                 List<ResolvedBoardResponse> sniffed = new ArrayList<>();
+                AtsPlatform unwatchable = null;
                 for (BoardRef ref : AtsUrlParser.findAll(html.get())) {
                     if (sniffed.size() >= maxSniffedBoards) {
                         break;
+                    }
+                    if (fetcherRegistry.getFetcher(ref.platform()).isEmpty()) {
+                        if (unwatchable == null) {
+                            unwatchable = ref.platform();
+                        }
+                        continue;
                     }
                     previewCandidate(user, ref, Source.SNIFF, null).ifPresent(sniffed::add);
                 }
                 if (!sniffed.isEmpty()) {
                     return new ResolveResponse(sniffed, null);
                 }
-                // No token, but the page may still have named the platform —
-                // Atlan's only mentions Ashby in a CSP header. Worth a great
-                // deal: it turns the probe below from 5 platforms into 1.
-                platformHint = AtsUrlParser.platformHint(html.get()).orElse(null);
+                // No usable token, but the page may still have named the
+                // platform. A board link on a platform we can't watch yet is the
+                // strongest evidence; failing that, a bare host mention — Atlan's
+                // only mentions Ashby in a CSP header. Worth a great deal: it
+                // narrows the probe below to one platform.
+                platformHint = unwatchable != null
+                        ? unwatchable
+                        : AtsUrlParser.platformHint(html.get()).orElse(null);
             }
         }
 

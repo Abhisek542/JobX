@@ -187,8 +187,7 @@ pill; `MatchResponse` still lacks `location`/`platformPostedAt`/description exce
 (V1 P1 item); `GET /matches` returns everything including `DISMISSED`, unpaginated,
 and relies on `open-in-view` for lazy `job.company` (N+1 per feed load);
 `AuthController.login` skips bcrypt for unknown emails, so response timing still
-distinguishes registered emails; `POST /watchlist` accepts
-`atsPlatform: UNSUPPORTED` and sets it ACTIVE; fetchers use `asText("")` for the
+distinguishes registered emails; fetchers use `asText("")` for the
 NOT NULL `title`/`apply_url` columns rather than skipping malformed records.
 
 **Step 5 (Angular dashboard) built and live-verified 2026-08-15** — lives in the
@@ -369,6 +368,15 @@ Detect ATS from careers URL, hit that platform's public job API directly:
 - Next wave (PLANNED 2026-09-27): Workday, Rippling, BambooHR (JSON APIs) and Jobvite, JazzHR (HTML).
   iCIMS and Gusto depend on recon. The backend CLAUDE.md "ATS integration approach" section has the
   order and rules. The UI lists a platform only once its fetcher ships.
+  - PR 0 (groundwork) done 2026-10-04. All seven platforms are in the `AtsPlatform` union and in
+    `PLATFORM_LABEL`, so a resolve's `platformHint` can name them.
+  - `SUPPORTED_PLATFORMS`, `TOKEN_HINTS` and the auth-hero list are still the original five.
+  - The add-company dead end has three branches:
+    - hint is a watchable platform: "board is loaded by JavaScript, paste the direct link";
+    - hint is a recognised but unwatchable platform: "uses {Platform}, can't watch yet"
+      (`isWatchable`);
+    - no hint.
+  - The backend returns 400 if `POST /watchlist` names a platform with no fetcher.
 
 **All five platforms are implemented and live-verified** (four on 2026-08-02, SmartRecruiters 2026-08-29). Verified
 field-level details (JSON shapes, date formats, Workable's two-call design, per-board

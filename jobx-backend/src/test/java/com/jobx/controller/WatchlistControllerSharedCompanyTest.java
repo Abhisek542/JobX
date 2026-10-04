@@ -21,6 +21,8 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -57,7 +59,8 @@ class WatchlistControllerSharedCompanyTest {
         matchRepository = mock(MatchRepository.class);
         matchingService = mock(MatchingService.class);
         fetcherRegistry = mock(FetcherRegistry.class);
-        when(fetcherRegistry.getFetcher(any())).thenReturn(Optional.empty());
+        // Every platform watchable by default; validateBoard on a mock accepts.
+        when(fetcherRegistry.getFetcher(any())).thenReturn(Optional.of(mock(AtsFetcher.class)));
         // A real WatchlistService, not a mock: the BUG_REPORT #6 fix moved the two
         // write transactions out of the controller, but they are still exactly the
         // behaviour these tests are about.
@@ -168,6 +171,27 @@ class WatchlistControllerSharedCompanyTest {
 
         assertEquals("Razorpay", response.companyName());
         verify(matchingService).backfillForWatcher(user, existingCompany);
+    }
+
+    /**
+     * A platform with no fetcher — UNSUPPORTED, or a recognised next-wave
+     * platform whose fetcher hasn't shipped — used to be accepted and set ACTIVE,
+     * leaving a watch that looked healthy and never produced a job.
+     */
+    @Test
+    void aPlatformWithNoFetcherIsRefusedBeforeAnythingIsWritten() {
+        for (AtsPlatform platform : new AtsPlatform[]{AtsPlatform.WORKDAY, AtsPlatform.UNSUPPORTED}) {
+            when(fetcherRegistry.getFetcher(platform)).thenReturn(Optional.empty());
+
+            ResponseStatusException e = assertThrows(ResponseStatusException.class,
+                    () -> controller.add(user, new WatchedCompanyRequest(
+                            "Salesforce", platform, "salesforce/wd12/External_Career_Site")));
+
+            assertEquals(HttpStatus.BAD_REQUEST, e.getStatusCode());
+        }
+        verifyNoInteractions(companyRepository);
+        verify(watchedCompanyRepository, never()).saveAndFlush(any());
+        verifyNoInteractions(matchingService);
     }
 
     @Test

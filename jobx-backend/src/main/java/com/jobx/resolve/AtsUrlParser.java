@@ -1,6 +1,8 @@
 package com.jobx.resolve;
 
 import com.jobx.enums.AtsPlatform;
+import com.jobx.fetcher.AtsFetchException;
+import com.jobx.fetcher.BoardTokens;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -9,6 +11,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -45,6 +48,17 @@ public final class AtsUrlParser {
     private static final String TOKEN = "([A-Za-z0-9][A-Za-z0-9._-]{0,99})";
 
     /**
+     * A token that lives in a hostname — one DNS label, the same definition
+     * {@link BoardTokens} enforces in the fetchers. The lookbehind stops a match
+     * starting mid-host: without it {@code a.b.bamboohr.com} would yield "b".
+     * {@link #TOKEN} is wrong here because it allows dots.
+     */
+    private static final String LABEL = "(?<![A-Za-z0-9.-])(" + BoardTokens.SUBDOMAIN_LABEL + ")";
+
+    /** Workday's {@code /en-US/} segment, which sits between the host and the site name. */
+    private static final Pattern LOCALE = Pattern.compile("[a-z]{2}-[a-z]{2}", Pattern.CASE_INSENSITIVE);
+
+    /**
      * Path or subdomain segments that are never a company's board token. Without
      * this, {@code apply.workable.com/...} yields the token "apply" and
      * {@code boards.greenhouse.io/embed/job_board} yields "embed".
@@ -54,54 +68,144 @@ public final class AtsUrlParser {
             "job_board", "job-board", "posting-api", "postings", "widget", "accounts",
             "companies", "boards", "www", "static", "assets", "cdn", "images", "img",
             "css", "js", "help", "blog", "resources", "support", "docs", "status",
-            "v0", "v1", "v2", "v3", "index.html", "favicon.ico", "robots.txt");
+            "v0", "v1", "v2", "v3", "index.html", "favicon.ico", "robots.txt",
+            "app", "platform", "ats", "board", "wday");
+
+    /**
+     * One way a URL names a board: the pattern, and how to read the token out of
+     * a match. Most platforms carry the token in group 1; Workday needs three
+     * groups to build {@code tenant/wdN/site}, which is why this isn't just a
+     * Pattern. The token function returns null to reject a match.
+     */
+    private record Rule(Pattern pattern, Function<Matcher, String> token) {
+    }
 
     /**
      * Ordered per platform, most specific (API) form first, so
      * {@code api.lever.co/v0/postings/fampay} yields "fampay" and not "v0".
      */
-    private static final Map<AtsPlatform, List<Pattern>> PATTERNS = new LinkedHashMap<>();
+    private static final Map<AtsPlatform, List<Rule>> PATTERNS = new LinkedHashMap<>();
 
     static {
-        PATTERNS.put(AtsPlatform.GREENHOUSE, compile(
+        PATTERNS.put(AtsPlatform.GREENHOUSE, rules(
                 "boards-api\\.greenhouse\\.io/v[0-9]+/boards/" + TOKEN,
                 // The embed form carries the token in a query parameter, not a path segment
                 "(?:job-)?boards(?:\\.[a-z]{2})?\\.greenhouse\\.io/embed/job_board\\?(?:[^\"\\s]*&(?:amp;)?)?for=" + TOKEN,
                 "(?:job-)?boards(?:\\.[a-z]{2})?\\.greenhouse\\.io/" + TOKEN));
 
-        PATTERNS.put(AtsPlatform.LEVER, compile(
+        PATTERNS.put(AtsPlatform.LEVER, rules(
                 "api\\.lever\\.co/v[0-9]+/postings/" + TOKEN,
                 "jobs(?:\\.[a-z]{2})?\\.lever\\.co/" + TOKEN));
 
-        PATTERNS.put(AtsPlatform.ASHBY, compile(
+        PATTERNS.put(AtsPlatform.ASHBY, rules(
                 "api\\.ashbyhq\\.com/posting-api/job-board/" + TOKEN,
                 "jobs\\.ashbyhq\\.com/" + TOKEN));
 
-        PATTERNS.put(AtsPlatform.WORKABLE, compile(
+        PATTERNS.put(AtsPlatform.WORKABLE, rules(
                 "apply\\.workable\\.com/api/v[0-9]+/(?:widget/)?accounts/" + TOKEN,
                 "apply\\.workable\\.com/" + TOKEN,
                 // Legacy per-company subdomain. RESERVED keeps apply/help/www out.
                 TOKEN + "\\.workable\\.com"));
 
-        PATTERNS.put(AtsPlatform.SMARTRECRUITERS, compile(
+        PATTERNS.put(AtsPlatform.SMARTRECRUITERS, rules(
                 "api\\.smartrecruiters\\.com/v[0-9]+/companies/" + TOKEN,
                 "(?:jobs|careers)\\.smartrecruiters\\.com/" + TOKEN));
+
+        // Next-wave platforms: recognised so the resolver can name them; each
+        // becomes watchable only when its fetcher ships (new-ats-add.md).
+
+        // Public site, the wday/cxs API form, and any of them with a locale
+        // segment: salesforce.wd12.myworkdayjobs.com/en-US/External_Career_Site
+        PATTERNS.put(AtsPlatform.WORKDAY, List.of(new Rule(Pattern.compile(
+                LABEL + "\\.(wd[0-9]{1,3})\\.myworkdayjobs\\.com/"
+                        + "(?:wday/cxs/" + BoardTokens.SUBDOMAIN_LABEL + "/)?"
+                        + "(?:[a-z]{2}-[a-z]{2}/)?"
+                        + "([A-Za-z0-9_-]{1,100})",
+                Pattern.CASE_INSENSITIVE), AtsUrlParser::workdayToken)));
+
+        PATTERNS.put(AtsPlatform.RIPPLING, rules(
+                "api\\.rippling\\.com/platform/api/ats/v[0-9]+/board/" + TOKEN,
+                "ats\\.rippling\\.com/api/v[0-9]+/board/" + TOKEN,
+                "ats\\.rippling\\.com/" + TOKEN));
+
+        PATTERNS.put(AtsPlatform.BAMBOOHR, hostRules(LABEL + "\\.bamboohr\\.com/(?:careers|jobs)"));
+
+        PATTERNS.put(AtsPlatform.JOBVITE, rules("jobs\\.jobvite\\.com/" + TOKEN));
+
+        PATTERNS.put(AtsPlatform.JAZZHR, hostRules(LABEL + "\\.applytojob\\.com"));
+
+        // The token is the whole label, e.g. careers-acme.icims.com -> "careers-acme"
+        PATTERNS.put(AtsPlatform.ICIMS, hostRules(LABEL + "\\.icims\\.com/jobs"));
+
+        PATTERNS.put(AtsPlatform.GUSTO, rules("jobs\\.gusto\\.com/boards/" + TOKEN));
     }
 
-    /** Bare host mentions — enough to name the platform, never enough to name the board. */
-    private static final Map<AtsPlatform, Pattern> HOST_HINTS = Map.of(
-            AtsPlatform.GREENHOUSE, Pattern.compile("greenhouse\\.io", Pattern.CASE_INSENSITIVE),
-            AtsPlatform.LEVER, Pattern.compile("lever\\.co", Pattern.CASE_INSENSITIVE),
-            AtsPlatform.ASHBY, Pattern.compile("ashbyhq\\.com", Pattern.CASE_INSENSITIVE),
-            AtsPlatform.WORKABLE, Pattern.compile("workable\\.com", Pattern.CASE_INSENSITIVE),
-            AtsPlatform.SMARTRECRUITERS, Pattern.compile("smartrecruiters\\.com", Pattern.CASE_INSENSITIVE));
+    /**
+     * Bare host mentions — enough to name the platform, never enough to name the
+     * board. Insertion-ordered so the answer is stable when a page mentions two.
+     * The next-wave hints are deliberately narrow: a page that merely uses
+     * Rippling or Gusto for payroll must not be read as hosting its board there.
+     */
+    private static final Map<AtsPlatform, Pattern> HOST_HINTS = new LinkedHashMap<>();
 
-    private static List<Pattern> compile(String... regexes) {
-        List<Pattern> compiled = new ArrayList<>(regexes.length);
+    static {
+        hint(AtsPlatform.GREENHOUSE, "greenhouse\\.io");
+        hint(AtsPlatform.LEVER, "lever\\.co");
+        hint(AtsPlatform.ASHBY, "ashbyhq\\.com");
+        hint(AtsPlatform.WORKABLE, "workable\\.com");
+        hint(AtsPlatform.SMARTRECRUITERS, "smartrecruiters\\.com");
+        hint(AtsPlatform.WORKDAY, "myworkdayjobs\\.com");
+        hint(AtsPlatform.RIPPLING, "ats\\.rippling\\.com");
+        hint(AtsPlatform.BAMBOOHR, "bamboohr\\.com/careers");
+        hint(AtsPlatform.JOBVITE, "jobs\\.jobvite\\.com");
+        hint(AtsPlatform.JAZZHR, "applytojob\\.com");
+        hint(AtsPlatform.ICIMS, "icims\\.com/jobs");
+        hint(AtsPlatform.GUSTO, "jobs\\.gusto\\.com");
+    }
+
+    private static void hint(AtsPlatform platform, String regex) {
+        HOST_HINTS.put(platform, Pattern.compile(regex, Pattern.CASE_INSENSITIVE));
+    }
+
+    /** Rules whose token is a path segment in group 1. */
+    private static List<Rule> rules(String... regexes) {
+        List<Rule> compiled = new ArrayList<>(regexes.length);
         for (String regex : regexes) {
-            compiled.add(Pattern.compile(regex, Pattern.CASE_INSENSITIVE));
+            compiled.add(new Rule(Pattern.compile(regex, Pattern.CASE_INSENSITIVE),
+                    m -> cleanToken(m.group(1))));
         }
         return List.copyOf(compiled);
+    }
+
+    /** Rules whose token is a subdomain in group 1 — lower-cased, as hostnames are. */
+    private static List<Rule> hostRules(String... regexes) {
+        List<Rule> compiled = new ArrayList<>(regexes.length);
+        for (String regex : regexes) {
+            compiled.add(new Rule(Pattern.compile(regex, Pattern.CASE_INSENSITIVE), m -> {
+                String label = m.group(1).toLowerCase(Locale.ROOT);
+                return RESERVED.contains(label) ? null : label;
+            }));
+        }
+        return List.copyOf(compiled);
+    }
+
+    /** {@code tenant/wdN/site}, or null when the match isn't really a board. */
+    private static String workdayToken(Matcher m) {
+        String tenant = m.group(1);
+        String site = m.group(3);
+        // The site is checked against "wday" only, not RESERVED: real Workday
+        // site names include "Careers" and "External", which RESERVED would drop.
+        if (RESERVED.contains(tenant.toLowerCase(Locale.ROOT))
+                || site.equalsIgnoreCase("wday")
+                // host/en-US with no site after it: the locale is not the site
+                || LOCALE.matcher(site).matches()) {
+            return null;
+        }
+        try {
+            return BoardTokens.WorkdayToken.parse(tenant + "/" + m.group(2) + "/" + site).token();
+        } catch (AtsFetchException e) {
+            return null;
+        }
     }
 
     /**
@@ -131,11 +235,11 @@ public final class AtsUrlParser {
         }
 
         Map<BoardRef, Integer> hits = new LinkedHashMap<>();
-        for (Map.Entry<AtsPlatform, List<Pattern>> entry : PATTERNS.entrySet()) {
-            for (Pattern pattern : entry.getValue()) {
-                Matcher matcher = pattern.matcher(text);
+        for (Map.Entry<AtsPlatform, List<Rule>> entry : PATTERNS.entrySet()) {
+            for (Rule rule : entry.getValue()) {
+                Matcher matcher = rule.pattern().matcher(text);
                 while (matcher.find()) {
-                    String token = cleanToken(matcher.group(1));
+                    String token = rule.token().apply(matcher);
                     if (token == null) {
                         continue;
                     }
@@ -175,8 +279,24 @@ public final class AtsUrlParser {
             case ASHBY -> "https://jobs.ashbyhq.com/" + token;
             case WORKABLE -> "https://apply.workable.com/" + token;
             case SMARTRECRUITERS -> "https://jobs.smartrecruiters.com/" + token;
+            case WORKDAY -> workdayBoardUrl(token);
+            case RIPPLING -> "https://ats.rippling.com/" + token;
+            case BAMBOOHR -> "https://" + token + ".bamboohr.com/careers";
+            case JOBVITE -> "https://jobs.jobvite.com/" + token;
+            case JAZZHR -> "https://" + token + ".applytojob.com/apply";
+            case ICIMS -> "https://" + token + ".icims.com/jobs";
+            case GUSTO -> "https://jobs.gusto.com/boards/" + token;
             case UNSUPPORTED -> null;
         };
+    }
+
+    private static String workdayBoardUrl(String token) {
+        try {
+            BoardTokens.WorkdayToken workday = BoardTokens.WorkdayToken.parse(token);
+            return "https://" + workday.host() + "/" + workday.site();
+        } catch (AtsFetchException e) {
+            return null;
+        }
     }
 
     private static String cleanToken(String raw) {

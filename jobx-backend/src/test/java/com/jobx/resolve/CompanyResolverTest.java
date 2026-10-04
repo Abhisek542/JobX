@@ -221,6 +221,22 @@ class CompanyResolverTest {
         verify(safeUrlFetcher).fetch("https://boards.greenhouse.io/phonepe");
     }
 
+    /**
+     * A link to a platform Jobx recognises but has no fetcher for is answered at
+     * once, naming the platform. Sniffing the ATS's own page or probing other
+     * platforms can't make it watchable.
+     */
+    @Test
+    void aPastedLinkToAnUnwatchablePlatformIsNamedWithoutAnyNetwork() {
+        ResolveResponse response = resolver.resolve(user,
+                "https://salesforce.wd12.myworkdayjobs.com/en-US/External_Career_Site");
+
+        assertTrue(response.candidates().isEmpty());
+        assertEquals(AtsPlatform.WORKDAY, response.platformHint());
+        verifyNoInteractions(safeUrlFetcher);
+        verifyNoInteractions(boardProbe);
+    }
+
     // ------------------------------------------------------------------ sniff
 
     /**
@@ -263,6 +279,40 @@ class CompanyResolverTest {
         assertEquals("atlan", candidate.boardToken());
         assertEquals(AtsPlatform.ASHBY, response.platformHint());
         verify(boardProbe).probe(List.of(AtsPlatform.ASHBY), List.of("atlan", "Atlan"));
+    }
+
+    /**
+     * A careers page that links a board on a platform with no fetcher yields
+     * that platform as the hint, even when it also mentions another ATS's host
+     * in passing: the page named its board, which beats a bare host mention.
+     */
+    @Test
+    void aSniffedBoardOnAnUnwatchablePlatformBecomesTheHint() {
+        when(safeUrlFetcher.fetch("https://acme.com/careers/")).thenReturn(Optional.of("""
+                <script src="https://boards.greenhouse.io/static/widget.js"></script>
+                <a href="https://acme.bamboohr.com/careers">Open roles</a>
+                """));
+
+        ResolveResponse response = resolver.resolve(user, "https://acme.com/careers/");
+
+        assertTrue(response.candidates().isEmpty());
+        assertEquals(AtsPlatform.BAMBOOHR, response.platformHint());
+        verify(boardProbe).probe(eq(List.of(AtsPlatform.BAMBOOHR)), any());
+    }
+
+    /**
+     * A hint naming a platform that can't be probed (no fetcher; Workday's token
+     * can't be guessed anyway) ends in the honest empty answer, hint attached.
+     */
+    @Test
+    void aHintForANonProbeablePlatformIsAnHonestEmptyAnswer() {
+        when(safeUrlFetcher.fetch("https://acme.com/careers/"))
+                .thenReturn(Optional.of("<link rel=\"preconnect\" href=\"https://myworkdayjobs.com\">"));
+
+        ResolveResponse response = resolver.resolve(user, "https://acme.com/careers/");
+
+        assertTrue(response.candidates().isEmpty());
+        assertEquals(AtsPlatform.WORKDAY, response.platformHint());
     }
 
     // ------------------------------------------------------------------ probe

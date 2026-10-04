@@ -172,6 +172,13 @@ public class WatchlistController {
     @ResponseStatus(HttpStatus.CREATED)
     public WatchedCompanyResponse add(@AuthenticationPrincipal User user,
                                       @Valid @RequestBody WatchedCompanyRequest request) {
+        // A platform with no fetcher (UNSUPPORTED, or a recognised next-wave
+        // platform whose fetcher hasn't shipped) would sit on the watchlist as
+        // ACTIVE and never produce a job. Refuse it before anything is written.
+        if (fetcherRegistry.getFetcher(request.atsPlatform()).isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Jobx can't watch " + request.atsPlatform() + " boards yet");
+        }
         Company company = getOrCreateCompany(request);
 
         try {
