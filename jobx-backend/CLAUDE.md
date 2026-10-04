@@ -782,6 +782,15 @@ Detect ATS from careers URL, hit that platform's public job API directly:
 - Workable: `apply.workable.com/api/v1/widget/accounts/{token}` (embed-widget endpoint)
 - SmartRecruiters: `api.smartrecruiters.com/v1/companies/{id}/postings` (public, two-call;
   list is capped at 100/page and a bogus id returns an empty 200, not a 404)
+- Rippling: `api.rippling.com/platform/api/ats/v1/board/{slug}/jobs` (list, one row per
+  location) + `ats.rippling.com/api/v2/board/{slug}/jobs/{uuid}` (detail). Slugs are
+  case-sensitive; an unknown slug is a 404. Built 2026-10-04.
+- BambooHR: `{sub}.bamboohr.com/careers/list` + `/careers/{id}/detail` (JSON). The token
+  is a subdomain, validated by `BoardTokens`. An unknown subdomain is a **302**, checked
+  explicitly. Built 2026-10-04.
+- Jobvite: `jobs.jobvite.com/{co}/search?p=N` (HTML, 50 per page) + `/{co}/job/{id}`
+  (HTML with a JSON-LD `JobPosting`). The **first HTML-tier fetcher**. Not `/{co}/jobs`,
+  which truncates long categories. Built 2026-10-04.
 - Workday: `POST {tenant}.{wdN}.myworkdayjobs.com/wday/cxs/{tenant}/{site}/jobs` (public,
   two-call, built 2026-10-04). The token is the composite `tenant/wdN/site`. Pages are
   20, and `limit` > 20 is a 400. The list is newest-first, so paging stops once it is
@@ -805,6 +814,14 @@ Detect ATS from careers URL, hit that platform's public job API directly:
        as `platformHint` and no network call. A sniffed board on one becomes the
        hint. `POST /watchlist` returns **400 for any platform with no registered
        fetcher**, UNSUPPORTED included. The modal's dead end names the platform.
+  2. **API tier (JSON):** Workday → Rippling → BambooHR. **Rippling and BambooHR done
+     2026-10-04** (plans `pr-2-rippling.md`, `pr-3-bamboohr.md`), both added to
+     `PROBEABLE`. Workday not started.
+  3. **HTML tier (jsoup):** Jobvite → JazzHR. **Jobvite done 2026-10-04**
+     (`pr-4-jobvite.md`). It is the reference for JazzHR:
+     - zero cards on a 200 page throw unless `.jv-page-body` says "No results found";
+     - any 3xx means the board is gone;
+     - pages are capped by `jobx.fetch.jobvite.max-pages`.
   2. **API tier (JSON):** Workday → Rippling → BambooHR.
      - **Workday (PR 1) done 2026-10-04.** `fetcher/workday/WorkdayFetcher` was
        live-verified on Salesforce (1,523 listed). `externalPath` is the
@@ -826,17 +843,28 @@ Detect ATS from careers URL, hit that platform's public job API directly:
     BambooHR/JazzHR/iCIMS subdomain and Workday's `tenant/wdN/site`. Existing
     fetchers only put the token in a URL *path*. `POST /watchlist` takes
     `boardToken` straight from the user, so an unvalidated host token is SSRF.
+    New path-token fetchers (Rippling, Jobvite) use `BoardTokens.requirePathSegment`
+    so a token like `../x` or `a?b` can't change the path either.
+  - **Check redirects explicitly.** WebClient doesn't follow them here, and
+    `retrieve()` treats a 3xx as success. A fetcher whose dead-board signal is a
+    redirect (BambooHR, Jobvite) reads `toEntity(String.class)` and checks the
+    status code itself.
   - **HTML-tier fetchers fail loudly.** A 200 page where the selector finds zero
     job cards, and which lacks the platform's known "no openings" / "inactive"
     marker, throws `AtsFetchException`. A layout change must show up as FAILED,
     never as a silently empty feed.
   - **Never bypass bot protection** (Cloudflare challenges, CAPTCHAs). If that is
     the only way in, the platform stays UNSUPPORTED.
-  - Probing stays bounded: only Rippling and BambooHR are candidates for
-    `PROBEABLE`. Workday and iCIMS tokens can't be guessed from a name.
+  - Probing stays bounded. Rippling and BambooHR are now in `PROBEABLE`, which makes
+    seven platforms × up to 4 slug candidates. No other next-wave platform joins.
+    Workday and iCIMS tokens can't be guessed from a name.
 - Recruitee: not on the next-wave list. `{sub}.recruitee.com/api/offers/` is
   unverified.
 
+**Eight platforms are implemented and live-verified**: the first four on 2026-08-02,
+SmartRecruiters on 2026-08-29, and Rippling, BambooHR and Jobvite on 2026-10-04. The
+last three were checked with fixture tests plus a live run of each fetcher against
+the real sites, but not yet end to end through the app UI. Verified field-level details (JSON shapes, date formats,
 **Six platforms are implemented and live-verified** (the first four 2026-08-02,
 SmartRecruiters 2026-08-29, Workday 2026-10-04). Verified field-level details (JSON shapes, date formats,
 the two-call designs, per-board quirks, dead board tokens) are in
@@ -1068,9 +1096,9 @@ resuming multi-ATS work.
 3. More fetchers: Ashby, Workable, Lever, then harder ones if time allows. **Done and
    verified 2026-08-02** (order actually built: Ashby → Lever → Workable) — each
    verified against a live board as built, per-platform notes in
-   `jobx-backend/docs/ats-api-reference.md`. Next wave (Workday, Rippling, BambooHR, Jobvite,
-   JazzHR, iCIMS, Gusto) PLANNED 2026-09-27; see "ATS integration approach". Recruitee still
-   out of scope.
+   `jobx-backend/docs/ats-api-reference.md`. Next wave PLANNED 2026-09-27; see "ATS
+   integration approach". Rippling, BambooHR and Jobvite were built on 2026-10-04.
+   Workday, JazzHR, iCIMS and Gusto remain. Recruitee is still out of scope.
 4. Auth (Spring Security) + multi-tenant data, before handing app to other test users.
    **Done and verified 2026-07-30** — see Implementation status above for the full
    design (JWT access-token-only, `role` column added early, `/dev/**` intentionally

@@ -64,6 +64,28 @@ fetches details for shortcodes not already stored.
 | Foodics   | `foodics`   | 22        | 21          | MENA; 1 duplicate shortcode |
 | Apna      | `apna`      | 158       | 126         | India; 32 duplicate rows — the board that proves shortcode dedup works |
 
+Rippling, BambooHR and Jobvite are two-call fetchers too, so the first fetch of a
+board pays one detail call per job. Verified live 2026-10-04.
+
+### RIPPLING — `RipplingFetcher`
+
+| Company  | Board token | List rows | Unique jobs | Notes |
+|----------|-------------|-----------|-------------|-------|
+| Rippling | `rippling`  | 651       | 331         | Rows repeat once per location. **Case-sensitive**: `Rippling` is a 404. Careers URL `ats.rippling.com/rippling/jobs` |
+
+### BAMBOOHR — `BambooHrFetcher`
+
+| Company             | Board token         | Jobs | Notes |
+|---------------------|---------------------|------|-------|
+| Off Duty Management | `offdutymanagement` | 2    | Small board; careers URL `offdutymanagement.bamboohr.com/careers` |
+| Andela              | `andela`            | 0    | Real but empty (dormant). Add is rejected with 400 (no live roles) |
+
+### JOBVITE — `JobviteFetcher`
+
+| Company | Board token | Jobs | Notes |
+|---------|-------------|------|-------|
+| Egnyte  | `egnyte`    | 26   | **Start here**: one search page. Careers URL `jobs.jobvite.com/egnyte/jobs` |
+| Nutanix | `nutanix`   | 266  | 6 search pages of 50 — the pagination case. First fetch takes a few minutes |
 ### WORKDAY — `WorkdayFetcher` (verified 2026-10-04)
 
 The token has three parts, `tenant/wdN/site`, all read off the careers URL
@@ -168,6 +190,9 @@ VALUES
 | **409 duplicate** | Add `groww` twice | Second add rejected |
 | **429 cooldown** | Press "Check now" twice inside 5 min | Cooldown is `jobx.fetch.manual-cooldown-ms` (default 5 min), tracked via `last_fetched_at` |
 | **UNSUPPORTED platform** | `UNSUPPORTED` / anything | Currently accepted and set ACTIVE — a known gap, not a passing test |
+| **400 via wrong case (Rippling)** | `RIPPLING` / `Rippling` | Rippling slugs are case-sensitive; the capital-R slug 404s |
+| **400 via redirect** | `BAMBOOHR` / `zzqqbogus123`, or `JOBVITE` / `zzqqbogus123` | Unknown boards answer a 302; the fetcher reports "does not exist" |
+| **400 hostile token** | `BAMBOOHR` / `evil.com#` | Rejected before any request — host tokens go through `BoardTokens` |
 
 Dead tokens confirmed dead, don't retry: Lever `postman`, Ashby `hasura`,
 Workable `zerodha`.

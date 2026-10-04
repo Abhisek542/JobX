@@ -149,6 +149,104 @@ the pagination target).
   years — ignored, exactly like Workable's. Years come from description text via
   `ExperienceParser`.
 
+## Rippling — VERIFIED (fetcher built + live-tested 2026-10-04); TWO-CALL DESIGN
+
+Verified against Rippling's own board (`rippling`, 331 jobs).
+
+- **List:** `GET api.rippling.com/platform/api/ats/v1/board/{slug}/jobs` → a bare
+  JSON array, the whole board in one call (no paging). Items: `uuid` (**the
+  external id**), `name` → title, `url` → apply URL
+  (`ats.rippling.com/{slug}/jobs/{uuid}`), `department{id,label}`,
+  `workLocation{label,id}`. **No date and no description.**
+- **THE LIST REPEATS A JOB ONCE PER LOCATION** under the same `uuid`: 651 rows,
+  331 jobs. The fetcher groups rows by uuid and joins their location labels
+  (three shown, then "+N more"). The preview counts uuids, not rows.
+- **SLUGS ARE CASE-SENSITIVE.** `rippling` is a board; `Rippling` is a 404.
+- **Dead board:** an unknown slug is `404 {"error_code":"RESOURCE_NOT_FOUND",
+  "message":"Job Board not found"}` on v1 (and on v2). That is a clean dead
+  signal, so Rippling is in `CompanyResolver.PROBEABLE`.
+- **Detail:** `GET ats.rippling.com/api/v2/board/{slug}/jobs/{uuid}` →
+  `description.role` + `description.company` (HTML, stripped and joined, role
+  first), `createdOn` (`2026-08-13T08:54:48.317000-07:00`, full ISO with offset)
+  → `platform_posted_at`, `workLocations[]` (strings), `employmentType`,
+  `companyName`. `activeJobApplication` (the application form) is dropped
+  from `raw_json`. An unknown uuid is a 404.
+- **Age gate runs after the detail call**, because only the detail has a date. It
+  saves storing a stale posting, not the request. Known ids are still filtered
+  before it.
+- A paged list also exists (`ats.rippling.com/api/v2/board/{slug}/jobs`,
+  `page, pageSize=20, totalItems`). It isn't used, because v1 returns everything
+  in one call.
+
+## BambooHR — VERIFIED (fetcher built + live-tested 2026-10-04); TWO-CALL DESIGN
+
+Verified against Off Duty Management (`offdutymanagement`, 2 jobs).
+
+- **The token is a subdomain** (`{sub}.bamboohr.com`). It goes through
+  `BoardTokens.requireSubdomainLabel` before any request. The host is built only
+  as `label + ".bamboohr.com"`.
+- **List:** `GET {sub}.bamboohr.com/careers/list` →
+  `{"meta":{"totalCount":N},"result":[…]}`. Items: `id` (**the external id**,
+  a numeric string), `jobOpeningName` → title, `departmentLabel`,
+  `employmentStatusLabel`, `location{city,state}`, `atsLocation{country,state,
+  province,city}`, `isRemote`, `locationType`. **No date and no description.**
+  A posting fills `location` *or* `atsLocation`; live, one board used both. The
+  fetcher reads `location` first, then `atsLocation`.
+- **Detail:** `GET {sub}.bamboohr.com/careers/{id}/detail` (JSON) →
+  `result.jobOpening{description (HTML), datePosted ("2026-07-16", DATE-ONLY),
+  jobOpeningShareUrl, location, atsLocation, compensation, minimumExperience}`
+  plus `result.formFields` (the application form, not stored).
+  `minimumExperience` is a label ("Mid-level"), NOT years, so it is ignored.
+  `/careers/{id}` without `/detail` is the HTML page (used as the apply URL).
+  An unknown id is a 404.
+- **DEAD BOARD = 302 → `https://www.bamboohr.com/`.** Every one of ~30 random
+  labels did this. WebClient doesn't follow redirects, and `retrieve()` treats a
+  3xx as success, so the fetcher reads `toEntity` and checks the status itself.
+- **DORMANT ACCOUNTS ANSWER 200 WITH ZERO JOBS**, like Workable's ghosts: `andela`,
+  `zapier`, `toggl`, `asana`, `vercel` and `netlify` all return
+  `{"meta":{"totalCount":0},"result":[]}`. `validateBoard` rejects them at add
+  time, and the probe ignores them. Fixture: `bamboohr-andela-empty.json`.
+- `datePosted` is judged by the **end** of its day for the TTL, as with Workable.
+
+## Jobvite — VERIFIED (fetcher built + live-tested 2026-10-04); HTML TIER
+
+Verified against Egnyte (`egnyte`, 26 jobs) and Nutanix (`nutanix`, 266 jobs).
+**This is the first HTML-tier fetcher.** There is no public JSON API, so the
+server-rendered career site is parsed with jsoup.
+
+- **List: `GET jobs.jobvite.com/{co}/search?p={N}`, NOT `/{co}/jobs`.** The
+  `/jobs` page groups jobs by category and cuts long categories off behind a
+  "Show More" link. On Nutanix it showed 117 of 266 jobs. The search pages list
+  everything, 50 per page:
+  - cards: `td.jv-job-list-name a[href=/{co}/job/{id}]` (title and **external
+    id**) and `td.jv-job-list-location` (text; a multi-site job reads
+    "2 Locations");
+  - `.jv-pagination-text`: "1-50 of 266";
+  - `a.jv-pagination-next` is present on every page but the last.
+
+  Pages are capped at `jobx.fetch.jobvite.max-pages` (default 20, so 1,000
+  jobs), with a WARN when the cap is hit.
+- **FAIL LOUDLY.** A 200 page with zero cards throws `AtsFetchException`, unless
+  `.jv-page-body` contains "No results found" (Jobvite's empty-state text). That
+  marker was captured from a search that matched nothing
+  (`jobvite-egnyte-noresults.html`); no live board with zero openings could be
+  found. Treat it as the best available signal, not a verified one.
+- **Detail:** `GET jobs.jobvite.com/{co}/job/{id}` →
+  `.jv-job-detail-description` (HTML; its "Description" heading is dropped)
+  and **a JSON-LD `JobPosting` block** (the 2026-09-27 recon said there was none;
+  there is now). From it come `datePosted` ("2026-07-14", **date-only**) →
+  `platform_posted_at`, and `jobLocation[].address{addressLocality,
+  addressRegion}` → location. That replaces the list's "N Locations" text.
+  `raw_json` stores the JSON-LD. A page with no description is a detail
+  failure: the job is skipped and retried.
+- **Dead board:** an unknown company is `302 → http://search.jobvite.com/?invalid=1`
+  (no longer the `/support/` URL the first recon saw). A removed job is
+  `303 → /careers/{co}/jobs?error=404`. Any 3xx is treated as gone.
+- **Display name:** from `<title>{Name} Careers</title>`, not the page header.
+  Nutanix replaces the standard header with its own.
+- **The preview count** comes from the pagination text, so it covers the whole
+  board from one page.
+- Not probeable: found only from a pasted URL or a sniffed careers page.
 ## Workday — VERIFIED (fetcher built + live-tested 2026-10-04); TWO-CALL DESIGN
 
 Verified live against Salesforce (`salesforce/wd12/External_Career_Site`, 1,523
@@ -213,6 +311,18 @@ Real captured responses live in `src/test/resources/fixtures/` and back the fetc
 unit tests: `ashby-aspora.json`, `lever-fampay.json`, `lever-sprinto.json`,
 `workable-apna.json` (list), `workable-v2-job.json` (detail) — all 2026-08-02 — plus
 `smartrecruiters-phonepe.json` (list) and `smartrecruiters-phonepe-detail.json`
+(detail), captured 2026-08-29. Captured 2026-10-04:
+- **Rippling:** `rippling-rippling-v1-list.json`, which is the first five jobs of
+  the live list with every per-location row kept (15 rows), and
+  `rippling-rippling-v2-detail.json`.
+- **BambooHR:** `bamboohr-offdutymanagement-list.json`,
+  `bamboohr-offdutymanagement-detail.json` and `bamboohr-andela-empty.json`.
+- **Jobvite:** `jobvite-egnyte-search.html`, `jobvite-nutanix-search-p0.html`
+  and `jobvite-nutanix-search-p5.html` (the last page), plus
+  `jobvite-egnyte-detail.html` and `jobvite-egnyte-noresults.html`.
+
+If a board's live shape drifts, re-capture with curl and update both fixture
+and mapping.
 (detail), captured 2026-08-29 — plus `workday-salesforce-list.json` (page 0,
 `total` 1523) and `workday-salesforce-detail.json`, captured 2026-10-04. If a board's live shape drifts, re-capture with curl
 and update both fixture and mapping.
@@ -229,6 +339,9 @@ The add-company flow reads a board out of a careers page. These are the public
 | Ashby | `jobs.ashbyhq.com/{token}` |
 | Workable | `apply.workable.com/{token}` |
 | SmartRecruiters | `jobs.smartrecruiters.com/{token}` |
+| Rippling | `ats.rippling.com/{token}/jobs` (token is case-sensitive) |
+| BambooHR | `{token}.bamboohr.com/careers` |
+| Jobvite | `jobs.jobvite.com/{token}/jobs` (also `/{token}/search`, `/{token}/job/{id}`) |
 | Workday | `{tenant}.{wdN}.myworkdayjobs.com/{site}`, optionally with a locale (`/en-US/{site}`) → token `tenant/wdN/site` |
 
 **REGIONAL HOSTS ARE NOT OPTIONAL.** Groww's careers page links
@@ -258,6 +371,7 @@ VERIFIED` section. The build order and rules are in the backend CLAUDE.md, under
 
 | Platform | Endpoint(s) seen | Dead-board signal | Notes |
 |---|---|---|---|
+| Workday | List: `POST https://{tenant}.{wdN}.myworkdayjobs.com/wday/cxs/{tenant}/{site}/jobs`, body `{"appliedFacets":{},"limit":20,"offset":0,"searchText":""}` → `{total, jobPostings[{title, externalPath, locationsText, postedOn, bulletFields}]}`. Detail: `GET …/wday/cxs/{tenant}/{site}{externalPath}` → `jobPostingInfo{jobDescription (HTML), startDate (date-only), timeType, jobReqId, location}` | TBD | Token is composite `tenant/wdN/site`, e.g. `salesforce/wd12/External_Career_Site` (1,522 jobs, 20 per page). `postedOn` is relative text ("Posted Today", "Posted 30+ Days Ago"). Still to check: is `total` only set on page 0? Is the list newest-first? |
 | Rippling | List (one call, whole board): `GET https://api.rippling.com/platform/api/ats/v1/board/{slug}/jobs` → `[{uuid, name, department, url, workLocation}]`. Paged alternative: `ats.rippling.com/api/v2/board/{slug}/jobs` (`page, pageSize=20, totalItems`). Detail: `GET ats.rippling.com/api/v2/board/{slug}/jobs/{uuid}` → `description{company, role}` (HTML), `createdOn` (ISO), `employmentType`, `companyName` | v2 → 404 `RESOURCE_NOT_FOUND` | Page URL: `ats.rippling.com/{slug}/jobs` |
 | BambooHR | `GET https://{sub}.bamboohr.com/careers/list` → `{"meta":{"totalCount":N},"result":[…]}` | 302 → `www.bamboohr.com` | `andela` is real but has 0 jobs. Still need a live tenant with openings to capture the item and detail shapes. |
 | Jobvite | `GET https://jobs.jobvite.com/{co}/jobs`: server-rendered HTML with `.jv-job-list-name`, `.jv-job-list-location` and links to `/{co}/job/{id}` | Redirects to `jobvite.com/support/…?invalid=1` | Live boards: `nutanix`, `egnyte`. Detail pages have no JSON-LD. |

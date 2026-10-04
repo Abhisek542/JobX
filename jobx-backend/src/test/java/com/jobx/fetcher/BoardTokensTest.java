@@ -17,6 +17,26 @@ import static org.junit.jupiter.api.Assertions.*;
 class BoardTokensTest {
 
     @Nested
+    @DisplayName("path segments")
+    class PathSegments {
+
+        @ParameterizedTest
+        @ValueSource(strings = {"rippling", "Sprinto", "egnyte", "acme-inc", "acme_co", "acme.inc", "a"})
+        void acceptsOneSafeSegmentUnchanged(String token) {
+            // Unchanged on purpose: Rippling slugs are case-sensitive.
+            assertEquals(token, BoardTokens.requirePathSegment(token));
+        }
+
+        @ParameterizedTest
+        @NullAndEmptySource
+        @ValueSource(strings = {"..", ".", "../admin", "a/b", "a?b=1", "x#y", "a%2Fb", "x@y",
+                "-acme", ".hidden", "a b"})
+        void rejectsAnythingThatCouldChangeThePath(String token) {
+            assertThrows(AtsFetchException.class, () -> BoardTokens.requirePathSegment(token));
+        }
+    }
+
+    @Nested
     @DisplayName("subdomain labels")
     class SubdomainLabels {
 

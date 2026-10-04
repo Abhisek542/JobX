@@ -64,11 +64,14 @@ public class CompanyResolver {
     /**
      * The platforms worth probing: guessable from a name, one cheap request, and
      * a clean dead-board signal. Platforms without a fetcher can never be probed;
-     * Workday and iCIMS never will be (their tokens can't be guessed).
+     * Workday and iCIMS never will be (their tokens can't be guessed). Rippling
+     * 404s an unknown slug and BambooHR 302s an unknown subdomain, both verified
+     * live 2026-10-04. Jobvite stays URL/SNIFF only, to keep the fan-out bounded.
      */
     private static final List<AtsPlatform> PROBEABLE = List.of(
             AtsPlatform.GREENHOUSE, AtsPlatform.LEVER, AtsPlatform.ASHBY,
-            AtsPlatform.WORKABLE, AtsPlatform.SMARTRECRUITERS);
+            AtsPlatform.WORKABLE, AtsPlatform.SMARTRECRUITERS,
+            AtsPlatform.RIPPLING, AtsPlatform.BAMBOOHR);
 
     private final CompanyRepository companyRepository;
     private final WatchedCompanyRepository watchedCompanyRepository;

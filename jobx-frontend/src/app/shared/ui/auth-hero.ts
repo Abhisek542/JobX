@@ -12,8 +12,9 @@ import { Icon } from './icon';
  * ([heroLead]), form (default slot) and footer line ([heroFoot]); all form
  * state and submission stay in LoginPage / RegisterPage.
  *
- * HONESTY (uiux_plan.md §7): the stats are product facts — five supported ATS
- * platforms, the 30-minute poll, the six-day TTL — never user counts or ratings.
+ * HONESTY (uiux_plan.md §7): the stats are product facts — the supported ATS
+ * platforms (counted from `platforms`, so the number can't drift from the list),
+ * the 30-minute poll, the six-day TTL — never user counts or ratings.
  */
 @Component({
   selector: 'app-auth-hero',
@@ -313,7 +314,7 @@ import { Icon } from './icon';
           <div class="hstat">
             <span class="tile"><app-icon name="layers" /></span>
             <div>
-              <div class="v">5</div>
+              <div class="v">{{ platforms.length }}</div>
               <div class="l">ATS platforms</div>
             </div>
           </div>
@@ -361,6 +362,9 @@ export class AuthHero {
     'Ashby',
     'Workable',
     'SmartRecruiters',
+    'Rippling',
+    'BambooHR',
+    'Jobvite',
     'Workday',
   ];
 
