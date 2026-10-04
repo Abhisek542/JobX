@@ -64,6 +64,31 @@ fetches details for shortcodes not already stored.
 | Foodics   | `foodics`   | 22        | 21          | MENA; 1 duplicate shortcode |
 | Apna      | `apna`      | 158       | 126         | India; 32 duplicate rows — the board that proves shortcode dedup works |
 
+### JAZZHR — `JazzHrFetcher` (counted 2026-10-04)
+
+HTML tier, two calls like Workable: a first fetch pays one detail page per posting.
+The token is the subdomain of `{token}.applytojob.com`.
+
+| Company                     | Board token     | Jobs | Notes |
+|-----------------------------|-----------------|------|-------|
+| Sciaky                      | `sciakyinc`     | 2    | **Start here** — smallest live board |
+| Associated Metal Forming    | `associatedspring` | 7 | |
+| Illinois Secretary of State | `ilsos`         | 18   | |
+| Brennan Center for Justice  | `brennancenter` | 21   | The fixture board |
+| MRA Recruiting Services     | `mra`           | 122  | Largest seen; still one page, no pagination |
+| Inflow                      | `getinflow`     | 0    | Real but empty — rejected at add time (no live roles) |
+
+### GUSTO — `GustoFetcher` (counted 2026-10-04)
+
+HTML tier, two calls, and every detail call waits 1 s (`robots.txt` Crawl-delay).
+The token is the whole board slug, company name plus UUID — copy it from the
+board URL, or open any posting and follow its link to the board.
+
+| Company                 | Board token | Jobs | Notes |
+|-------------------------|-------------|------|-------|
+| Alexandria Electric     | `alexandria-electric-llc-7ca8ffc5-3b8d-421b-a0ed-c7e3dfc7303d` | 1 | Smallest |
+| Sage Veterinary Imaging | `sage-veterinary-imaging-07e81227-32b5-482d-9fc0-c99bc9ad2f96` | 14 | The fixture board; many postings are months old, so most are dropped by the 6-day TTL |
+
 ---
 
 ## Fast manual run (clean DB)
@@ -152,8 +177,10 @@ VALUES
 | **429 cooldown** | Press "Check now" twice inside 5 min | Cooldown is `jobx.fetch.manual-cooldown-ms` (default 5 min), tracked via `last_fetched_at` |
 | **UNSUPPORTED platform** | `UNSUPPORTED` / anything | Currently accepted and set ACTIVE — a known gap, not a passing test |
 
+| **400 on a dead JazzHR board** | `JAZZHR` / `jazzhr` | A cancelled account ("Inactive Career Page"); an unknown subdomain redirects instead and is rejected the same way |
+
 Dead tokens confirmed dead, don't retry: Lever `postman`, Ashby `hasura`,
-Workable `zerodha`.
+Workable `zerodha`, JazzHR `jazzhr` (inactive).
 
 ---
 

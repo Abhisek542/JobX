@@ -62,6 +62,8 @@ export const SUPPORTED_PLATFORMS: readonly AtsPlatform[] = [
   'ASHBY',
   'WORKABLE',
   'SMARTRECRUITERS',
+  'JAZZHR',
+  'GUSTO',
 ];
 
 export const PLATFORM_LABEL: Record<AtsPlatform, string> = {
@@ -80,8 +82,14 @@ export const PLATFORM_LABEL: Record<AtsPlatform, string> = {
   UNSUPPORTED: 'Unsupported board',
 };
 
-/** Board-token hints, straight from the mockup's TOKEN_HINTS. */
-export const TOKEN_HINTS: Record<string, { placeholder: string; url: string; token: string }> = {
+/**
+ * Board-token hints, straight from the mockup's TOKEN_HINTS. `suffix` follows
+ * the token for platforms whose token is a subdomain (JazzHR).
+ */
+export const TOKEN_HINTS: Record<
+  string,
+  { placeholder: string; url: string; token: string; suffix?: string }
+> = {
   GREENHOUSE: { placeholder: 'razorpay', url: 'boards.greenhouse.io/', token: 'razorpay' },
   LEVER: { placeholder: 'fampay', url: 'jobs.lever.co/', token: 'fampay' },
   ASHBY: { placeholder: 'sprinto', url: 'jobs.ashbyhq.com/', token: 'sprinto' },
@@ -91,6 +99,18 @@ export const TOKEN_HINTS: Record<string, { placeholder: string; url: string; tok
     placeholder: 'PHONEPELIMITED',
     url: 'jobs.smartrecruiters.com/',
     token: 'PHONEPELIMITED',
+  },
+  JAZZHR: {
+    placeholder: 'brennancenter',
+    url: 'https://',
+    token: 'brennancenter',
+    suffix: '.applytojob.com',
+  },
+  // A Gusto board slug is the company name plus a UUID — copy all of it.
+  GUSTO: {
+    placeholder: 'sage-veterinary-imaging-07e81227-…',
+    url: 'jobs.gusto.com/boards/',
+    token: 'sage-veterinary-imaging-07e81227-…',
   },
 };
 

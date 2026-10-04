@@ -188,6 +188,13 @@ Built as planned below, with these differences:
 - "Zero cards on a 200 page" → `AtsFetchException` unless the page shows
   Jobvite's no-openings marker (capture it in recon).
 
+> **PR 5–7 outcome (2026-10-04)** — detailed plan and results in `new-ats-pr5-7.md`.
+> JazzHR and Gusto were built. Gusto's gate passed: Cloudflare challenges curl's
+> and a Chrome user agent, not the app's own client (20/20 × 200). iCIMS is not
+> built: its "CAPTCHA" was triggered by our Chrome user agent, and the real
+> blocker is that customers are moving to iCIMS Career Sites on their own
+> domains, which needs a design decision. The sections below are the original plan.
+
 ## PR 5 — JazzHR (HTML tier)
 
 - **Recon**: find a live `{sub}.applytojob.com/apply` tenant with jobs; capture
