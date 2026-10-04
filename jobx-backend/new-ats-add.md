@@ -152,6 +152,8 @@ Built as planned below, with these differences:
 
 ## PR 2 — Rippling (API tier)
 
+Detailed plan: `pr-2-rippling.md`.
+
 - **Recon**: capture `rippling-rippling-v1-list.json` and a v2 detail; confirm
   v1 list has no dates (hence detail), and whether v1 is also 404 for bogus.
 - **`fetcher/rippling/RipplingFetcher.java`**: list via v1 (one call, whole
@@ -163,6 +165,8 @@ Built as planned below, with these differences:
 - Add to `PROBEABLE` (404 = clean dead signal). Tests as PR 1.
 
 ## PR 3 — BambooHR (API tier)
+
+Detailed plan: `pr-3-bamboohr.md`.
 
 - **Recon**: find ≥1 live tenant with open jobs (search the web for
   `"bamboohr.com/careers"`); capture `careers/list` and the per-job detail
@@ -177,6 +181,8 @@ Built as planned below, with these differences:
   reliable. Tests as PR 1.
 
 ## PR 4 — Jobvite (HTML tier)
+
+Detailed plan: `pr-4-jobvite.md`.
 
 - **Recon**: capture `jobvite-egnyte-list.html` and one detail page; find the
   description selector and whether the list paginates (`?p=` / "next").
