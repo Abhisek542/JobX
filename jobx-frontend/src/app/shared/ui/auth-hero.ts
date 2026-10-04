@@ -355,7 +355,14 @@ export class AuthHero {
    */
   readonly next = input<string | null>(null);
 
-  protected readonly platforms = ['Greenhouse', 'Lever', 'Ashby', 'Workable', 'SmartRecruiters'];
+  protected readonly platforms = [
+    'Greenhouse',
+    'Lever',
+    'Ashby',
+    'Workable',
+    'SmartRecruiters',
+    'Workday',
+  ];
 
   protected scrollTo(id: string): void {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
