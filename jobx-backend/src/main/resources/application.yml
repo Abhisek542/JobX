@@ -57,6 +57,15 @@ jobx:
   fetch:
     interval-ms: 1800000    # 30 minutes — override to 60000 for local dev testing
     manual-cooldown-ms: 300000   # 5 min between manual "Check now" fetches per company
+    jobvite:
+      # Jobvite's search pages hold 50 jobs each; 20 pages = 1,000 jobs. A board
+      # past the cap is read up to it and logged as a WARN, never failed.
+      max-pages: 20
+    workday:
+      # 20 postings a page is Workday's hard cap. Paging normally stops much
+      # earlier, once the newest-first list runs past the TTL; this only bounds
+      # a board whose dates we can't read. WARN logged when hit.
+      max-pages: 60
   retention:
     # Jobx is about applying before the aggregators pick a role up. Past this
     # window that race is lost, so the posting is deleted and tombstoned (the

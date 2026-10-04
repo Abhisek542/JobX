@@ -88,6 +88,44 @@ board URL, or open any posting and follow its link to the board.
 |-------------------------|-------------|------|-------|
 | Alexandria Electric     | `alexandria-electric-llc-7ca8ffc5-3b8d-421b-a0ed-c7e3dfc7303d` | 1 | Smallest |
 | Sage Veterinary Imaging | `sage-veterinary-imaging-07e81227-32b5-482d-9fc0-c99bc9ad2f96` | 14 | The fixture board; many postings are months old, so most are dropped by the 6-day TTL |
+Rippling, BambooHR and Jobvite are two-call fetchers too, so the first fetch of a
+board pays one detail call per job. Verified live 2026-10-04.
+
+### RIPPLING — `RipplingFetcher`
+
+| Company  | Board token | List rows | Unique jobs | Notes |
+|----------|-------------|-----------|-------------|-------|
+| Rippling | `rippling`  | 651       | 331         | Rows repeat once per location. **Case-sensitive**: `Rippling` is a 404. Careers URL `ats.rippling.com/rippling/jobs` |
+
+### BAMBOOHR — `BambooHrFetcher`
+
+| Company             | Board token         | Jobs | Notes |
+|---------------------|---------------------|------|-------|
+| Off Duty Management | `offdutymanagement` | 2    | Small board; careers URL `offdutymanagement.bamboohr.com/careers` |
+| Andela              | `andela`            | 0    | Real but empty (dormant). Add is rejected with 400 (no live roles) |
+
+### JOBVITE — `JobviteFetcher`
+
+| Company | Board token | Jobs | Notes |
+|---------|-------------|------|-------|
+| Egnyte  | `egnyte`    | 26   | **Start here**: one search page. Careers URL `jobs.jobvite.com/egnyte/jobs` |
+| Nutanix | `nutanix`   | 266  | 6 search pages of 50 — the pagination case. First fetch takes a few minutes |
+### WORKDAY — `WorkdayFetcher` (verified 2026-10-04)
+
+The token has three parts, `tenant/wdN/site`, all read off the careers URL
+`https://{tenant}.{wdN}.myworkdayjobs.com/en-US/{site}`. Pasting that URL into
+the add-company modal fills them in. Like Workable, the first fetch makes one
+detail call per posting, but only for postings inside the 6-day TTL. The list is
+newest-first, so paging stops once it has run past that window.
+
+| Company    | Board token                            | Listed (`total`) | Notes |
+|------------|----------------------------------------|------------------|-------|
+| Salesforce | `salesforce/wd12/External_Career_Site` | 1,523            | The recon board; ~300 postings inside 6 days, so the first fetch pages ~16 times |
+| NVIDIA     | `nvidia/wd5/NVIDIAExternalCareerSite`  | 2,000            | `total` looks capped at 2000; paging is bounded by `jobx.fetch.workday.max-pages` anyway |
+
+Dead boards fail loudly: an unknown site is a 404 (`salesforce/wd12/NoSuchSite`)
+and an unknown tenant is a 422. Both give a 400 at add time and FAILED health on a
+watched board.
 
 ---
 
@@ -176,6 +214,9 @@ VALUES
 | **409 duplicate** | Add `groww` twice | Second add rejected |
 | **429 cooldown** | Press "Check now" twice inside 5 min | Cooldown is `jobx.fetch.manual-cooldown-ms` (default 5 min), tracked via `last_fetched_at` |
 | **UNSUPPORTED platform** | `UNSUPPORTED` / anything | Currently accepted and set ACTIVE — a known gap, not a passing test |
+| **400 via wrong case (Rippling)** | `RIPPLING` / `Rippling` | Rippling slugs are case-sensitive; the capital-R slug 404s |
+| **400 via redirect** | `BAMBOOHR` / `zzqqbogus123`, or `JOBVITE` / `zzqqbogus123` | Unknown boards answer a 302; the fetcher reports "does not exist" |
+| **400 hostile token** | `BAMBOOHR` / `evil.com#` | Rejected before any request — host tokens go through `BoardTokens` |
 
 | **400 on a dead JazzHR board** | `JAZZHR` / `jazzhr` | A cancelled account ("Inactive Career Page"); an unknown subdomain redirects instead and is rejected the same way |
 

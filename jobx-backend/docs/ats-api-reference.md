@@ -270,6 +270,161 @@ token would be a whole customer domain taken from user input, which needs the
 `SafeUrlFetcher`/`PrivateAddressGuard` treatment rather than `BoardTokens`. That
 is a design call, not a recon gap. Until then `ICIMS` stays recognised but not
 watchable: a pasted iCIMS link gets the honest "uses iCIMS, can't watch yet" answer.
+## Rippling — VERIFIED (fetcher built + live-tested 2026-10-04); TWO-CALL DESIGN
+
+Verified against Rippling's own board (`rippling`, 331 jobs).
+
+- **List:** `GET api.rippling.com/platform/api/ats/v1/board/{slug}/jobs` → a bare
+  JSON array, the whole board in one call (no paging). Items: `uuid` (**the
+  external id**), `name` → title, `url` → apply URL
+  (`ats.rippling.com/{slug}/jobs/{uuid}`), `department{id,label}`,
+  `workLocation{label,id}`. **No date and no description.**
+- **THE LIST REPEATS A JOB ONCE PER LOCATION** under the same `uuid`: 651 rows,
+  331 jobs. The fetcher groups rows by uuid and joins their location labels
+  (three shown, then "+N more"). The preview counts uuids, not rows.
+- **SLUGS ARE CASE-SENSITIVE.** `rippling` is a board; `Rippling` is a 404.
+- **Dead board:** an unknown slug is `404 {"error_code":"RESOURCE_NOT_FOUND",
+  "message":"Job Board not found"}` on v1 (and on v2). That is a clean dead
+  signal, so Rippling is in `CompanyResolver.PROBEABLE`.
+- **Detail:** `GET ats.rippling.com/api/v2/board/{slug}/jobs/{uuid}` →
+  `description.role` + `description.company` (HTML, stripped and joined, role
+  first), `createdOn` (`2026-08-13T08:54:48.317000-07:00`, full ISO with offset)
+  → `platform_posted_at`, `workLocations[]` (strings), `employmentType`,
+  `companyName`. `activeJobApplication` (the application form) is dropped
+  from `raw_json`. An unknown uuid is a 404.
+- **Age gate runs after the detail call**, because only the detail has a date. It
+  saves storing a stale posting, not the request. Known ids are still filtered
+  before it.
+- A paged list also exists (`ats.rippling.com/api/v2/board/{slug}/jobs`,
+  `page, pageSize=20, totalItems`). It isn't used, because v1 returns everything
+  in one call.
+
+## BambooHR — VERIFIED (fetcher built + live-tested 2026-10-04); TWO-CALL DESIGN
+
+Verified against Off Duty Management (`offdutymanagement`, 2 jobs).
+
+- **The token is a subdomain** (`{sub}.bamboohr.com`). It goes through
+  `BoardTokens.requireSubdomainLabel` before any request. The host is built only
+  as `label + ".bamboohr.com"`.
+- **List:** `GET {sub}.bamboohr.com/careers/list` →
+  `{"meta":{"totalCount":N},"result":[…]}`. Items: `id` (**the external id**,
+  a numeric string), `jobOpeningName` → title, `departmentLabel`,
+  `employmentStatusLabel`, `location{city,state}`, `atsLocation{country,state,
+  province,city}`, `isRemote`, `locationType`. **No date and no description.**
+  A posting fills `location` *or* `atsLocation`; live, one board used both. The
+  fetcher reads `location` first, then `atsLocation`.
+- **Detail:** `GET {sub}.bamboohr.com/careers/{id}/detail` (JSON) →
+  `result.jobOpening{description (HTML), datePosted ("2026-07-16", DATE-ONLY),
+  jobOpeningShareUrl, location, atsLocation, compensation, minimumExperience}`
+  plus `result.formFields` (the application form, not stored).
+  `minimumExperience` is a label ("Mid-level"), NOT years, so it is ignored.
+  `/careers/{id}` without `/detail` is the HTML page (used as the apply URL).
+  An unknown id is a 404.
+- **DEAD BOARD = 302 → `https://www.bamboohr.com/`.** Every one of ~30 random
+  labels did this. WebClient doesn't follow redirects, and `retrieve()` treats a
+  3xx as success, so the fetcher reads `toEntity` and checks the status itself.
+- **DORMANT ACCOUNTS ANSWER 200 WITH ZERO JOBS**, like Workable's ghosts: `andela`,
+  `zapier`, `toggl`, `asana`, `vercel` and `netlify` all return
+  `{"meta":{"totalCount":0},"result":[]}`. `validateBoard` rejects them at add
+  time, and the probe ignores them. Fixture: `bamboohr-andela-empty.json`.
+- `datePosted` is judged by the **end** of its day for the TTL, as with Workable.
+
+## Jobvite — VERIFIED (fetcher built + live-tested 2026-10-04); HTML TIER
+
+Verified against Egnyte (`egnyte`, 26 jobs) and Nutanix (`nutanix`, 266 jobs).
+**This is the first HTML-tier fetcher.** There is no public JSON API, so the
+server-rendered career site is parsed with jsoup.
+
+- **List: `GET jobs.jobvite.com/{co}/search?p={N}`, NOT `/{co}/jobs`.** The
+  `/jobs` page groups jobs by category and cuts long categories off behind a
+  "Show More" link. On Nutanix it showed 117 of 266 jobs. The search pages list
+  everything, 50 per page:
+  - cards: `td.jv-job-list-name a[href=/{co}/job/{id}]` (title and **external
+    id**) and `td.jv-job-list-location` (text; a multi-site job reads
+    "2 Locations");
+  - `.jv-pagination-text`: "1-50 of 266";
+  - `a.jv-pagination-next` is present on every page but the last.
+
+  Pages are capped at `jobx.fetch.jobvite.max-pages` (default 20, so 1,000
+  jobs), with a WARN when the cap is hit.
+- **FAIL LOUDLY.** A 200 page with zero cards throws `AtsFetchException`, unless
+  `.jv-page-body` contains "No results found" (Jobvite's empty-state text). That
+  marker was captured from a search that matched nothing
+  (`jobvite-egnyte-noresults.html`); no live board with zero openings could be
+  found. Treat it as the best available signal, not a verified one.
+- **Detail:** `GET jobs.jobvite.com/{co}/job/{id}` →
+  `.jv-job-detail-description` (HTML; its "Description" heading is dropped)
+  and **a JSON-LD `JobPosting` block** (the 2026-09-27 recon said there was none;
+  there is now). From it come `datePosted` ("2026-07-14", **date-only**) →
+  `platform_posted_at`, and `jobLocation[].address{addressLocality,
+  addressRegion}` → location. That replaces the list's "N Locations" text.
+  `raw_json` stores the JSON-LD. A page with no description is a detail
+  failure: the job is skipped and retried.
+- **Dead board:** an unknown company is `302 → http://search.jobvite.com/?invalid=1`
+  (no longer the `/support/` URL the first recon saw). A removed job is
+  `303 → /careers/{co}/jobs?error=404`. Any 3xx is treated as gone.
+- **Display name:** from `<title>{Name} Careers</title>`, not the page header.
+  Nutanix replaces the standard header with its own.
+- **The preview count** comes from the pagination text, so it covers the whole
+  board from one page.
+- Not probeable: found only from a pasted URL or a sniffed careers page.
+## Workday — VERIFIED (fetcher built + live-tested 2026-10-04); TWO-CALL DESIGN
+
+Verified live against Salesforce (`salesforce/wd12/External_Career_Site`, 1,523
+postings). NVIDIA (`nvidia/wd5/NVIDIAExternalCareerSite`) was spot-checked.
+
+- **Token** is composite, `tenant/wdN/site`, because the board is addressed by
+  three things that can't be derived from each other. It ends up in the **host**,
+  so `WorkdayFetcher` runs it through `BoardTokens.WorkdayToken.parse` before any
+  request and builds every URL from the validated parts. The site name is
+  case-insensitive (`external_career_site` works too).
+- **List:** `POST https://{tenant}.{wdN}.myworkdayjobs.com/wday/cxs/{tenant}/{site}/jobs`,
+  body `{"appliedFacets":{},"limit":20,"offset":N,"searchText":""}` →
+  `{ total, jobPostings: [{title, externalPath, locationsText, postedOn, bulletFields:[reqId]}], facets }`.
+  - **`Content-Type: application/json` is required.** Without it you get a 500.
+  - **`limit` above 20 is a 400**, not a silent clamp. Pages are 20.
+  - **`total` is only set at offset 0.** Every later page says `0`. NVIDIA's
+    `total` is exactly 2000, which looks like a cap.
+  - **Newest-first.** Sampled offsets 0 / 100 / 300 / 600 / 1000 / 1500 read
+    "Posted Today" → "3 Days" → "6 Days" → "17 Days" → "30+ Days". The order jitters
+    at day boundaries, e.g. "Posted Yesterday" after "Posted 2 Days Ago" on page 0.
+    The fetcher stops after **two** consecutive pages that are entirely past the
+    TTL, so on Salesforce it pages ~16 times, not 76. `jobx.fetch.workday.max-pages`
+    (default 60) only bounds a board whose dates can't be read.
+  - `postedOn` is **relative text**: "Posted Today", "Posted Yesterday", "Posted N
+    Days Ago", "Posted 30+ Days Ago". `WorkdayPostedOn` reads it as that day's
+    midnight UTC, the same clock as the stored `startDate`, and the fetcher skips
+    too-old postings before the detail call. Unknown text (another locale) is never
+    "too old".
+  - `locationsText` is a place, or a count ("3 Locations") for multi-location
+    postings. A count is never stored as a location.
+- **Detail:** `GET https://{host}/wday/cxs/{tenant}/{site}{externalPath}` →
+  `{ jobPostingInfo, hiringOrganization, similarJobs }`. From `jobPostingInfo`:
+  - `jobDescription` (HTML, ~5–12k chars) → stripped → `description`;
+  - `startDate` (date-only, `2026-10-03`) → `platform_posted_at` at midnight UTC.
+    It is in the tenant's time zone, so an Australian posting can be dated
+    "tomorrow" in UTC;
+  - `location` plus `additionalLocations[]` → `location`, joined with `; `;
+  - also present: `jobReqId`, `timeType`, `remoteType`, `externalUrl`, `endDate`.
+  Only `jobPostingInfo` is kept as `raw_json`, because `similarJobs` is noise.
+  `hiringOrganization.name` is a legal entity ("621 Salesforce.com India Private
+  Limited Hyderabad Branch"), so it is **not** used as the display name.
+- **`external_id` = `externalPath`** (e.g. `/job/India---Hyderabad/Performance-Engineer---Software-Engineering-SMTS_JR358291`).
+  It's on the list, so the N+1 guard runs before the detail call. Paths that
+  aren't a plain `/job/...` are dropped, because the path is appended to a URL on
+  the board's host. The req id (`bulletFields[0]` / `jobReqId`) stays in `raw_json`.
+- **Apply URL** = `https://{host}/{site}{externalPath}`, the public posting page.
+  It's the same as the detail's `externalUrl`.
+- **Dead board:** unknown site → **404** `{"errorCode":"S21","message":"not found:
+  Job_Posting_Site_ID=…"}`, unknown tenant → **422**, unknown posting → 404. All of
+  them throw out of `retrieve()`, so a dead board is a FAILED fetch and a 400 at add
+  time, never an empty one.
+- **Detail failure** skips the posting, which is retried next cycle. Same rule as
+  Workable.
+- **Never probed.** The token can't be guessed from a name, so Workday is not in
+  `CompanyResolver.PROBEABLE`. A careers page that only mentions `myworkdayjobs.com`
+  gets the platform hint and no probe. Boards are found from a pasted link or a
+  sniffed board URL.
 
 ## Test fixtures
 
@@ -283,6 +438,21 @@ unit tests: `ashby-aspora.json`, `lever-fampay.json`, `lever-sprinto.json`,
 cancelled account), `gusto-sage-board.html`, `gusto-sage-posting.html` and
 `gusto-challenge.html` (the Cloudflare page curl's user agent is served). If a
 board's live shape drifts, re-capture with curl and update both fixture and mapping.
+(detail), captured 2026-08-29. Captured 2026-10-04:
+- **Rippling:** `rippling-rippling-v1-list.json`, which is the first five jobs of
+  the live list with every per-location row kept (15 rows), and
+  `rippling-rippling-v2-detail.json`.
+- **BambooHR:** `bamboohr-offdutymanagement-list.json`,
+  `bamboohr-offdutymanagement-detail.json` and `bamboohr-andela-empty.json`.
+- **Jobvite:** `jobvite-egnyte-search.html`, `jobvite-nutanix-search-p0.html`
+  and `jobvite-nutanix-search-p5.html` (the last page), plus
+  `jobvite-egnyte-detail.html` and `jobvite-egnyte-noresults.html`.
+
+If a board's live shape drifts, re-capture with curl and update both fixture
+and mapping.
+(detail), captured 2026-08-29 — plus `workday-salesforce-list.json` (page 0,
+`total` 1523) and `workday-salesforce-detail.json`, captured 2026-10-04. If a board's live shape drifts, re-capture with curl
+and update both fixture and mapping.
 
 ## Careers-page URL forms (for ATS detection, verified live 2026-09-06)
 
@@ -298,6 +468,10 @@ The add-company flow reads a board out of a careers page. These are the public
 | SmartRecruiters | `jobs.smartrecruiters.com/{token}` |
 | JazzHR | `{token}.applytojob.com/apply`, `{token}.applytojob.com/apply/{code}/{slug}` |
 | Gusto | `jobs.gusto.com/boards/{token}` (a posting link, `jobs.gusto.com/postings/…`, names only the platform) |
+| Rippling | `ats.rippling.com/{token}/jobs` (token is case-sensitive) |
+| BambooHR | `{token}.bamboohr.com/careers` |
+| Jobvite | `jobs.jobvite.com/{token}/jobs` (also `/{token}/search`, `/{token}/job/{id}`) |
+| Workday | `{tenant}.{wdN}.myworkdayjobs.com/{site}`, optionally with a locale (`/en-US/{site}`) → token `tenant/wdN/site` |
 
 **REGIONAL HOSTS ARE NOT OPTIONAL.** Groww's careers page links
 `job-boards.**eu**.greenhouse.io/groww`. A pattern anchored on

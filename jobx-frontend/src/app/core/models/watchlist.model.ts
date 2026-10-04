@@ -64,6 +64,10 @@ export const SUPPORTED_PLATFORMS: readonly AtsPlatform[] = [
   'SMARTRECRUITERS',
   'JAZZHR',
   'GUSTO',
+  'RIPPLING',
+  'BAMBOOHR',
+  'JOBVITE',
+  'WORKDAY',
 ];
 
 export const PLATFORM_LABEL: Record<AtsPlatform, string> = {
@@ -85,10 +89,17 @@ export const PLATFORM_LABEL: Record<AtsPlatform, string> = {
 /**
  * Board-token hints, straight from the mockup's TOKEN_HINTS. `suffix` follows
  * the token for platforms whose token is a subdomain (JazzHR).
+ * Board-token hints, straight from the mockup's TOKEN_HINTS. Rendered as
+ * `url` + bold `token` + `suffix`; `suffix` exists for platforms whose token is
+ * a subdomain (BambooHR) rather than a path segment.
  */
 export const TOKEN_HINTS: Record<
   string,
   { placeholder: string; url: string; token: string; suffix?: string }
+/** Board-token hints, straight from the mockup's TOKEN_HINTS. */
+export const TOKEN_HINTS: Record<
+  string,
+  { placeholder: string; url: string; token: string; note?: string }
 > = {
   GREENHOUSE: { placeholder: 'razorpay', url: 'boards.greenhouse.io/', token: 'razorpay' },
   LEVER: { placeholder: 'fampay', url: 'jobs.lever.co/', token: 'fampay' },
@@ -111,6 +122,22 @@ export const TOKEN_HINTS: Record<
     placeholder: 'sage-veterinary-imaging-07e81227-…',
     url: 'jobs.gusto.com/boards/',
     token: 'sage-veterinary-imaging-07e81227-…',
+  // Rippling slugs are case-sensitive: 'rippling' is a board, 'Rippling' is not.
+  RIPPLING: { placeholder: 'rippling', url: 'ats.rippling.com/', token: 'rippling' },
+  // The BambooHR token is the subdomain in front of .bamboohr.com.
+  BAMBOOHR: {
+    placeholder: 'offdutymanagement',
+    url: '',
+    token: 'offdutymanagement',
+    suffix: '.bamboohr.com/careers',
+  },
+  JOBVITE: { placeholder: 'egnyte', url: 'jobs.jobvite.com/', token: 'egnyte' },
+  // A Workday board needs three parts of its URL, not one: tenant, shard, site.
+  WORKDAY: {
+    placeholder: 'salesforce/wd12/External_Career_Site',
+    url: 'salesforce.wd12.myworkdayjobs.com/',
+    token: 'External_Career_Site',
+    note: 'Enter it as tenant/wdN/site, e.g. salesforce/wd12/External_Career_Site.',
   },
 };
 

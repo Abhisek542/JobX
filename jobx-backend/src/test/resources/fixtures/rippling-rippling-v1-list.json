@@ -1,0 +1,197 @@
+[
+  {
+    "uuid": "75ad50c6-778f-42ee-9c63-70d1cd687202",
+    "name": "Account Executive, Broker Channel (Austin & San Antonio)",
+    "department": {
+      "id": "Sales",
+      "label": "Sales"
+    },
+    "url": "https://ats.rippling.com/rippling/jobs/75ad50c6-778f-42ee-9c63-70d1cd687202",
+    "workLocation": {
+      "label": "Austin, TX",
+      "id": "Austin, TX"
+    }
+  },
+  {
+    "uuid": "94486f41-6474-446a-b67a-c164e11354ea",
+    "name": "Account Executive, Broker Channel (Pittsburgh or Cleveland)",
+    "department": {
+      "id": "Sales",
+      "label": "Sales"
+    },
+    "url": "https://ats.rippling.com/rippling/jobs/94486f41-6474-446a-b67a-c164e11354ea",
+    "workLocation": {
+      "label": "Pittsburgh, PA",
+      "id": "Pittsburgh, PA"
+    }
+  },
+  {
+    "uuid": "94486f41-6474-446a-b67a-c164e11354ea",
+    "name": "Account Executive, Broker Channel (Pittsburgh or Cleveland)",
+    "department": {
+      "id": "Sales",
+      "label": "Sales"
+    },
+    "url": "https://ats.rippling.com/rippling/jobs/94486f41-6474-446a-b67a-c164e11354ea",
+    "workLocation": {
+      "label": "Cleveland, OH",
+      "id": "Cleveland, OH"
+    }
+  },
+  {
+    "uuid": "528f45e5-4c17-4fb7-affe-41e0c12c7c15",
+    "name": " Account Executive, Broker Channel (TOLA)",
+    "department": {
+      "id": "Sales",
+      "label": "Sales"
+    },
+    "url": "https://ats.rippling.com/rippling/jobs/528f45e5-4c17-4fb7-affe-41e0c12c7c15",
+    "workLocation": {
+      "label": "OK",
+      "id": "OK"
+    }
+  },
+  {
+    "uuid": "528f45e5-4c17-4fb7-affe-41e0c12c7c15",
+    "name": " Account Executive, Broker Channel (TOLA)",
+    "department": {
+      "id": "Sales",
+      "label": "Sales"
+    },
+    "url": "https://ats.rippling.com/rippling/jobs/528f45e5-4c17-4fb7-affe-41e0c12c7c15",
+    "workLocation": {
+      "label": "AR",
+      "id": "AR"
+    }
+  },
+  {
+    "uuid": "528f45e5-4c17-4fb7-affe-41e0c12c7c15",
+    "name": " Account Executive, Broker Channel (TOLA)",
+    "department": {
+      "id": "Sales",
+      "label": "Sales"
+    },
+    "url": "https://ats.rippling.com/rippling/jobs/528f45e5-4c17-4fb7-affe-41e0c12c7c15",
+    "workLocation": {
+      "label": "LA",
+      "id": "LA"
+    }
+  },
+  {
+    "uuid": "528f45e5-4c17-4fb7-affe-41e0c12c7c15",
+    "name": " Account Executive, Broker Channel (TOLA)",
+    "department": {
+      "id": "Sales",
+      "label": "Sales"
+    },
+    "url": "https://ats.rippling.com/rippling/jobs/528f45e5-4c17-4fb7-affe-41e0c12c7c15",
+    "workLocation": {
+      "label": "San Antonio, TX",
+      "id": "San Antonio, TX"
+    }
+  },
+  {
+    "uuid": "528f45e5-4c17-4fb7-affe-41e0c12c7c15",
+    "name": " Account Executive, Broker Channel (TOLA)",
+    "department": {
+      "id": "Sales",
+      "label": "Sales"
+    },
+    "url": "https://ats.rippling.com/rippling/jobs/528f45e5-4c17-4fb7-affe-41e0c12c7c15",
+    "workLocation": {
+      "label": "Austin, TX",
+      "id": "Austin, TX"
+    }
+  },
+  {
+    "uuid": "528f45e5-4c17-4fb7-affe-41e0c12c7c15",
+    "name": " Account Executive, Broker Channel (TOLA)",
+    "department": {
+      "id": "Sales",
+      "label": "Sales"
+    },
+    "url": "https://ats.rippling.com/rippling/jobs/528f45e5-4c17-4fb7-affe-41e0c12c7c15",
+    "workLocation": {
+      "label": "Houston, TX",
+      "id": "Houston, TX"
+    }
+  },
+  {
+    "uuid": "528f45e5-4c17-4fb7-affe-41e0c12c7c15",
+    "name": " Account Executive, Broker Channel (TOLA)",
+    "department": {
+      "id": "Sales",
+      "label": "Sales"
+    },
+    "url": "https://ats.rippling.com/rippling/jobs/528f45e5-4c17-4fb7-affe-41e0c12c7c15",
+    "workLocation": {
+      "label": "Remote (Dallas, Texas, US)",
+      "id": "Remote (Dallas, Texas, US)"
+    }
+  },
+  {
+    "uuid": "b81ad8f4-e2f6-449e-88ee-60bff5f07b84",
+    "name": "Account Executive - Germany",
+    "department": {
+      "id": "Sales",
+      "label": "Sales"
+    },
+    "url": "https://ats.rippling.com/rippling/jobs/b81ad8f4-e2f6-449e-88ee-60bff5f07b84",
+    "workLocation": {
+      "label": "Berlin",
+      "id": "Berlin"
+    }
+  },
+  {
+    "uuid": "b81ad8f4-e2f6-449e-88ee-60bff5f07b84",
+    "name": "Account Executive - Germany",
+    "department": {
+      "id": "Sales",
+      "label": "Sales"
+    },
+    "url": "https://ats.rippling.com/rippling/jobs/b81ad8f4-e2f6-449e-88ee-60bff5f07b84",
+    "workLocation": {
+      "label": "Dublin, Ireland",
+      "id": "Dublin, Ireland"
+    }
+  },
+  {
+    "uuid": "ae666b72-45bc-4d07-90c1-7a440adf501f",
+    "name": "Account Executive, IT Cloud",
+    "department": {
+      "id": "Sales",
+      "label": "Sales"
+    },
+    "url": "https://ats.rippling.com/rippling/jobs/ae666b72-45bc-4d07-90c1-7a440adf501f",
+    "workLocation": {
+      "label": "Hybrid (San Francisco, California, US)",
+      "id": "Hybrid (San Francisco, California, US)"
+    }
+  },
+  {
+    "uuid": "ae666b72-45bc-4d07-90c1-7a440adf501f",
+    "name": "Account Executive, IT Cloud",
+    "department": {
+      "id": "Sales",
+      "label": "Sales"
+    },
+    "url": "https://ats.rippling.com/rippling/jobs/ae666b72-45bc-4d07-90c1-7a440adf501f",
+    "workLocation": {
+      "label": "Hybrid (New York, New York, US)",
+      "id": "Hybrid (New York, New York, US)"
+    }
+  },
+  {
+    "uuid": "ae666b72-45bc-4d07-90c1-7a440adf501f",
+    "name": "Account Executive, IT Cloud",
+    "department": {
+      "id": "Sales",
+      "label": "Sales"
+    },
+    "url": "https://ats.rippling.com/rippling/jobs/ae666b72-45bc-4d07-90c1-7a440adf501f",
+    "workLocation": {
+      "label": "Chicago, IL",
+      "id": "Chicago, IL"
+    }
+  }
+]

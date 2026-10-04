@@ -64,11 +64,14 @@ public class CompanyResolver {
     /**
      * The platforms worth probing: guessable from a name, one cheap request, and
      * a clean dead-board signal. Platforms without a fetcher can never be probed;
-     * Workday and iCIMS never will be (their tokens can't be guessed).
+     * Workday and iCIMS never will be (their tokens can't be guessed). Rippling
+     * 404s an unknown slug and BambooHR 302s an unknown subdomain, both verified
+     * live 2026-10-04. Jobvite stays URL/SNIFF only, to keep the fan-out bounded.
      */
     private static final List<AtsPlatform> PROBEABLE = List.of(
             AtsPlatform.GREENHOUSE, AtsPlatform.LEVER, AtsPlatform.ASHBY,
-            AtsPlatform.WORKABLE, AtsPlatform.SMARTRECRUITERS);
+            AtsPlatform.WORKABLE, AtsPlatform.SMARTRECRUITERS,
+            AtsPlatform.RIPPLING, AtsPlatform.BAMBOOHR);
 
     private final CompanyRepository companyRepository;
     private final WatchedCompanyRepository watchedCompanyRepository;
@@ -194,7 +197,11 @@ public class CompanyResolver {
         }
 
         // 4. PROBE — guess the slug, then make the ATS prove it.
-        List<String> tokens = SlugCandidates.from(trimmed, maxSlugCandidates);
+        // A hint for a platform whose tokens can't be guessed (Workday's
+        // tenant/wdN/site) names the platform but rules probing out entirely.
+        List<String> tokens = platformHint == null || PROBEABLE.contains(platformHint)
+                ? SlugCandidates.from(trimmed, maxSlugCandidates)
+                : List.of();
         if (!tokens.isEmpty()) {
             List<AtsPlatform> platforms = platformHint == null ? PROBEABLE : List.of(platformHint);
             List<ResolvedBoardResponse> probed = boardProbe.probe(platforms, tokens).stream()
