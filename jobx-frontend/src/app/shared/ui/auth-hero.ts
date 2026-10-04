@@ -13,6 +13,8 @@ import { Icon } from './icon';
  * state and submission stay in LoginPage / RegisterPage.
  *
  * HONESTY (uiux_plan.md §7): the stats are product facts — the supported ATS
+ * platforms (counted from `platforms`, so the number can't drift from the
+ * list), the 30-minute poll, the six-day TTL — never user counts or ratings.
  * platforms (counted from `platforms`, so the number can't drift from the list),
  * the 30-minute poll, the six-day TTL — never user counts or ratings.
  */
@@ -362,6 +364,8 @@ export class AuthHero {
     'Ashby',
     'Workable',
     'SmartRecruiters',
+    'JazzHR',
+    'Gusto',
     'Rippling',
     'BambooHR',
     'Jobvite',

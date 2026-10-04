@@ -1,5 +1,34 @@
 # Plan: PR 5 (JazzHR), PR 6 (iCIMS), PR 7 (Gusto)
 
+## Status (2026-10-04, implemented)
+
+- **PR 5 JazzHR: built.** `fetcher/jazzhr/JazzHrFetcher.java`, 20 tests.
+- **PR 7 Gusto: built.** The gate check passed: 20/20 requests answered 200 with
+  the app's default client. `fetcher/gusto/GustoFetcher.java`, 18 tests.
+- Both were run once against the live sites through the real `WebClient` config
+  (a throwaway test, deleted afterwards). That run found postings with no JSON-LD
+  on both platforms (2/21 and 3/14), now handled by a page-body fallback.
+- **PR 6 iCIMS: NOT built, and the recon below was wrong.** The CAPTCHA came from
+  the Chrome user agent used for recon; an honest agent gets plain 404s for
+  unknown hosts and a 200 for a real one. The real finding: customers such as
+  UCLA have moved to **iCIMS Career Sites** (ex-Jibe), which serves JSON at
+  `https://{customer-domain}/api/jobs`. Building that needs a decision on
+  custom-domain tokens. See the iCIMS section of `docs/ats-api-reference.md`.
+- **Deviations from the plan:**
+  - Shared new files rather than per-fetcher copies: `HtmlPage` (status +
+    Location), `JsonLd` (JobPosting extraction) and `PastTtlMemo`. They are new
+    files, so they don't conflict with the Jobvite branch.
+  - **`PastTtlMemo` was not in the plan.** Neither list carries dates, and
+    FetchScheduler never stores or tombstones a too-old posting. Without the memo,
+    every stale posting still listed would cost a detail call every cycle (on Gusto,
+    plus 1 s of crawl delay each).
+  - Gusto's empty board was never seen live. A "Careers at …" page with the job
+    list rendered and empty is read as quiet; anything else with zero postings throws.
+  - The resolver was not changed: a pasted Gusto *posting* link still yields only
+    the platform hint (option (b) below).
+
+The original plan follows.
+
 Follows `new-ats-add.md`. PR 0 (groundwork) is merged. The enum values, `BoardTokens`,
 the `AtsUrlParser` rules and `HOST_HINTS`, `boardUrl()`, the frontend `AtsPlatform`
 union and `PLATFORM_LABEL` are all already in place for these three platforms.

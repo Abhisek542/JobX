@@ -823,6 +823,19 @@ Detect ATS from careers URL, hit that platform's public job API directly:
      - any 3xx means the board is gone;
      - pages are capped by `jobx.fetch.jobvite.max-pages`.
   2. **API tier (JSON):** Workday → Rippling → BambooHR.
+  3. **HTML tier (jsoup):** Jobvite → JazzHR. **JazzHR built 2026-10-04**
+     (`JazzHrFetcher`, two-call: board page → JSON-LD detail page). Plan:
+     `jobx-backend/new-ats-pr5-7.md`.
+  4. **Recon-gated:**
+     - **Gusto: gate passed, built 2026-10-04** (`GustoFetcher`). The Cloudflare
+       challenge targets some clients only: this app's default client got 20/20
+       × 200, curl's agent is always challenged. A challenge is a FAILED fetch,
+       never retried; every detail call waits 1 s (robots.txt Crawl-delay).
+     - **iCIMS: not built, decision pending.** The 2026-09-27 CAPTCHA was caused
+       by sending a Chrome user agent. Customers are moving to "iCIMS Career
+       Sites" (ex-Jibe), which has a JSON `/api/jobs` on the customer's own
+       domain. That needs a custom-domain token design, not `BoardTokens`.
+       Details in `docs/ats-api-reference.md`.
      - **Workday (PR 1) done 2026-10-04.** `fetcher/workday/WorkdayFetcher` was
        live-verified on Salesforce (1,523 listed). `externalPath` is the
        `external_id`. `WorkdayPostedOn` reads "Posted N Days Ago" onto the same
@@ -854,6 +867,27 @@ Detect ATS from careers URL, hit that platform's public job API directly:
     marker, throws `AtsFetchException`. A layout change must show up as FAILED,
     never as a silently empty feed.
   - **Never bypass bot protection** (Cloudflare challenges, CAPTCHAs). If that is
+    the only way in, the platform stays UNSUPPORTED. **Never send a browser user
+    agent**, in fetchers or in recon. Both Gusto's and iCIMS's walls were
+    triggered by a Chrome UA and not by an honest one; spoofing a browser is
+    exactly the kind of workaround this rule forbids.
+  - **HTML-tier plumbing (new files, shared):**
+    - `HtmlPage.get` keeps status + `Location`, because `.retrieve()` reads a
+      3xx as an empty success;
+    - `JsonLd.find` reads the `JobPosting` block, the most stable part of a page;
+    - `PastTtlMemo` stops a two-call fetcher whose list has no dates from paying
+      a detail call for the same stale posting every cycle. Too-old postings are
+      never stored or tombstoned, so nothing else remembers them.
+    - Detail URLs are rebuilt from a fixed host plus a strictly matched id; a
+      scraped href is never requested.
+  - Probing stays bounded: only Rippling and BambooHR are candidates for
+    `PROBEABLE`. Workday and iCIMS tokens can't be guessed from a name.
+- Recruitee: not on the next-wave list. `{sub}.recruitee.com/api/offers/` is
+  unverified.
+
+**The original five platforms are implemented and live-verified** (the first four
+2026-08-02, SmartRecruiters 2026-08-29). **JazzHR and Gusto were added 2026-10-04**
+(fixture-tested against live-captured pages; not yet run end to end in the app). Verified field-level details (JSON shapes, date formats,
     the only way in, the platform stays UNSUPPORTED.
   - Probing stays bounded. Rippling and BambooHR are now in `PROBEABLE`, which makes
     seven platforms × up to 4 slug candidates. No other next-wave platform joins.
@@ -1096,6 +1130,9 @@ resuming multi-ATS work.
 3. More fetchers: Ashby, Workable, Lever, then harder ones if time allows. **Done and
    verified 2026-08-02** (order actually built: Ashby → Lever → Workable) — each
    verified against a live board as built, per-platform notes in
+   `jobx-backend/docs/ats-api-reference.md`. Next wave (Workday, Rippling, BambooHR, Jobvite,
+   JazzHR, iCIMS, Gusto) PLANNED 2026-09-27; JazzHR and Gusto built 2026-10-04, iCIMS
+   pending a design call; see "ATS integration approach". Recruitee still out of scope.
    `jobx-backend/docs/ats-api-reference.md`. Next wave PLANNED 2026-09-27; see "ATS
    integration approach". Rippling, BambooHR and Jobvite were built on 2026-10-04.
    Workday, JazzHR, iCIMS and Gusto remain. Recruitee is still out of scope.

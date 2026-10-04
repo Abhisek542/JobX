@@ -370,6 +370,10 @@ Detect ATS from careers URL, hit that platform's public job API directly:
   order and rules. The UI lists a platform only once its fetcher ships.
   - PR 0 (groundwork) done 2026-10-04. All seven platforms are in the `AtsPlatform` union and in
     `PLATFORM_LABEL`, so a resolve's `platformHint` can name them.
+  - `SUPPORTED_PLATFORMS`, `TOKEN_HINTS` and the auth-hero list are the original five plus
+    **JazzHR and Gusto** (fetchers built 2026-10-04). A token hint may carry a `suffix`
+    rendered after the token, for subdomain tokens (`brennancenter` + `.applytojob.com`).
+    iCIMS stays recognised but unwatchable (design call pending).
   - Rippling, BambooHR and Jobvite fetchers shipped 2026-10-04. They are now in
     `SUPPORTED_PLATFORMS`, `TOKEN_HINTS` and the auth-hero list, which makes eight.
     The hero's platform count is `platforms.length`, no longer a hard-coded "5".

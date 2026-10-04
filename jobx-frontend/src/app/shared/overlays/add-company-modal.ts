@@ -163,6 +163,8 @@ type Step = 'input' | 'resolving' | 'confirm' | 'dead-end';
                 <p class="hint">
                   Take it straight from the careers URL — don't guess it.<br />
                   <code
+                    >{{ hint().url }}<b>{{ hint().token }}</b
+                    >{{ hint().suffix }}</code
                     >{{ hint().url }}<b>{{ hint().token }}</b>{{ hint().suffix ?? '' }}</code
                   >
                   @if (hint().note; as note) {
