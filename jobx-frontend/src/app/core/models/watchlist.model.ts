@@ -62,6 +62,9 @@ export const SUPPORTED_PLATFORMS: readonly AtsPlatform[] = [
   'ASHBY',
   'WORKABLE',
   'SMARTRECRUITERS',
+  'RIPPLING',
+  'BAMBOOHR',
+  'JOBVITE',
 ];
 
 export const PLATFORM_LABEL: Record<AtsPlatform, string> = {
@@ -80,8 +83,15 @@ export const PLATFORM_LABEL: Record<AtsPlatform, string> = {
   UNSUPPORTED: 'Unsupported board',
 };
 
-/** Board-token hints, straight from the mockup's TOKEN_HINTS. */
-export const TOKEN_HINTS: Record<string, { placeholder: string; url: string; token: string }> = {
+/**
+ * Board-token hints, straight from the mockup's TOKEN_HINTS. Rendered as
+ * `url` + bold `token` + `suffix`; `suffix` exists for platforms whose token is
+ * a subdomain (BambooHR) rather than a path segment.
+ */
+export const TOKEN_HINTS: Record<
+  string,
+  { placeholder: string; url: string; token: string; suffix?: string }
+> = {
   GREENHOUSE: { placeholder: 'razorpay', url: 'boards.greenhouse.io/', token: 'razorpay' },
   LEVER: { placeholder: 'fampay', url: 'jobs.lever.co/', token: 'fampay' },
   ASHBY: { placeholder: 'sprinto', url: 'jobs.ashbyhq.com/', token: 'sprinto' },
@@ -92,6 +102,16 @@ export const TOKEN_HINTS: Record<string, { placeholder: string; url: string; tok
     url: 'jobs.smartrecruiters.com/',
     token: 'PHONEPELIMITED',
   },
+  // Rippling slugs are case-sensitive: 'rippling' is a board, 'Rippling' is not.
+  RIPPLING: { placeholder: 'rippling', url: 'ats.rippling.com/', token: 'rippling' },
+  // The BambooHR token is the subdomain in front of .bamboohr.com.
+  BAMBOOHR: {
+    placeholder: 'offdutymanagement',
+    url: '',
+    token: 'offdutymanagement',
+    suffix: '.bamboohr.com/careers',
+  },
+  JOBVITE: { placeholder: 'egnyte', url: 'jobs.jobvite.com/', token: 'egnyte' },
 };
 
 // --------------------------------------------------------------------------

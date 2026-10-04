@@ -290,14 +290,14 @@ class CompanyResolverTest {
     void aSniffedBoardOnAnUnwatchablePlatformBecomesTheHint() {
         when(safeUrlFetcher.fetch("https://acme.com/careers/")).thenReturn(Optional.of("""
                 <script src="https://boards.greenhouse.io/static/widget.js"></script>
-                <a href="https://acme.bamboohr.com/careers">Open roles</a>
+                <a href="https://acme.applytojob.com/apply">Open roles</a>
                 """));
 
         ResolveResponse response = resolver.resolve(user, "https://acme.com/careers/");
 
         assertTrue(response.candidates().isEmpty());
-        assertEquals(AtsPlatform.BAMBOOHR, response.platformHint());
-        verify(boardProbe).probe(eq(List.of(AtsPlatform.BAMBOOHR)), any());
+        assertEquals(AtsPlatform.JAZZHR, response.platformHint());
+        verify(boardProbe).probe(eq(List.of(AtsPlatform.JAZZHR)), any());
     }
 
     /**
@@ -327,8 +327,12 @@ class CompanyResolverTest {
 
         assertEquals("PROBE", candidate.source());
         assertEquals("fampay", candidate.boardToken());
+        // Rippling and BambooHR joined once their fetchers shipped. Jobvite,
+        // Workday and the other recognised-only platforms are never guessed.
         verify(boardProbe).probe(
-                argThat(platforms -> platforms.size() == 5),
+                eq(List.of(AtsPlatform.GREENHOUSE, AtsPlatform.LEVER, AtsPlatform.ASHBY,
+                        AtsPlatform.WORKABLE, AtsPlatform.SMARTRECRUITERS,
+                        AtsPlatform.RIPPLING, AtsPlatform.BAMBOOHR)),
                 eq(List.of("FamPay", "fampay", "Fampay")));
     }
 

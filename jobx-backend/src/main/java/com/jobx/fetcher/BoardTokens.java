@@ -26,8 +26,26 @@ public final class BoardTokens {
     public static final String SUBDOMAIN_LABEL = "[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?";
 
     private static final Pattern LABEL = Pattern.compile(SUBDOMAIN_LABEL, Pattern.CASE_INSENSITIVE);
+    // The same shape AtsUrlParser's path TOKEN matches. The leading alphanumeric
+    // rules out "." and ".."; no '/', '?', '#', '%' or '@' can appear at all.
+    private static final Pattern PATH_SEGMENT = Pattern.compile("[A-Za-z0-9][A-Za-z0-9._-]{0,99}");
     private static final Pattern WORKDAY_SHARD = Pattern.compile("wd\\d{1,3}", Pattern.CASE_INSENSITIVE);
     private static final Pattern WORKDAY_SITE = Pattern.compile("[A-Za-z0-9_-]{1,100}");
+
+    /**
+     * For tokens that go into a URL path on a fixed host (Rippling, Jobvite).
+     * A path token can't redirect the request to another host, but an
+     * unchecked "../x" or "a?b" would still change which resource we ask for.
+     *
+     * @return the token unchanged — path tokens can be case-sensitive (Rippling's are)
+     * @throws AtsFetchException unless the token is one safe path segment
+     */
+    public static String requirePathSegment(String token) {
+        if (token == null || !PATH_SEGMENT.matcher(token).matches()) {
+            throw new AtsFetchException("Board token '" + token + "' is not a valid board name");
+        }
+        return token;
+    }
 
     /**
      * @return the token lower-cased (hostnames are case-insensitive)
