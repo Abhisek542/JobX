@@ -165,6 +165,9 @@ type Step = 'input' | 'resolving' | 'confirm' | 'dead-end';
                   <code
                     >{{ hint().url }}<b>{{ hint().token }}</b>{{ hint().suffix ?? '' }}</code
                   >
+                  @if (hint().note; as note) {
+                    <br />{{ note }}
+                  }
                 </p>
                 @if (fieldError('boardToken'); as message) {
                   <p class="err">{{ message }}</p>

@@ -365,6 +365,7 @@ export class AuthHero {
     'Rippling',
     'BambooHR',
     'Jobvite',
+    'Workday',
   ];
 
   protected scrollTo(id: string): void {

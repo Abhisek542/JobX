@@ -375,6 +375,9 @@ Detect ATS from careers URL, hit that platform's public job API directly:
     The hero's platform count is `platforms.length`, no longer a hard-coded "5".
     `TOKEN_HINTS` entries gained an optional `suffix`, because BambooHR's token is a
     subdomain: the hint reads `<b>offdutymanagement</b>.bamboohr.com/careers`.
+  - PR 1 (Workday) done 2026-10-04. `SUPPORTED_PLATFORMS`, `TOKEN_HINTS` and the auth-hero
+    list now include Workday. Its token hint has an optional `note`, because the token is the
+    composite `tenant/wdN/site` (e.g. `salesforce/wd12/External_Career_Site`), not one URL segment.
   - The add-company dead end has three branches:
     - hint is a watchable platform: "board is loaded by JavaScript, paste the direct link";
     - hint is a recognised but unwatchable platform: "uses {Platform}, can't watch yet"
@@ -384,6 +387,7 @@ Detect ATS from careers URL, hit that platform's public job API directly:
 
 **Eight platforms are implemented** (four on 2026-08-02, SmartRecruiters 2026-08-29,
 Rippling/BambooHR/Jobvite 2026-10-04). Verified
+**Six platforms are implemented and live-verified** (four on 2026-08-02, SmartRecruiters 2026-08-29, Workday 2026-10-04). Verified
 field-level details (JSON shapes, date formats, Workable's two-call design, per-board
 quirks, dead board tokens) are in `jobx-backend/docs/ats-api-reference.md` — read that file before
 touching any fetcher code, not this one.
