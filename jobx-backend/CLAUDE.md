@@ -238,8 +238,7 @@ pill; `MatchResponse` still lacks `location`/`platformPostedAt`/description exce
 (V1 P1 item); `GET /matches` returns everything including `DISMISSED`, unpaginated,
 and relies on `open-in-view` for lazy `job.company` (N+1 per feed load);
 `AuthController.login` skips bcrypt for unknown emails, so response timing still
-distinguishes registered emails; `POST /watchlist` accepts
-`atsPlatform: UNSUPPORTED` and sets it ACTIVE; fetchers use `asText("")` for the
+distinguishes registered emails; fetchers use `asText("")` for the
 NOT NULL `title`/`apply_url` columns rather than skipping malformed records.
 
 **Step 5 (Angular dashboard) built and live-verified 2026-08-15** — lives in the
@@ -788,14 +787,27 @@ Detect ATS from careers URL, hit that platform's public job API directly:
   endpoints. The full plan is in `jobx-backend/new-ats-add.md`. Recon notes are under
   "Candidate platforms" in `docs/ats-api-reference.md`. Build them one PR each, in this order, with a recon step
   (fixtures + a docs section) at the start of each:
-  1. PR 0: groundwork. Add enum values (`ats_platform` is TEXT with no CHECK, so no
-     migration), a `BoardTokens` validator, and multi-part token rules in `AtsUrlParser`.
+  1. PR 0: groundwork. **Done 2026-10-04.** What landed:
+     - the seven enum values. `ats_platform` is TEXT with no CHECK, so no migration.
+     - `fetcher/BoardTokens`: `requireSubdomainLabel` and `WorkdayToken.parse`.
+     - `AtsUrlParser` now takes a `Rule(pattern, token fn)` per platform, so
+       Workday's three groups become `tenant/wdN/site`. Host tokens are matched
+       with `BoardTokens.SUBDOMAIN_LABEL`, so the parser and the fetchers agree on
+       what a valid host token is.
+     - Narrow `HOST_HINTS` and a `boardUrl` for every platform.
+     - These platforms are *recognised but not watchable* until their fetcher
+       ships. Pasting a link to one returns an empty resolve with that platform
+       as `platformHint` and no network call. A sniffed board on one becomes the
+       hint. `POST /watchlist` returns **400 for any platform with no registered
+       fetcher**, UNSUPPORTED included. The modal's dead end names the platform.
   2. **API tier (JSON):** Workday → Rippling → BambooHR.
   3. **HTML tier (jsoup):** Jobvite → JazzHR.
   4. **Recon-gated:** iCIMS (no working public URL found yet) and Gusto (behind a
      Cloudflare challenge). Each stays UNSUPPORTED unless a public URL without a bot
      challenge turns up.
 - Rules for the next wave:
+  - **A platform is watchable only if it has a registered fetcher.** Enforced in
+    `WatchlistController.add`. Don't add a parallel "supported" list on the backend.
   - **Tokens that end up in a hostname go through `BoardTokens`.** This covers the
     BambooHR/JazzHR/iCIMS subdomain and Workday's `tenant/wdN/site`. Existing
     fetchers only put the token in a URL *path*. `POST /watchlist` takes

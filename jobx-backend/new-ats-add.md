@@ -46,7 +46,19 @@ No headless-browser or challenge-solving workarounds.
 
 ---
 
-## PR 0 — Groundwork (no new fetchers yet)
+## PR 0 — Groundwork (no new fetchers yet) — DONE 2026-10-04
+
+Built as planned below, with these differences:
+- **Token hints:** `TOKEN_HINTS` was **not** extended. Each platform's hint lands
+  in its own PR with a recon-verified real token.
+- **Workday site check:** a Workday site is checked against `wday` and a locale
+  only, not against `RESERVED`. Real site names include `Careers`.
+- **Added beyond the plan:**
+  - `CompanyResolver` returns at once, naming the platform as `platformHint`,
+    when a pasted URL is on a platform with no fetcher.
+  - A sniffed board on such a platform becomes the hint.
+  - `POST /watchlist` returns 400 for any platform without a fetcher.
+  - The modal's dead-end copy now has a branch for these platforms.
 
 1. **`enums/AtsPlatform.java`** — add `WORKDAY, RIPPLING, BAMBOOHR, JOBVITE,
    JAZZHR, ICIMS, GUSTO`; update the `UNSUPPORTED` comment. `ats_platform` is

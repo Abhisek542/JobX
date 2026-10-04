@@ -243,16 +243,22 @@ type Step = 'input' | 'resolving' | 'confirm' | 'dead-end';
               <div>
                 <b>We can't watch this one yet.</b>
                 @if (platformHint(); as hinted) {
-                  <p>
-                    {{ query() }} looks like it uses {{ label(hinted) }}, but their board is loaded
-                    by JavaScript so we couldn't read its ID from the page. Pasting the direct link
-                    to their job board usually fixes it.
-                  </p>
+                  @if (isWatchable(hinted)) {
+                    <p>
+                      {{ query() }} looks like it uses {{ label(hinted) }}, but their board is
+                      loaded by JavaScript so we couldn't read its ID from the page. Pasting the
+                      direct link to their job board usually fixes it.
+                    </p>
+                  } @else {
+                    <p>
+                      {{ query() }} uses {{ label(hinted) }}. Jobx can't watch
+                      {{ label(hinted) }} boards yet.
+                    </p>
+                  }
                 } @else {
                   <p>
-                    We couldn't find a job board for “{{ query() }}”. Portals like Workday, Rippling
-                    and BambooHR have no public API, so Jobx marks those <b>unsupported</b> rather
-                    than pretending to watch them.
+                    We couldn't find a job board for “{{ query() }}”. Some careers portals aren't
+                    supported yet, so Jobx says so rather than pretending to watch them.
                   </p>
                 }
                 <p>We've noted the request — it helps us decide what to support next.</p>
@@ -374,6 +380,11 @@ export class AddCompanyModal {
 
   protected label(platform: AtsPlatform): string {
     return PLATFORM_LABEL[platform];
+  }
+
+  /** A hinted platform Jobx has no fetcher for can't be fixed by a better link. */
+  protected isWatchable(platform: AtsPlatform): boolean {
+    return SUPPORTED_PLATFORMS.includes(platform);
   }
 
   protected sourceLabel(board: ResolvedBoardResponse): string {

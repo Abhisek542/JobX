@@ -183,6 +183,99 @@ class AtsUrlParserTest {
     }
 
     @Nested
+    @DisplayName("next-wave platforms (recognised, not yet watchable)")
+    class NextWave {
+
+        @Test
+        void workdayPublicSiteWithAndWithoutLocale() {
+            BoardRef expected = new BoardRef(AtsPlatform.WORKDAY, "salesforce/wd12/External_Career_Site");
+            assertEquals(expected,
+                    parsed("https://salesforce.wd12.myworkdayjobs.com/en-US/External_Career_Site"));
+            assertEquals(expected,
+                    parsed("https://salesforce.wd12.myworkdayjobs.com/External_Career_Site"));
+        }
+
+        @Test
+        void workdayApiFormAndDeepJobLink() {
+            BoardRef expected = new BoardRef(AtsPlatform.WORKDAY, "salesforce/wd12/External_Career_Site");
+            assertEquals(expected, parsed(
+                    "https://salesforce.wd12.myworkdayjobs.com/wday/cxs/salesforce/External_Career_Site/jobs"));
+            assertEquals(expected, parsed("https://salesforce.wd12.myworkdayjobs.com/en-US/"
+                    + "External_Career_Site/job/California---San-Francisco/Senior-Engineer_JR123"));
+        }
+
+        @Test
+        void workdayShardsAndCaseNormalisation() {
+            assertEquals(new BoardRef(AtsPlatform.WORKDAY, "acme/wd1/Careers"),
+                    parsed("acme.wd1.myworkdayjobs.com/Careers"));
+            assertEquals(new BoardRef(AtsPlatform.WORKDAY, "acme/wd103/Careers"),
+                    parsed("https://ACME.WD103.myworkdayjobs.com/Careers"));
+        }
+
+        /** A bare locale or a host with no site is not a board. */
+        @Test
+        void workdayWithoutASiteIsNothing() {
+            assertTrue(AtsUrlParser.parse("https://acme.wd5.myworkdayjobs.com/en-US").isEmpty());
+            assertTrue(AtsUrlParser.parse("https://acme.wd5.myworkdayjobs.com/").isEmpty());
+            assertTrue(AtsUrlParser.parse("https://www.myworkdayjobs.com/").isEmpty());
+        }
+
+        @Test
+        void rippling() {
+            BoardRef expected = new BoardRef(AtsPlatform.RIPPLING, "rippling");
+            assertEquals(expected, parsed("https://ats.rippling.com/rippling/jobs"));
+            assertEquals(expected, parsed("https://ats.rippling.com/api/v2/board/rippling/jobs"));
+            assertEquals(expected,
+                    parsed("https://api.rippling.com/platform/api/ats/v1/board/rippling/jobs"));
+        }
+
+        @Test
+        void bambooHr() {
+            assertEquals(new BoardRef(AtsPlatform.BAMBOOHR, "acme"),
+                    parsed("https://acme.bamboohr.com/careers"));
+            assertEquals(new BoardRef(AtsPlatform.BAMBOOHR, "acme"),
+                    parsed("https://ACME.bamboohr.com/careers/42"));
+            assertEquals(new BoardRef(AtsPlatform.BAMBOOHR, "acme"),
+                    parsed("acme.bamboohr.com/jobs/view.php?id=7"));
+        }
+
+        @Test
+        void jobviteJazzHrIcimsGusto() {
+            assertEquals(new BoardRef(AtsPlatform.JOBVITE, "egnyte"),
+                    parsed("https://jobs.jobvite.com/egnyte/job/oAbc123"));
+            assertEquals(new BoardRef(AtsPlatform.JAZZHR, "acme"),
+                    parsed("https://acme.applytojob.com/apply/xyz/Engineer"));
+            assertEquals(new BoardRef(AtsPlatform.ICIMS, "careers-acme"),
+                    parsed("https://careers-acme.icims.com/jobs/search?ss=1"));
+            assertEquals(new BoardRef(AtsPlatform.GUSTO, "acme"),
+                    parsed("https://jobs.gusto.com/boards/acme"));
+        }
+
+        /**
+         * A host token must be one whole DNS label: these would otherwise hand a
+         * fetcher a host of the attacker's choosing, or a fragment of one.
+         */
+        @Test
+        void hostileHostsYieldNothing() {
+            assertTrue(AtsUrlParser.parse("https://evil.com#.bamboohr.com/careers").isEmpty());
+            assertTrue(AtsUrlParser.parse("https://a.b.bamboohr.com/careers").isEmpty());
+            assertTrue(AtsUrlParser.parse("https://www.bamboohr.com/careers").isEmpty());
+            // "x@" is userinfo; the host really is y.applytojob.com
+            assertEquals("y", parsed("https://x@y.applytojob.com/apply").token());
+        }
+
+        /** The payroll products share a domain with the ATS; only the ATS host is a hint. */
+        @Test
+        void payrollMentionsAreNotHints() {
+            assertTrue(AtsUrlParser.platformHint("We run payroll on rippling.com").isEmpty());
+            assertTrue(AtsUrlParser.platformHint("Benefits via gusto.com").isEmpty());
+            assertTrue(AtsUrlParser.platformHint("HR on www.bamboohr.com").isEmpty());
+            assertEquals(Optional.of(AtsPlatform.WORKDAY),
+                    AtsUrlParser.platformHint("<link href=\"https://acme.wd5.myworkdayjobs.com\">"));
+        }
+    }
+
+    @Nested
     @DisplayName("board URLs shown on the confirmation card")
     class BoardUrls {
 
@@ -198,16 +291,38 @@ class AtsUrlParserTest {
                     AtsUrlParser.boardUrl(AtsPlatform.WORKABLE, "apna"));
             assertEquals("https://jobs.smartrecruiters.com/PHONEPELIMITED",
                     AtsUrlParser.boardUrl(AtsPlatform.SMARTRECRUITERS, "PHONEPELIMITED"));
+            assertEquals("https://salesforce.wd12.myworkdayjobs.com/External_Career_Site",
+                    AtsUrlParser.boardUrl(AtsPlatform.WORKDAY, "salesforce/wd12/External_Career_Site"));
+            assertEquals("https://ats.rippling.com/rippling",
+                    AtsUrlParser.boardUrl(AtsPlatform.RIPPLING, "rippling"));
+            assertEquals("https://acme.bamboohr.com/careers",
+                    AtsUrlParser.boardUrl(AtsPlatform.BAMBOOHR, "acme"));
+            assertEquals("https://jobs.jobvite.com/egnyte",
+                    AtsUrlParser.boardUrl(AtsPlatform.JOBVITE, "egnyte"));
+            assertEquals("https://acme.applytojob.com/apply",
+                    AtsUrlParser.boardUrl(AtsPlatform.JAZZHR, "acme"));
+            assertEquals("https://careers-acme.icims.com/jobs",
+                    AtsUrlParser.boardUrl(AtsPlatform.ICIMS, "careers-acme"));
+            assertEquals("https://jobs.gusto.com/boards/acme",
+                    AtsUrlParser.boardUrl(AtsPlatform.GUSTO, "acme"));
         }
 
         /** Round-trips: every URL this produces must parse back to what made it. */
         @Test
         void areThemselvesParseable() {
-            for (AtsPlatform platform : List.of(AtsPlatform.GREENHOUSE, AtsPlatform.LEVER,
-                    AtsPlatform.ASHBY, AtsPlatform.WORKABLE, AtsPlatform.SMARTRECRUITERS)) {
-                String url = AtsUrlParser.boardUrl(platform, "acme");
-                assertEquals(new BoardRef(platform, "acme"), parsed(url), url);
+            for (AtsPlatform platform : AtsPlatform.values()) {
+                if (platform == AtsPlatform.UNSUPPORTED) {
+                    continue;
+                }
+                String token = platform == AtsPlatform.WORKDAY ? "acme/wd5/External" : "acme";
+                String url = AtsUrlParser.boardUrl(platform, token);
+                assertEquals(new BoardRef(platform, token), parsed(url), url);
             }
+        }
+
+        @Test
+        void aWorkdayTokenThatDoesNotParseHasNoBoardUrl() {
+            assertNull(AtsUrlParser.boardUrl(AtsPlatform.WORKDAY, "evil.com#/wd5/Site"));
         }
 
         @Test

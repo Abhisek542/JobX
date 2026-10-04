@@ -5,6 +5,15 @@ export type AtsPlatform =
   | 'ASHBY'
   | 'WORKABLE'
   | 'SMARTRECRUITERS'
+  // Recognised so the add-company dead end can name them. Each becomes
+  // watchable (SUPPORTED_PLATFORMS) only in the PR that ships its fetcher.
+  | 'WORKDAY'
+  | 'RIPPLING'
+  | 'BAMBOOHR'
+  | 'JOBVITE'
+  | 'JAZZHR'
+  | 'ICIMS'
+  | 'GUSTO'
   | 'UNSUPPORTED';
 export type CompanyStatus = 'ACTIVE' | 'PAUSED' | 'UNSUPPORTED';
 export type FetchStatus = 'SUCCESS' | 'FAILED';
@@ -61,6 +70,13 @@ export const PLATFORM_LABEL: Record<AtsPlatform, string> = {
   ASHBY: 'Ashby',
   WORKABLE: 'Workable',
   SMARTRECRUITERS: 'SmartRecruiters',
+  WORKDAY: 'Workday',
+  RIPPLING: 'Rippling',
+  BAMBOOHR: 'BambooHR',
+  JOBVITE: 'Jobvite',
+  JAZZHR: 'JazzHR',
+  ICIMS: 'iCIMS',
+  GUSTO: 'Gusto',
   UNSUPPORTED: 'Unsupported board',
 };
 
