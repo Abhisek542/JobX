@@ -78,6 +78,24 @@ The token is the subdomain of `{token}.applytojob.com`.
 | MRA Recruiting Services     | `mra`           | 122  | Largest seen; still one page, no pagination |
 | Inflow                      | `getinflow`     | 0    | Real but empty — rejected at add time (no live roles) |
 
+**End to end in the app, 2026-10-25** (test account `html-e2e@jobx.dev`, the
+password from the curl example below). Pasting each careers URL into the add-company
+modal gave a real confirmation card (Sciaky 1 role, Brennan Center 22, Illinois SoS 19).
+Watching ran the first fetch at once: Sciaky and Brennan Center stored 0 because every
+posting was past the 6-day TTL (real dates, Oct 3–6), and **`ilsos` stored 7** (4 dated, 3
+with no JSON-LD through the page-body fallback) and scored 3 matches into the feed.
+A second "Check now" cost 1 detail call. That call is the TTL-boundary bug below; the 7
+stored and 10 stale postings cost nothing. A bogus token, a hostile `evil.com#` and an
+`ICIMS` add all answered 400. A token broken in the DB turned the board FAILED ("does
+not exist (redirected to …)", shown as "Refresh issue"), and restoring it brought it back
+to SUCCESS. **`ilsos` is the board to use for a live check:** it has fresh postings.
+
+**Known bug (found 2026-10-25):** JazzHR (and Jobvite) judge a date-only posting by
+the *end* of its day, but `FetchScheduler` judges it at midnight. A posting dated on the
+cutoff day passes the fetcher, is dropped by the scheduler and is never put in
+`PastTtlMemo`, so it costs a detail call every cycle that day. Workday hit the same bug
+and fixed it by reading the date at midnight.
+
 ### GUSTO — `GustoFetcher` (counted 2026-10-04)
 
 HTML tier, two calls, and every detail call waits 1 s (`robots.txt` Crawl-delay).
@@ -88,6 +106,13 @@ board URL, or open any posting and follow its link to the board.
 |-------------------------|-------------|------|-------|
 | Alexandria Electric     | `alexandria-electric-llc-7ca8ffc5-3b8d-421b-a0ed-c7e3dfc7303d` | 1 | Smallest |
 | Sage Veterinary Imaging | `sage-veterinary-imaging-07e81227-32b5-482d-9fc0-c99bc9ad2f96` | 14 | The fixture board; many postings are months old, so most are dropped by the 6-day TTL |
+
+**2026-10-25: Cloudflare now challenges the app's own client.** Adding Sage through the
+modal hit `ChallengedException` on both resolve attempts (on 2026-10-04 the same client
+got 20/20 × 200). Gusto boards can't be added or fetched until that changes. No other
+client or user agent was tried (CLAUDE.md: never bypass bot protection). Two UI
+consequences: the modal says "We can't watch this one yet" and the request is logged in
+`unsupported_board_requests`, because the resolver reads a challenge as "no live roles".
 Rippling, BambooHR and Jobvite are two-call fetchers too, so the first fetch of a
 board pays one detail call per job. Verified live 2026-10-04.
 

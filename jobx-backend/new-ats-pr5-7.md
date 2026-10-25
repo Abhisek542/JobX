@@ -330,7 +330,7 @@ append-only:
 | `application.yml` | Workday adds `jobx.fetch.workday.max-pages` | Only add `jobx.fetch.jazzhr.*` if pagination exists; append it as a sibling block |
 | `watchlist.model.ts`, `auth-hero.ts` | Every platform PR appends to `SUPPORTED_PLATFORMS`, `TOKEN_HINTS` and `platforms` | One-line appends; trivial rebase conflicts |
 | `ats-api-reference.md`, `ats-test-data.md`, both `CLAUDE.md`s | Every platform PR | Add new sections only and edit just this platform's candidate-table row; rewrite the tier summary paragraph in whichever PR merges **last** |
-| HTML-tier helper | Jobvite (PR 4) will need the same redirect/marker logic | Keep it private in each fetcher for now. After PRs 4, 5 and 7 merge, a follow-up can pull a shared `HtmlBoardPage` (status + Location + jsoup doc + JSON-LD extraction) out of three real users instead of guessing at it from one |
+| HTML-tier helper | Jobvite (PR 4) will need the same redirect/marker logic | Keep it private in each fetcher for now. After PRs 4, 5 and 7 merge, a follow-up can pull a shared `HtmlBoardPage` (status + Location + jsoup doc + JSON-LD extraction) out of three real users instead of guessing at it from one. **Done 2026-10-25**: the rules went onto `HtmlPage` (`requireBoard`, `requireOk`, `requireCardsOrEmptyMarker`) and Jobvite moved onto `HtmlPage` + `JsonLd.find`; no new class was needed |
 
 ## Verification (each fetcher PR)
 1. `./mvnw test`: all of the above, plus the existing suite.
