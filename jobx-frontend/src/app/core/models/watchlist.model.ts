@@ -95,11 +95,7 @@ export const PLATFORM_LABEL: Record<AtsPlatform, string> = {
  */
 export const TOKEN_HINTS: Record<
   string,
-  { placeholder: string; url: string; token: string; suffix?: string }
-/** Board-token hints, straight from the mockup's TOKEN_HINTS. */
-export const TOKEN_HINTS: Record<
-  string,
-  { placeholder: string; url: string; token: string; note?: string }
+  { placeholder: string; url: string; token: string; suffix?: string; note?: string }
 > = {
   GREENHOUSE: { placeholder: 'razorpay', url: 'boards.greenhouse.io/', token: 'razorpay' },
   LEVER: { placeholder: 'fampay', url: 'jobs.lever.co/', token: 'fampay' },
@@ -122,6 +118,7 @@ export const TOKEN_HINTS: Record<
     placeholder: 'sage-veterinary-imaging-07e81227-…',
     url: 'jobs.gusto.com/boards/',
     token: 'sage-veterinary-imaging-07e81227-…',
+  },
   // Rippling slugs are case-sensitive: 'rippling' is a board, 'Rippling' is not.
   RIPPLING: { placeholder: 'rippling', url: 'ats.rippling.com/', token: 'rippling' },
   // The BambooHR token is the subdomain in front of .bamboohr.com.
