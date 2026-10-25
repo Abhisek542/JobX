@@ -796,72 +796,53 @@ Detect ATS from careers URL, hit that platform's public job API directly:
   20, and `limit` > 20 is a 400. The list is newest-first, so paging stops once it is
   past the TTL. `postedOn` is relative text and is read before the detail call. Never
   probed.
-- **Next wave (PLANNED 2026-09-27, not built yet)** — the old "no clean public API"
+- JazzHR: `{sub}.applytojob.com/apply` (HTML, the whole board on one page) +
+  `/apply/{code}/{slug}` (HTML with a JSON-LD `JobPosting`). The token is a subdomain,
+  validated by `BoardTokens`. An unknown subdomain redirects to jazzhr.com; a
+  cancelled account answers 200 with "Inactive Career Page". Built 2026-10-04.
+- Gusto: `jobs.gusto.com/boards/{slug}` (HTML) + `/postings/{slug}` (JSON-LD). The
+  slug carries a UUID, so it can't be guessed and is never probed. Behind Cloudflare,
+  but the app's own client is not challenged (20/20 × 200). A challenge is a FAILED
+  fetch, never retried; every detail call waits 1 s (robots.txt Crawl-delay). Built
+  2026-10-04.
+- iCIMS: **dropped 2026-10-25, will not be built.** Customers have moved to "iCIMS
+  Career Sites", a JSON `/api/jobs` on the customer's *own* domain, which would need
+  custom-domain tokens. `ICIMS` stays recognised but not watchable: a pasted iCIMS
+  link gets the honest "uses iCIMS, can't watch yet" answer. Findings are in
+  `docs/ats-api-reference.md`.
+- **ATS wave (2026-09-27 → 2026-10-04) is complete.** The old "no clean public API"
   verdict on Workday/Rippling/BambooHR was wrong; live recon found usable public
-  endpoints. The full plan is in `jobx-backend/new-ats-add.md`. Recon notes are under
-  "Candidate platforms" in `docs/ats-api-reference.md`. Build them one PR each, in this order, with a recon step
-  (fixtures + a docs section) at the start of each:
-  1. PR 0: groundwork. **Done 2026-10-04.** What landed:
-     - the seven enum values. `ats_platform` is TEXT with no CHECK, so no migration.
-     - `fetcher/BoardTokens`: `requireSubdomainLabel` and `WorkdayToken.parse`.
-     - `AtsUrlParser` now takes a `Rule(pattern, token fn)` per platform, so
-       Workday's three groups become `tenant/wdN/site`. Host tokens are matched
-       with `BoardTokens.SUBDOMAIN_LABEL`, so the parser and the fetchers agree on
-       what a valid host token is.
-     - Narrow `HOST_HINTS` and a `boardUrl` for every platform.
-     - These platforms are *recognised but not watchable* until their fetcher
-       ships. Pasting a link to one returns an empty resolve with that platform
-       as `platformHint` and no network call. A sniffed board on one becomes the
-       hint. `POST /watchlist` returns **400 for any platform with no registered
-       fetcher**, UNSUPPORTED included. The modal's dead end names the platform.
-  2. **API tier (JSON):** Workday → Rippling → BambooHR. **Rippling and BambooHR done
-     2026-10-04** (plans `pr-2-rippling.md`, `pr-3-bamboohr.md`), both added to
-     `PROBEABLE`. Workday not started.
-  3. **HTML tier (jsoup):** Jobvite → JazzHR. **Jobvite done 2026-10-04**
-     (`pr-4-jobvite.md`). It is the reference for JazzHR:
-     - zero cards on a 200 page throw unless `.jv-page-body` says "No results found";
-     - any 3xx means the board is gone;
-     - pages are capped by `jobx.fetch.jobvite.max-pages`.
-  2. **API tier (JSON):** Workday → Rippling → BambooHR.
-  3. **HTML tier (jsoup):** Jobvite → JazzHR. **JazzHR built 2026-10-04**
-     (`JazzHrFetcher`, two-call: board page → JSON-LD detail page). Plan:
-     `jobx-backend/new-ats-pr5-7.md`.
-  4. **Recon-gated:**
-     - **Gusto: gate passed, built 2026-10-04** (`GustoFetcher`). The Cloudflare
-       challenge targets some clients only: this app's default client got 20/20
-       × 200, curl's agent is always challenged. A challenge is a FAILED fetch,
-       never retried; every detail call waits 1 s (robots.txt Crawl-delay).
-     - **iCIMS: not built, decision pending.** The 2026-09-27 CAPTCHA was caused
-       by sending a Chrome user agent. Customers are moving to "iCIMS Career
-       Sites" (ex-Jibe), which has a JSON `/api/jobs` on the customer's own
-       domain. That needs a custom-domain token design, not `BoardTokens`.
-       Details in `docs/ats-api-reference.md`.
-     - **Workday (PR 1) done 2026-10-04.** `fetcher/workday/WorkdayFetcher` was
-       live-verified on Salesforce (1,523 listed). `externalPath` is the
-       `external_id`. `WorkdayPostedOn` reads "Posted N Days Ago" onto the same
-       midnight-UTC clock as the stored `startDate`. A more generous reading was
-       tried first, and live it cost a repeated detail call every cycle for each
-       last-day posting, because those postings were never stored.
-       `CompanyResolver` now probes only when the hint is in `PROBEABLE`, so a
-       bare `myworkdayjobs.com` mention names the platform without probing it.
-       Notes are in `docs/ats-api-reference.md` under "## Workday".
-  3. **HTML tier (jsoup):** Jobvite → JazzHR.
-  4. **Recon-gated:** iCIMS (no working public URL found yet) and Gusto (behind a
-     Cloudflare challenge). Each stays UNSUPPORTED unless a public URL without a bot
-     challenge turns up.
-- Rules for the next wave:
+  endpoints. Plans: `jobx-backend/new-ats-add.md` (PR 0–4), `new-ats-pr5-7.md`
+  (JazzHR, Gusto, iCIMS), `pr-2-rippling.md`, `pr-3-bamboohr.md`, `pr-4-jobvite.md`.
+  What PR 0 (groundwork) put in place:
+  - The seven enum values. `ats_platform` is TEXT with no CHECK, so no migration.
+  - `fetcher/BoardTokens`: `requireSubdomainLabel`, `requirePathSegment` and
+    `WorkdayToken.parse`.
+  - `AtsUrlParser` takes a `Rule(pattern, token fn)` per platform, so Workday's
+    three groups become `tenant/wdN/site`. Host tokens are matched with
+    `BoardTokens.SUBDOMAIN_LABEL`, so the parser and the fetchers agree on what a
+    valid host token is. Narrow `HOST_HINTS` and a `boardUrl` for every platform.
+  - A platform with no fetcher (now only `ICIMS`) is *recognised but not
+    watchable*: pasting a link to it returns an empty resolve with that platform as
+    `platformHint` and no network call, a sniffed board on it becomes the hint, and
+    `POST /watchlist` returns **400 for any platform with no registered fetcher**,
+    UNSUPPORTED included. The modal's dead end names the platform.
+- Tiers:
+  - **API tier (JSON):** Workday, Rippling, BambooHR.
+  - **HTML tier (jsoup):** Jobvite, JazzHR, Gusto.
+  - **Not supported:** iCIMS (dropped), Recruitee (`{sub}.recruitee.com/api/offers/`
+    unverified, not planned).
+- Rules for adding a platform:
   - **A platform is watchable only if it has a registered fetcher.** Enforced in
     `WatchlistController.add`. Don't add a parallel "supported" list on the backend.
   - **Tokens that end up in a hostname go through `BoardTokens`.** This covers the
-    BambooHR/JazzHR/iCIMS subdomain and Workday's `tenant/wdN/site`. Existing
-    fetchers only put the token in a URL *path*. `POST /watchlist` takes
-    `boardToken` straight from the user, so an unvalidated host token is SSRF.
-    New path-token fetchers (Rippling, Jobvite) use `BoardTokens.requirePathSegment`
-    so a token like `../x` or `a?b` can't change the path either.
+    BambooHR/JazzHR subdomain and Workday's `tenant/wdN/site`. `POST /watchlist`
+    takes `boardToken` straight from the user, so an unvalidated host token is SSRF.
+    Path-token fetchers (Rippling, Jobvite) use `BoardTokens.requirePathSegment` so a
+    token like `../x` or `a?b` can't change the path either.
   - **Check redirects explicitly.** WebClient doesn't follow them here, and
     `retrieve()` treats a 3xx as success. A fetcher whose dead-board signal is a
-    redirect (BambooHR, Jobvite) reads `toEntity(String.class)` and checks the
-    status code itself.
+    redirect (BambooHR, Jobvite, JazzHR) checks the status code itself.
   - **HTML-tier fetchers fail loudly.** A 200 page where the selector finds zero
     job cards, and which lacks the platform's known "no openings" / "inactive"
     marker, throws `AtsFetchException`. A layout change must show up as FAILED,
@@ -871,7 +852,7 @@ Detect ATS from careers URL, hit that platform's public job API directly:
     agent**, in fetchers or in recon. Both Gusto's and iCIMS's walls were
     triggered by a Chrome UA and not by an honest one; spoofing a browser is
     exactly the kind of workaround this rule forbids.
-  - **HTML-tier plumbing (new files, shared):**
+  - **HTML-tier plumbing (shared):**
     - `HtmlPage.get` keeps status + `Location`, because `.retrieve()` reads a
       3xx as an empty success;
     - `JsonLd.find` reads the `JobPosting` block, the most stable part of a page;
@@ -880,30 +861,28 @@ Detect ATS from careers URL, hit that platform's public job API directly:
       never stored or tombstoned, so nothing else remembers them.
     - Detail URLs are rebuilt from a fixed host plus a strictly matched id; a
       scraped href is never requested.
-  - Probing stays bounded: only Rippling and BambooHR are candidates for
-    `PROBEABLE`. Workday and iCIMS tokens can't be guessed from a name.
-- Recruitee: not on the next-wave list. `{sub}.recruitee.com/api/offers/` is
-  unverified.
+  - **Probing stays bounded.** `PROBEABLE` is the original five plus Rippling and
+    BambooHR: seven platforms × up to 4 slug candidates. Workday tokens and Gusto
+    slugs can't be guessed from a name; Jobvite and JazzHR stay URL/SNIFF-only.
+    `CompanyResolver` probes only when the platform hint is in `PROBEABLE`.
+- Workday notes: `externalPath` is the `external_id`. `WorkdayPostedOn` reads
+  "Posted N Days Ago" onto the same midnight-UTC clock as the stored `startDate`.
+  A more generous reading was tried first, and live it cost a repeated detail call
+  every cycle for each last-day posting, because those postings were never stored.
+  Live-verified on Salesforce (1,523 listed). A bare `myworkdayjobs.com` mention
+  names the platform without probing it.
+- Jobvite notes: zero cards on a 200 page throw unless `.jv-page-body` says "No
+  results found"; any 3xx means the board is gone; paging is capped by
+  `jobx.fetch.jobvite.max-pages`.
 
-**The original five platforms are implemented and live-verified** (the first four
-2026-08-02, SmartRecruiters 2026-08-29). **JazzHR and Gusto were added 2026-10-04**
-(fixture-tested against live-captured pages; not yet run end to end in the app). Verified field-level details (JSON shapes, date formats,
-    the only way in, the platform stays UNSUPPORTED.
-  - Probing stays bounded. Rippling and BambooHR are now in `PROBEABLE`, which makes
-    seven platforms × up to 4 slug candidates. No other next-wave platform joins.
-    Workday and iCIMS tokens can't be guessed from a name.
-- Recruitee: not on the next-wave list. `{sub}.recruitee.com/api/offers/` is
-  unverified.
-
-**Eight platforms are implemented and live-verified**: the first four on 2026-08-02,
-SmartRecruiters on 2026-08-29, and Rippling, BambooHR and Jobvite on 2026-10-04. The
-last three were checked with fixture tests plus a live run of each fetcher against
-the real sites, but not yet end to end through the app UI. Verified field-level details (JSON shapes, date formats,
-**Six platforms are implemented and live-verified** (the first four 2026-08-02,
-SmartRecruiters 2026-08-29, Workday 2026-10-04). Verified field-level details (JSON shapes, date formats,
-the two-call designs, per-board quirks, dead board tokens) are in
-`jobx-backend/docs/ats-api-reference.md` — read that file before touching any fetcher
-code, not this one.
+**Eleven platforms are implemented**: Greenhouse, Lever, Ashby and Workable
+(2026-08-02), SmartRecruiters (2026-08-29), and Workday, Rippling, BambooHR, Jobvite,
+JazzHR and Gusto (2026-10-04). Workday, Rippling, BambooHR and Jobvite were
+live-tested against the real sites. JazzHR and Gusto were fixture-tested against
+live-captured pages plus one throwaway live run, but not yet run end to end in the
+app. Verified field-level details (JSON shapes, date formats, the two-call designs,
+per-board quirks, dead board tokens) are in `jobx-backend/docs/ats-api-reference.md`
+— read that file before touching any fetcher code, not this one.
 
 Board tokens rot: PhonePe's Greenhouse board went from 68 live jobs to a hard 404
 in six days when they moved to SmartRecruiters. Treat a sudden FAILED board as
@@ -1131,11 +1110,8 @@ resuming multi-ATS work.
    verified 2026-08-02** (order actually built: Ashby → Lever → Workable) — each
    verified against a live board as built, per-platform notes in
    `jobx-backend/docs/ats-api-reference.md`. Next wave (Workday, Rippling, BambooHR, Jobvite,
-   JazzHR, iCIMS, Gusto) PLANNED 2026-09-27; JazzHR and Gusto built 2026-10-04, iCIMS
-   pending a design call; see "ATS integration approach". Recruitee still out of scope.
-   `jobx-backend/docs/ats-api-reference.md`. Next wave PLANNED 2026-09-27; see "ATS
-   integration approach". Rippling, BambooHR and Jobvite were built on 2026-10-04.
-   Workday, JazzHR, iCIMS and Gusto remain. Recruitee is still out of scope.
+   JazzHR, Gusto) **done 2026-10-04**; iCIMS dropped 2026-10-25. See "ATS integration
+   approach". Recruitee still out of scope.
 4. Auth (Spring Security) + multi-tenant data, before handing app to other test users.
    **Done and verified 2026-07-30** — see Implementation status above for the full
    design (JWT access-token-only, `role` column added early, `/dev/**` intentionally

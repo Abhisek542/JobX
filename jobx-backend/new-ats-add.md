@@ -1,5 +1,10 @@
 # Plan: ATS coverage — 7 new fetchers (Workday, Rippling, BambooHR, Jobvite, JazzHR, iCIMS, Gusto)
 
+> **Status: COMPLETE.** Six of seven built 2026-10-04 (PRs #27–#29): Workday,
+> Rippling, BambooHR, Jobvite, JazzHR, Gusto. iCIMS **dropped 2026-10-25** and
+> stays recognised but not watchable. The sections below are the plan as written,
+> with per-PR outcomes.
+
 ## Context
 
 OpenJobRadar (openjobradar.com/integrations) monitors 12+ ATSs; JobX supports 5
@@ -162,7 +167,7 @@ Built as planned below, with these differences, all from recon:
   `WorkableDetailFailureTest`), `postedOn` parser table test.
 - Add `WORKDAY` to `SUPPORTED_PLATFORMS` / auth-hero.
 
-## PR 2 — Rippling (API tier)
+## PR 2 — Rippling (API tier) — DONE 2026-10-04
 
 Detailed plan: `pr-2-rippling.md`.
 
@@ -176,7 +181,7 @@ Detailed plan: `pr-2-rippling.md`.
   from nothing (v1 has none) → null.
 - Add to `PROBEABLE` (404 = clean dead signal). Tests as PR 1.
 
-## PR 3 — BambooHR (API tier)
+## PR 3 — BambooHR (API tier) — DONE 2026-10-04
 
 Detailed plan: `pr-3-bamboohr.md`.
 
@@ -192,7 +197,7 @@ Detailed plan: `pr-3-bamboohr.md`.
 - Add to `PROBEABLE` only if recon confirms the wildcard-302 dead signal is
   reliable. Tests as PR 1.
 
-## PR 4 — Jobvite (HTML tier)
+## PR 4 — Jobvite (HTML tier) — DONE 2026-10-04
 
 Detailed plan: `pr-4-jobvite.md`.
 
@@ -213,14 +218,14 @@ Detailed plan: `pr-4-jobvite.md`.
 > blocker is that customers are moving to iCIMS Career Sites on their own
 > domains, which needs a design decision. The sections below are the original plan.
 
-## PR 5 — JazzHR (HTML tier)
+## PR 5 — JazzHR (HTML tier) — DONE 2026-10-04
 
 - **Recon**: find a live `{sub}.applytojob.com/apply` tenant with jobs; capture
   list + detail (`/apply/{id}/{slug}`). Dead signals: redirect to
   `jazzhr.com/job-seekers`, or `<title>` "Inactive Career Page".
 - **`fetcher/jazzhr/JazzHrFetcher.java`** with the same HTML-tier rules.
 
-## PR 6 — iCIMS (recon-gated)
+## PR 6 — iCIMS (recon-gated) — DROPPED 2026-10-25
 
 - Recon: find the real public search URL form for a known iCIMS customer's
   careers link (follow an actual company careers page, don't guess the host).
@@ -229,7 +234,7 @@ Detailed plan: `pr-4-jobvite.md`.
   iframe/JS-only → **stop**: keep `UNSUPPORTED`, keep the `HOST_HINTS` entry,
   document the finding in `ats-api-reference.md`.
 
-## PR 7 — Gusto (recon-gated)
+## PR 7 — Gusto (recon-gated) — DONE 2026-10-04
 
 - Recon showed a Cloudflare challenge on `jobs.gusto.com`. Look for a
   legitimate, un-challenged public feed (e.g. an embed/widget or JSON endpoint
