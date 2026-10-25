@@ -115,14 +115,7 @@ public class GustoFetcher implements AtsFetcher {
 
     private String readBoard(String slug) {
         String url = BASE_URL + "/boards/" + slug;
-        HtmlPage page = checked(fetchPage(url), url);
-        if (page.status() == 404 || page.isRedirect()) {
-            throw new AtsFetchException("Gusto board '" + slug + "' does not exist (HTTP " + page.status() + ")");
-        }
-        if (!page.isOk()) {
-            throw new AtsFetchException("Gusto board '" + slug + "' answered HTTP " + page.status());
-        }
-        return page.body();
+        return checked(fetchPage(url), url).requireBoard("Gusto", slug);
     }
 
     /** Throws {@link ChallengedException} when the page is a Cloudflare challenge. */
@@ -179,15 +172,10 @@ public class GustoFetcher implements AtsFetcher {
         // "Careers at …" title with the job list rendered and empty. Not yet
         // seen live (no empty board was found during recon), so anything else
         // is treated as a layout change rather than a quiet board.
-        if (cards.isEmpty()) {
-            boolean boardPage = document.title().startsWith("Careers at ");
-            Element list = document.selectFirst("ul.divide-y");
-            if (!boardPage || list == null || !list.children().isEmpty()) {
-                throw new AtsFetchException("Gusto board '" + slug
-                        + "' returned a page with no recognisable postings — layout changed?");
-            }
-        }
-        return cards;
+        Element list = document.selectFirst("ul.divide-y");
+        boolean emptyBoardPage = document.title().startsWith("Careers at ")
+                && list != null && list.children().isEmpty();
+        return HtmlPage.requireCardsOrEmptyMarker(cards, emptyBoardPage, "Gusto", slug);
     }
 
     /** Package-private seam for fixture tests. fetchDetails=false covers the list mapping alone. */
@@ -261,11 +249,7 @@ public class GustoFetcher implements AtsFetcher {
      */
     String fetchDetail(String postingSlug) {
         String url = BASE_URL + "/postings/" + postingSlug;
-        HtmlPage page = checked(fetchPage(url), url);
-        if (!page.isOk()) {
-            throw new AtsFetchException("Gusto posting " + postingSlug + " answered HTTP " + page.status());
-        }
-        return page.body();
+        return checked(fetchPage(url), url).requireOk("Gusto posting " + postingSlug);
     }
 
     /**

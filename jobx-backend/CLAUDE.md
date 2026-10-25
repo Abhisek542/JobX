@@ -842,7 +842,8 @@ Detect ATS from careers URL, hit that platform's public job API directly:
     token like `../x` or `a?b` can't change the path either.
   - **Check redirects explicitly.** WebClient doesn't follow them here, and
     `retrieve()` treats a 3xx as success. A fetcher whose dead-board signal is a
-    redirect (BambooHR, Jobvite, JazzHR) checks the status code itself.
+    redirect (BambooHR, Jobvite, JazzHR) checks the status code itself — the
+    HTML-tier ones through `HtmlPage.requireBoard`.
   - **HTML-tier fetchers fail loudly.** A 200 page where the selector finds zero
     job cards, and which lacks the platform's known "no openings" / "inactive"
     marker, throws `AtsFetchException`. A layout change must show up as FAILED,
@@ -854,7 +855,12 @@ Detect ATS from careers URL, hit that platform's public job API directly:
     exactly the kind of workaround this rule forbids.
   - **HTML-tier plumbing (shared):**
     - `HtmlPage.get` keeps status + `Location`, because `.retrieve()` reads a
-      3xx as an empty success;
+      3xx as an empty success. All three HTML fetchers read pages through it,
+      and its rules are shared rather than re-written per fetcher:
+      `requireBoard` (3xx or 404 = board does not exist, other non-2xx =
+      failed fetch), `requireOk` (detail pages) and `requireCardsOrEmptyMarker`
+      (the fail-loudly rule above). A new HTML-tier fetcher uses these;
+      it only supplies its selectors and its empty-board marker;
     - `JsonLd.find` reads the `JobPosting` block, the most stable part of a page;
     - `PastTtlMemo` stops a two-call fetcher whose list has no dates from paying
       a detail call for the same stale posting every cycle. Too-old postings are
