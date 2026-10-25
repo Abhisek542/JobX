@@ -15,8 +15,6 @@ import { Icon } from './icon';
  * HONESTY (uiux_plan.md §7): the stats are product facts — the supported ATS
  * platforms (counted from `platforms`, so the number can't drift from the
  * list), the 30-minute poll, the six-day TTL — never user counts or ratings.
- * platforms (counted from `platforms`, so the number can't drift from the list),
- * the 30-minute poll, the six-day TTL — never user counts or ratings.
  */
 @Component({
   selector: 'app-auth-hero',

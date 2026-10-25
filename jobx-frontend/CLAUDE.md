@@ -365,23 +365,18 @@ Detect ATS from careers URL, hit that platform's public job API directly:
 - Ashby: `api.ashbyhq.com/posting-api/job-board/{token}` (public, no-auth path — not `jobPosting.list`)
 - Workable: `apply.workable.com/api/v1/widget/accounts/{token}` (embed-widget endpoint)
 - SmartRecruiters: `api.smartrecruiters.com/v1/companies/{id}/postings` (two-call; built 2026-08-29)
-- Next wave (PLANNED 2026-09-27): Workday, Rippling, BambooHR (JSON APIs) and Jobvite, JazzHR (HTML).
-  iCIMS and Gusto depend on recon. The backend CLAUDE.md "ATS integration approach" section has the
-  order and rules. The UI lists a platform only once its fetcher ships.
-  - PR 0 (groundwork) done 2026-10-04. All seven platforms are in the `AtsPlatform` union and in
-    `PLATFORM_LABEL`, so a resolve's `platformHint` can name them.
-  - `SUPPORTED_PLATFORMS`, `TOKEN_HINTS` and the auth-hero list are the original five plus
-    **JazzHR and Gusto** (fetchers built 2026-10-04). A token hint may carry a `suffix`
-    rendered after the token, for subdomain tokens (`brennancenter` + `.applytojob.com`).
-    iCIMS stays recognised but unwatchable (design call pending).
-  - Rippling, BambooHR and Jobvite fetchers shipped 2026-10-04. They are now in
-    `SUPPORTED_PLATFORMS`, `TOKEN_HINTS` and the auth-hero list, which makes eight.
-    The hero's platform count is `platforms.length`, no longer a hard-coded "5".
-    `TOKEN_HINTS` entries gained an optional `suffix`, because BambooHR's token is a
-    subdomain: the hint reads `<b>offdutymanagement</b>.bamboohr.com/careers`.
-  - PR 1 (Workday) done 2026-10-04. `SUPPORTED_PLATFORMS`, `TOKEN_HINTS` and the auth-hero
-    list now include Workday. Its token hint has an optional `note`, because the token is the
-    composite `tenant/wdN/site` (e.g. `salesforce/wd12/External_Career_Site`), not one URL segment.
+- Workday, Rippling, BambooHR (JSON APIs) and Jobvite, JazzHR, Gusto (HTML): **all built
+  2026-10-04**. iCIMS **dropped 2026-10-25**: it stays in the `AtsPlatform` union and
+  `PLATFORM_LABEL` so a resolve's `platformHint` can name it, but it is not watchable.
+  The backend CLAUDE.md "ATS integration approach" section has the rules.
+  - The UI lists a platform only once its fetcher ships. `SUPPORTED_PLATFORMS`,
+    `TOKEN_HINTS` and the auth-hero list hold the eleven watchable platforms. The hero's
+    platform count is `platforms.length`, never a hard-coded number.
+  - A `TOKEN_HINTS` entry may carry an optional `suffix`, rendered after the token, for
+    subdomain tokens (`<b>brennancenter</b>.applytojob.com`,
+    `<b>offdutymanagement</b>.bamboohr.com/careers`), and an optional `note`, for
+    Workday's composite `tenant/wdN/site` token (e.g.
+    `salesforce/wd12/External_Career_Site`), which is not one URL segment.
   - The add-company dead end has three branches:
     - hint is a watchable platform: "board is loaded by JavaScript, paste the direct link";
     - hint is a recognised but unwatchable platform: "uses {Platform}, can't watch yet"
@@ -389,9 +384,9 @@ Detect ATS from careers URL, hit that platform's public job API directly:
     - no hint.
   - The backend returns 400 if `POST /watchlist` names a platform with no fetcher.
 
-**Eight platforms are implemented** (four on 2026-08-02, SmartRecruiters 2026-08-29,
-Rippling/BambooHR/Jobvite 2026-10-04). Verified
-**Six platforms are implemented and live-verified** (four on 2026-08-02, SmartRecruiters 2026-08-29, Workday 2026-10-04). Verified
+**Eleven platforms are implemented**: Greenhouse, Lever, Ashby and Workable (2026-08-02),
+SmartRecruiters (2026-08-29), and Workday, Rippling, BambooHR, Jobvite, JazzHR and Gusto
+(2026-10-04). Verified
 field-level details (JSON shapes, date formats, Workable's two-call design, per-board
 quirks, dead board tokens) are in `jobx-backend/docs/ats-api-reference.md` — read that file before
 touching any fetcher code, not this one.
@@ -556,8 +551,8 @@ resuming multi-ATS work.
    verified 2026-08-02** (order actually built: Ashby → Lever → Workable) — each
    verified against a live board as built, per-platform notes in
    `jobx-backend/docs/ats-api-reference.md`. Next wave (Workday, Rippling, BambooHR, Jobvite,
-   JazzHR, iCIMS, Gusto) PLANNED 2026-09-27; see "ATS integration approach". Recruitee still
-   out of scope.
+   JazzHR, Gusto) **done 2026-10-04**; iCIMS dropped 2026-10-25. See "ATS integration
+   approach". Recruitee still out of scope.
 4. Auth (Spring Security) + multi-tenant data, before handing app to other test users.
    **Done and verified 2026-07-30** — see Implementation status above for the full
    design (JWT access-token-only, `role` column added early, `/dev/**` intentionally
