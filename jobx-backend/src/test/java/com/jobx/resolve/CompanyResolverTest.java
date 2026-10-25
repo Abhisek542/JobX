@@ -289,15 +289,15 @@ class CompanyResolverTest {
     void aSniffedBoardOnAnUnwatchablePlatformBecomesTheHint() {
         when(safeUrlFetcher.fetch("https://acme.com/careers/")).thenReturn(Optional.of("""
                 <script src="https://boards.greenhouse.io/static/widget.js"></script>
-                <a href="https://acme.applytojob.com/apply">Open roles</a>
+                <a href="https://careers-acme.icims.com/jobs/search">Open roles</a>
                 """));
 
         ResolveResponse response = resolver.resolve(user, "https://acme.com/careers/");
 
         assertTrue(response.candidates().isEmpty());
-        assertEquals(AtsPlatform.JAZZHR, response.platformHint());
-        verify(boardProbe).probe(eq(List.of(AtsPlatform.JAZZHR)), any());
-        assertEquals(AtsPlatform.BAMBOOHR, response.platformHint());
+        // iCIMS is the one recognised platform with no fetcher (dropped 2026-10-25),
+        // and its token can't be guessed, so nothing is probed.
+        assertEquals(AtsPlatform.ICIMS, response.platformHint());
         verifyNoInteractions(boardProbe);
     }
 
