@@ -243,7 +243,7 @@ Gusto Recruiting's hosted boards. Verified against Sage Veterinary Imaging
 - **TTL cost:** as on JazzHR, a stale posting costs one detail call ever, via
   `PastTtlMemo`.
 
-## iCIMS — INVESTIGATED 2026-10-04, NOT BUILT (decision pending)
+## iCIMS — INVESTIGATED 2026-10-04; DROPPED 2026-10-25 (will not be built)
 
 Two findings change the 2026-09-27 picture.
 
@@ -268,8 +268,10 @@ Why it isn't built: no live classic-portal board was found to build the planned
 HTML fetcher against, and the Career Sites API needs a different design — the
 token would be a whole customer domain taken from user input, which needs the
 `SafeUrlFetcher`/`PrivateAddressGuard` treatment rather than `BoardTokens`. That
-is a design call, not a recon gap. Until then `ICIMS` stays recognised but not
-watchable: a pasted iCIMS link gets the honest "uses iCIMS, can't watch yet" answer.
+is a design call, not a recon gap. **Decided 2026-10-25: not worth it, iCIMS is
+dropped.** `ICIMS` stays recognised but not watchable: a pasted iCIMS link gets the
+honest "uses iCIMS, can't watch yet" answer.
+
 ## Rippling — VERIFIED (fetcher built + live-tested 2026-10-04); TWO-CALL DESIGN
 
 Verified against Rippling's own board (`rippling`, 331 jobs).
@@ -490,19 +492,3 @@ What sniffing a live careers page actually yields, measured across four boards:
 So sniffing hits about half of careers pages, and slug probing covers exactly the
 half it misses (atlan → `atlan`, fampay → `fampay`). Neither is sufficient alone.
 Page fixtures for the first three are in `src/test/resources/fixtures/careers-*.html`.
-
-## Candidate platforms — recon 2026-09-27 (NOT BUILT YET)
-
-These are first-pass curl checks, not verified fetcher notes. Each platform's PR
-must re-capture fixtures and replace its row below with a proper `## {Platform} —
-VERIFIED` section. The build order and rules are in the backend CLAUDE.md, under
-"ATS integration approach".
-
-| Platform | Endpoint(s) seen | Dead-board signal | Notes |
-|---|---|---|---|
-| Workday | List: `POST https://{tenant}.{wdN}.myworkdayjobs.com/wday/cxs/{tenant}/{site}/jobs`, body `{"appliedFacets":{},"limit":20,"offset":0,"searchText":""}` → `{total, jobPostings[{title, externalPath, locationsText, postedOn, bulletFields}]}`. Detail: `GET …/wday/cxs/{tenant}/{site}{externalPath}` → `jobPostingInfo{jobDescription (HTML), startDate (date-only), timeType, jobReqId, location}` | TBD | Token is composite `tenant/wdN/site`, e.g. `salesforce/wd12/External_Career_Site` (1,522 jobs, 20 per page). `postedOn` is relative text ("Posted Today", "Posted 30+ Days Ago"). Still to check: is `total` only set on page 0? Is the list newest-first? |
-| Rippling | List (one call, whole board): `GET https://api.rippling.com/platform/api/ats/v1/board/{slug}/jobs` → `[{uuid, name, department, url, workLocation}]`. Paged alternative: `ats.rippling.com/api/v2/board/{slug}/jobs` (`page, pageSize=20, totalItems`). Detail: `GET ats.rippling.com/api/v2/board/{slug}/jobs/{uuid}` → `description{company, role}` (HTML), `createdOn` (ISO), `employmentType`, `companyName` | v2 → 404 `RESOURCE_NOT_FOUND` | Page URL: `ats.rippling.com/{slug}/jobs` |
-| BambooHR | `GET https://{sub}.bamboohr.com/careers/list` → `{"meta":{"totalCount":N},"result":[…]}` | 302 → `www.bamboohr.com` | `andela` is real but has 0 jobs. Still need a live tenant with openings to capture the item and detail shapes. |
-| Jobvite | `GET https://jobs.jobvite.com/{co}/jobs`: server-rendered HTML with `.jv-job-list-name`, `.jv-job-list-location` and links to `/{co}/job/{id}` | Redirects to `jobvite.com/support/…?invalid=1` | Live boards: `nutanix`, `egnyte`. Detail pages have no JSON-LD. |
-
-JazzHR, Gusto and iCIMS have moved out of this table into their own sections above.
