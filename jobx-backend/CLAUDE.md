@@ -884,9 +884,11 @@ Detect ATS from careers URL, hit that platform's public job API directly:
 **Eleven platforms are implemented**: Greenhouse, Lever, Ashby and Workable
 (2026-08-02), SmartRecruiters (2026-08-29), and Workday, Rippling, BambooHR, Jobvite,
 JazzHR and Gusto (2026-10-04). Workday, Rippling, BambooHR and Jobvite were
-live-tested against the real sites. JazzHR and Gusto were fixture-tested against
-live-captured pages plus one throwaway live run, but not yet run end to end in the
-app. Verified field-level details (JSON shapes, date formats, the two-call designs,
+live-tested against the real sites. JazzHR was run end to end in the app on
+2026-10-25 (add → watch → fetch → feed, dead and broken tokens; results and a
+TTL-boundary bug in `docs/ats-test-data.md`). **Gusto is blocked as of 2026-10-25:**
+Cloudflare now challenges the app's own client too, so Gusto boards can't be added
+or fetched. Verified field-level details (JSON shapes, date formats, the two-call designs,
 per-board quirks, dead board tokens) are in `jobx-backend/docs/ats-api-reference.md`
 — read that file before touching any fetcher code, not this one.
 
