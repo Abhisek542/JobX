@@ -65,8 +65,70 @@ public class Company {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 
+    // ---- ATS-move re-detection (V10, add-company-improvements PR D) ----
+
+    /**
+     * The careers page this board was found on, when it came from URL mode.
+     * Only a hint for BoardRedetector's later sniffs, always fetched through
+     * SafeUrlFetcher. Filled once: a later adder never overwrites it.
+     */
+    @Column(name = "careers_url")
+    private String careersUrl;
+
+    /** First FAILED fetch of the current failing streak; null while healthy. */
+    @Column(name = "failing_since")
+    private Instant failingSince;
+
+    /** When BoardRedetector last looked for a new board, found one or not. */
+    @Column(name = "last_redetect_at")
+    private Instant lastRedetectAt;
+
+    /**
+     * A board BoardRedetector thinks this company moved to. A proposal only:
+     * nothing is switched until a watcher confirms it via POST /watchlist/{id}/move.
+     * All three are set together or all null.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "moved_to_platform")
+    private AtsPlatform movedToPlatform;
+
+    @Column(name = "moved_to_token")
+    private String movedToToken;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "moved_to_reason")
+    private MoveReason movedToReason;
+
+    public boolean hasMoveProposal() {
+        return movedToPlatform != null && movedToToken != null;
+    }
+
+    public void proposeMove(AtsPlatform platform, String token, MoveReason reason) {
+        this.movedToPlatform = platform;
+        this.movedToToken = token;
+        this.movedToReason = reason;
+    }
+
+    public void clearMoveProposal() {
+        this.movedToPlatform = null;
+        this.movedToToken = null;
+        this.movedToReason = null;
+    }
+
     public enum FetchStatus {
         SUCCESS,
         FAILED   // dashboard shows the "Refresh issue" warning state
+    }
+
+    /** Why a move was proposed. Drives the banner copy on the watchlist. */
+    public enum MoveReason {
+        /** The board has been failing for a while and another board turned up. */
+        FAILING,
+        /**
+         * A healthy crawled (CUSTOM) board whose careers page now links a real
+         * ATS. Not produced until the PR E crawler ships; a successful fetch
+         * does not clear it, because the old board still works.
+         */
+        NATIVE_AVAILABLE
     }
 }

@@ -75,7 +75,7 @@ public class CompanyResolver {
      * 404s an unknown slug and BambooHR 302s an unknown subdomain, both verified
      * live 2026-10-04. Jobvite stays URL/SNIFF only, to keep the fan-out bounded.
      */
-    private static final List<AtsPlatform> PROBEABLE = List.of(
+    static final List<AtsPlatform> PROBEABLE = List.of(
             AtsPlatform.GREENHOUSE, AtsPlatform.LEVER, AtsPlatform.ASHBY,
             AtsPlatform.WORKABLE, AtsPlatform.SMARTRECRUITERS,
             AtsPlatform.RIPPLING, AtsPlatform.BAMBOOHR);

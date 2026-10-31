@@ -1,4 +1,4 @@
--- V8: record which add-company mode a dead end happened in.
+-- V9: record which add-company mode a dead end happened in.
 --
 -- The add-company modal now asks the user to pick a mode: look a company up by
 -- NAME (catalog, then slug probing) or paste its careers page URL (parse, sniff,

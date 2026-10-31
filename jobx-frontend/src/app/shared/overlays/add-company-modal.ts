@@ -397,6 +397,12 @@ export class AddCompanyModal {
   /** Name → catalog typeahead + probing; URL → read the link and their careers page. */
   protected readonly mode = signal<ResolveMode>('NAME');
   protected readonly query = signal('');
+  /**
+   * The careers link the current candidates were resolved from, or null after a
+   * NAME-mode resolve. Captured when the resolve is sent, so editing the field
+   * afterwards can't change which page gets stored (PR D).
+   */
+  private readonly resolvedCareersUrl = signal<string | null>(null);
   protected readonly suggestions = signal<CompanySearchResponse[]>([]);
   protected readonly candidates = signal<ResolvedBoardResponse[]>([]);
   protected readonly selected = signal<ResolvedBoardResponse | null>(null);
@@ -570,6 +576,7 @@ export class AddCompanyModal {
 
     this.suggestions.set([]);
     this.step.set('resolving');
+    this.resolvedCareersUrl.set(mode === 'URL' ? query : null);
 
     this.api.resolve({ mode, query }).subscribe({
       next: (response) => {
@@ -609,7 +616,12 @@ export class AddCompanyModal {
     if (!board) {
       return;
     }
-    void this.watch(board.companyName, board.atsPlatform, board.boardToken);
+    // Only a board read off the pasted link or the page it points to was
+    // found on that page; it is where Jobx looks again if the board later
+    // stops working. A probed guess on the domain label was not.
+    const fromPage = board.source === 'URL' || board.source === 'SNIFF';
+    const careersUrl = fromPage ? (this.resolvedCareersUrl() ?? undefined) : undefined;
+    void this.watch(board.companyName, board.atsPlatform, board.boardToken, careersUrl);
   }
 
   protected watchManual(): void {
@@ -641,10 +653,15 @@ export class AddCompanyModal {
    * from its stored jobs — so promising a first check there would misdescribe
    * where the roles about to appear came from.
    */
-  private async watch(companyName: string, atsPlatform: AtsPlatform, boardToken: string) {
+  private async watch(
+    companyName: string,
+    atsPlatform: AtsPlatform,
+    boardToken: string,
+    careersUrl?: string,
+  ) {
     this.saving.set(true);
     try {
-      const company = await this.store.add({ companyName, atsPlatform, boardToken });
+      const company = await this.store.add({ companyName, atsPlatform, boardToken, careersUrl });
       this.added.emit(company);
       this.closed.emit();
 

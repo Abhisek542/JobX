@@ -68,7 +68,7 @@ class FetchSchedulerSharedJobsTest {
         ObjectProvider<FetchScheduler> self = mock(ObjectProvider.class);
 
         scheduler = new FetchScheduler(companyRepository, jobRepository, expiredJobRepository,
-                fetcherRegistry, matchingService, self, TTL_DAYS);
+                fetcherRegistry, matchingService, mock(com.jobx.resolve.BoardRedetector.class), self, TTL_DAYS);
         when(self.getObject()).thenReturn(scheduler);
 
         company = new Company();

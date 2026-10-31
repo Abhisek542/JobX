@@ -1,6 +1,7 @@
 package com.jobx.controller;
 
 import com.jobx.dto.ManualFetchResponse;
+import com.jobx.dto.MoveWatchRequest;
 import com.jobx.dto.ResolveRequest;
 import com.jobx.dto.ResolveResponse;
 import com.jobx.dto.ResolvedBoardResponse;
@@ -12,8 +13,10 @@ import com.jobx.entity.Company;
 import com.jobx.entity.UnsupportedBoardRequest;
 import com.jobx.entity.User;
 import com.jobx.entity.WatchedCompany;
+import com.jobx.enums.AtsPlatform;
 import com.jobx.fetcher.AtsFetchException;
 import com.jobx.fetcher.AtsFetcher;
+import com.jobx.fetcher.BoardPreview;
 import com.jobx.fetcher.FetcherRegistry;
 import com.jobx.repository.CompanyRepository;
 import com.jobx.repository.MatchRepository;
@@ -181,7 +184,8 @@ public class WatchlistController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Jobx can't watch " + request.atsPlatform() + " boards yet");
         }
-        Company company = getOrCreateCompany(request);
+        Company company = getOrCreateCompany(request.atsPlatform(), request.boardToken(), request.companyName());
+        rememberCareersUrl(company, request.careersUrl());
 
         try {
             return WatchedCompanyResponse.from(watchlistService.watchAndBackfill(user, company));
@@ -274,16 +278,95 @@ public class WatchlistController {
     }
 
     /**
+     * Switch this user's watch to the board BoardRedetector proposed (PR D).
+     *
+     * The body names the board the user saw on the banner, and it must still be
+     * the company's current proposal. Otherwise the click could switch them to
+     * a board they never saw, if a later redetect changed the proposal. The
+     * proposed board is then previewed again and must still have live roles,
+     * because the proposal may be a day old.
+     *
+     * Like POST /watchlist this is not @Transactional: the preview (and
+     * validateBoard for a board nobody watches yet) is an ATS round trip. The
+     * switch itself is one short transaction in WatchlistService.
+     *
+     * 409 when there is no matching proposal or the board no longer has live
+     * roles; the banner then simply goes away on the next watchlist load.
+     */
+    @PostMapping("/{id}/move")
+    public WatchedCompanyResponse move(@PathVariable UUID id, @AuthenticationPrincipal User user,
+                                       @Valid @RequestBody MoveWatchRequest request) {
+        WatchedCompany watch = requireOwnedWatch(id, user);
+        Company old = watch.getCompany();
+
+        if (!old.hasMoveProposal()
+                || old.getMovedToPlatform() != request.atsPlatform()
+                || !old.getMovedToToken().equals(request.boardToken())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "that move is no longer proposed for " + old.getDisplayName());
+        }
+        AtsPlatform platform = old.getMovedToPlatform();
+        String token = old.getMovedToToken();
+
+        AtsFetcher fetcher = fetcherRegistry.getFetcher(platform).orElseThrow(() ->
+                new ResponseStatusException(HttpStatus.CONFLICT,
+                        "Jobx can't watch " + platform + " boards yet"));
+        if (!hasLiveRoles(fetcher, platform, token)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "the " + platform + " board for " + old.getDisplayName()
+                            + " has no open roles right now — not switching");
+        }
+
+        Company target = getOrCreateCompany(platform, token, old.getDisplayName());
+        rememberCareersUrl(target, old.getCareersUrl());
+
+        WatchedCompany moved = watchlistService.moveWatch(user, watch, target);
+        log.info("Moved watch {} for {} from {} '{}' to {} '{}'", id, old.getDisplayName(),
+                old.getAtsPlatform(), old.getBoardToken(), platform, token);
+        return WatchedCompanyResponse.from(moved);
+    }
+
+    private boolean hasLiveRoles(AtsFetcher fetcher, AtsPlatform platform, String token) {
+        Company probe = new Company();
+        probe.setAtsPlatform(platform);
+        probe.setBoardToken(token);
+        probe.setDisplayName(token);
+        try {
+            BoardPreview preview = fetcher.previewBoard(probe);
+            return preview.jobCount() > 0;
+        } catch (Exception e) {
+            log.info("Move preview of {} '{}' failed: {}", platform, token, e.toString());
+            return false;
+        }
+    }
+
+    /**
+     * Store the careers page a board was found on, if the company has none yet.
+     * Only a hint for BoardRedetector; blank values are ignored. The in-memory
+     * copy is updated too, so the response and later steps see it.
+     */
+    private void rememberCareersUrl(Company company, String careersUrl) {
+        if (careersUrl == null || careersUrl.isBlank() || company.getCareersUrl() != null) {
+            return;
+        }
+        String trimmed = careersUrl.trim();
+        if (company.getId() != null) {
+            companyRepository.fillCareersUrlIfMissing(company.getId(), trimmed);
+        }
+        company.setCareersUrl(trimmed);
+    }
+
+    /**
      * Company rows are shared and keyed (ats_platform, board_token). First
      * adder's companyName becomes the canonical displayName; later adders'
      * typed names are discarded — one shared label, no cross-user leakage.
      */
-    private Company getOrCreateCompany(WatchedCompanyRequest request) {
-        return findCompany(request).orElseGet(() -> {
+    private Company getOrCreateCompany(AtsPlatform platform, String token, String name) {
+        return findCompany(platform, token).orElseGet(() -> {
             Company company = new Company();
-            company.setAtsPlatform(request.atsPlatform());
-            company.setBoardToken(request.boardToken());
-            company.setDisplayName(request.companyName());
+            company.setAtsPlatform(platform);
+            company.setBoardToken(token);
+            company.setDisplayName(name);
 
             // Only for a board nobody watches yet: prove the token is real
             // before it becomes a row. Most platforms 404 a bad token so their
@@ -304,7 +387,7 @@ public class WatchlistController {
                 // is its own transaction now, so unlike the pre-split version we
                 // are not inside a rollback-only one here and can simply join the
                 // winner's row.
-                return findCompany(request).orElseThrow(() -> e);
+                return findCompany(platform, token).orElseThrow(() -> e);
             }
         });
     }
@@ -318,11 +401,11 @@ public class WatchlistController {
      * reintroducing, one row at a time, exactly the duplicate jobs and duplicate
      * matches that the V4 rework existed to remove.
      */
-    private Optional<Company> findCompany(WatchedCompanyRequest request) {
+    private Optional<Company> findCompany(AtsPlatform platform, String token) {
         return companyRepository
-                .findByAtsPlatformAndBoardToken(request.atsPlatform(), request.boardToken())
+                .findByAtsPlatformAndBoardToken(platform, token)
                 .or(() -> companyRepository.findByPlatformAndTokenIgnoreCase(
-                        request.atsPlatform(), request.boardToken()));
+                        platform, token));
     }
 
     /**

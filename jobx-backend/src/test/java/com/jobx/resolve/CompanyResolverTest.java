@@ -254,7 +254,7 @@ class CompanyResolverTest {
         AtsFetcher greenhouse = stubBoard(AtsPlatform.GREENHOUSE, new BoardPreview(null, 0, List.of()));
         when(greenhouse.distinguishesMissingBoard()).thenReturn(true);
 
-        ResolveResponse response = resolver.resolve(user, "https://boards.greenhouse.io/quietco");
+        ResolveResponse response = resolver.resolve(user, URL, "https://boards.greenhouse.io/quietco");
 
         ResolvedBoardResponse candidate = response.candidates().get(0);
         assertEquals("URL", candidate.source());
@@ -267,13 +267,12 @@ class CompanyResolverTest {
 
     @Test
     void anEmptyBoardSniffedOffTheCareersPageIsOfferedOnAPlatformThat404sUnknownTokens() {
-        when(safeUrlFetcher.fetch("https://razorpay.com/jobs/"))
-                .thenReturn(Optional.of(FixtureSupport.fixture("careers-razorpay-excerpt.html")));
+        serve("https://razorpay.com/jobs/", FixtureSupport.fixture("careers-razorpay-excerpt.html"));
         AtsFetcher greenhouse = stubBoard(AtsPlatform.GREENHOUSE, new BoardPreview(null, 0, List.of()));
         when(greenhouse.distinguishesMissingBoard()).thenReturn(true);
 
         ResolvedBoardResponse candidate =
-                resolver.resolve(user, "https://razorpay.com/jobs/").candidates().get(0);
+                resolver.resolve(user, URL, "https://razorpay.com/jobs/").candidates().get(0);
 
         assertEquals("SNIFF", candidate.source());
         assertEquals("razorpaysoftwareprivatelimited", candidate.boardToken());
@@ -289,7 +288,7 @@ class CompanyResolverTest {
     void anEmptyBoardFromAPastedLinkIsNotOfferedOnAPlatformThatCannotTellMissingFromEmpty() {
         stubBoard(AtsPlatform.WORKABLE, new BoardPreview("Razorpay", 0, List.of()));
 
-        ResolveResponse response = resolver.resolve(user, "https://apply.workable.com/razorpay/");
+        ResolveResponse response = resolver.resolve(user, URL, "https://apply.workable.com/razorpay/");
 
         assertTrue(response.candidates().isEmpty());
     }

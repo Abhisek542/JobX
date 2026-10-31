@@ -4,6 +4,7 @@ import { AppError } from '../models/api-error.model';
 import {
   CompanyStatus,
   ManualFetchResponse,
+  PLATFORM_LABEL,
   WatchedCompanyRequest,
   WatchedCompanyResponse,
 } from '../models/watchlist.model';
@@ -133,6 +134,8 @@ export class WatchlistStore {
     this.loadedSignal.set(false);
     this.errorSignal.set(null);
     this.checkingSignal.set(new Set());
+    this.dismissedMovesSignal.set(new Set());
+    this.movingSignal.set(new Set());
   }
 
   /**
@@ -195,6 +198,74 @@ export class WatchlistStore {
       error: (error: AppError) => {
         if (epoch === this.epoch) this.toasts.error(error.detail);
       },
+    });
+  }
+
+  /**
+   * Proposals the user dismissed this session, keyed by watch id + proposed
+   * board. Client-side only for now (add-company-improvements PR D): a reload
+   * brings the banner back, and a different proposal shows even if an earlier
+   * one was dismissed.
+   */
+  private readonly dismissedMovesSignal = signal<ReadonlySet<string>>(new Set());
+  private readonly movingSignal = signal<ReadonlySet<string>>(new Set());
+  readonly moving = this.movingSignal.asReadonly();
+
+  /** The proposal to show on this row, or null if none or dismissed. */
+  visibleMove(company: WatchedCompanyResponse): WatchedCompanyResponse['movedTo'] {
+    const moved = company.movedTo;
+    if (!moved) return null;
+    return this.dismissedMovesSignal().has(moveKey(company)) ? null : moved;
+  }
+
+  dismissMove(company: WatchedCompanyResponse): void {
+    this.dismissedMovesSignal.update((set) => new Set(set).add(moveKey(company)));
+  }
+
+  /**
+   * Switch to the proposed board. The server deletes this user's matches on
+   * the old board and backfills the new one, so the feed reloads, exactly as
+   * after an add.
+   */
+  move(company: WatchedCompanyResponse): void {
+    const moved = company.movedTo;
+    if (!moved || this.movingSignal().has(company.id)) return;
+    this.setMoving(company.id, true);
+
+    const epoch = this.epoch;
+    this.api
+      .move(company.id, { atsPlatform: moved.atsPlatform, boardToken: moved.boardToken })
+      .subscribe({
+        next: (updated) => {
+          if (epoch !== this.epoch) return;
+          this.setMoving(company.id, false);
+          // Usually the same row re-pointed; if the user already watched the new
+          // board the old row is gone and another one comes back.
+          this.companiesSignal.update((list) => [
+            ...list.filter((c) => c.id !== company.id && c.id !== updated.id),
+            updated,
+          ]);
+          this.feed.reload();
+          this.toasts.ok(
+            `${updated.companyName} now watched on ${PLATFORM_LABEL[moved.atsPlatform]}`,
+          );
+        },
+        error: (error: AppError) => {
+          if (epoch !== this.epoch) return;
+          this.setMoving(company.id, false);
+          this.toasts.error(error.detail);
+          // 409: the proposal changed or the board emptied. Show the current state.
+          if (error.status === 409 || error.status === 404) this.load({ force: true });
+        },
+      });
+  }
+
+  private setMoving(id: string, moving: boolean): void {
+    this.movingSignal.update((set) => {
+      const next = new Set(set);
+      if (moving) next.add(id);
+      else next.delete(id);
+      return next;
     });
   }
 
@@ -306,4 +377,10 @@ export class WatchlistStore {
       return next;
     });
   }
+}
+
+/** One dismissal per watch row and proposed board. */
+function moveKey(company: WatchedCompanyResponse): string {
+  const moved = company.movedTo;
+  return `${company.id}|${moved?.atsPlatform}|${moved?.boardToken}`;
 }

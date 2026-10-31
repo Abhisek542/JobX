@@ -6,6 +6,7 @@ import {
   CompanySearchResponse,
   CompanyStatus,
   ManualFetchResponse,
+  MoveWatchRequest,
   ResolveRequest,
   ResolveResponse,
   ResolvedBoardResponse,
@@ -79,6 +80,15 @@ export class WatchlistApi {
 
   remove(id: string): Observable<void> {
     return this.http.delete<void>(`${this.base}/watchlist/${id}`);
+  }
+
+  /**
+   * Switch this watch to the board Jobx proposed in `movedTo`. Same watch id
+   * comes back, pointing at the new board. 409 when that proposal is gone or the
+   * new board has no open roles right now.
+   */
+  move(id: string, request: MoveWatchRequest): Observable<WatchedCompanyResponse> {
+    return this.http.post<WatchedCompanyResponse>(`${this.base}/watchlist/${id}/move`, request);
   }
 
   /**

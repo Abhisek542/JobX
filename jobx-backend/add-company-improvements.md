@@ -40,8 +40,9 @@ confirms it against real evidence. Nothing is watched or switched silently.
 ## PR A: Two add-company modes
 
 > **Built 2026-10-31.** Shipped as planned, with these differences:
-> - The migration is `V8__unsupported_request_mode.sql` (only the `mode`
->   column), so PR C's columns and later ones move to V9+.
+> - The migration was `V8__unsupported_request_mode.sql` (only the `mode`
+>   column). PR C also shipped a V8, so PR D renamed this one to
+>   `V9__unsupported_request_mode.sql` before either was applied anywhere.
 > - The one-hop follow lives in a separate `resolve/CareersLinkFollower`
 >   (parallel fetches under `jobx.resolve.follow-budget-ms`, 8 s) with link
 >   picking in `resolve/CareersLinkFinder`. `SafeUrlFetcher` gained
@@ -173,6 +174,42 @@ platforms that 404 an unknown token, an empty board is provably real.
 ---
 
 ## PR D: Re-detecting a company that moved to another ATS
+
+> **Built 2026-10-31, native ↔ native only.** PR E (the CUSTOM crawler) hasn't
+> shipped, so D was built ahead of it, and everything that needs
+> `CareerPageExtractor` or the rendered SNIFF is left for E:
+> - **Not built:** native → CUSTOM proposals, re-sniffing a failing CUSTOM
+>   board's own URL, and the weekly CUSTOM → native (`NATIVE_AVAILABLE`) check
+>   (step 3b). They slot into `BoardRedetector.findCandidate` / `isDue`.
+>   `MoveReason.NATIVE_AVAILABLE`, its CHECK value, the "not cleared by a
+>   successful fetch" rule and the banner copy already exist, so E only has to
+>   produce it.
+> - **Migrations:** PR A and PR C both shipped a `V8`, and Flyway refuses to
+>   start with two (neither had been applied to the dev DB). PR A's became
+>   `V9__unsupported_request_mode.sql`; D's columns are
+>   `V10__company_redetect.sql`. `crawl_mode` stays with E2.
+> - **Sniff, then probe.** A careers page that yields no new board falls back
+>   to the name probe, instead of probing only when there is no careers URL.
+>   Bounded by the per-cycle cap, and a probed hit is still only a proposal.
+> - **Finding nothing clears an earlier proposal** (its board may have emptied
+>   since). The candidate needs live roles; PR B's empty-board exception never
+>   applies to a guess.
+> - **`/move` takes a body** `{atsPlatform, boardToken}` that must equal the
+>   current proposal (409 otherwise), so a click can't switch to a board a later
+>   redetect proposed after the banner was drawn. The watch row is re-pointed
+>   (same id, same ACTIVE/PAUSED status). If the user already watches the target,
+>   the old row is dropped instead. The old company's `careers_url` is copied to
+>   the target if it has none.
+> - `careers_url` is filled on an existing company with a single
+>   `UPDATE … WHERE careers_url IS NULL`, so it can't race a fetch's health write.
+> - The redetector re-reads the company row before saving the proposal, since the
+>   cycle's instance can be minutes old.
+> - Config: `jobx.redetect.failing-for-hours: 12`, `retry-after-hours: 24`,
+>   `max-per-cycle: 5`.
+> - Live-verified on a scratch database: a dead Lever token whose `careers_url`
+>   was `razorpay.com/jobs/` got a `GREENHOUSE/razorpaysoftwareprivatelimited`
+>   proposal in one cycle, and `/move` answered a stale body with a 409 and the
+>   real one with a 200 that kept the watch id.
 
 Goal: turn "FAILED for days" into "looks like they moved to Lever. Switch?"
 

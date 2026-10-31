@@ -1,4 +1,4 @@
-import { WatchedCompanyResponse } from '../models/watchlist.model';
+import { MovedTo, PLATFORM_LABEL, WatchedCompanyResponse } from '../models/watchlist.model';
 import { relTime } from './time';
 
 export type StatusDot = 'ok' | 'warn' | 'bad' | 'idle';
@@ -51,4 +51,16 @@ export function companyStatusLine(
     bad: false,
     canCheck: true,
   };
+}
+
+/**
+ * The "they moved" banner on a watchlist row (add-company-improvements PR D).
+ * The backend only proposes; this copy must read as a question the user
+ * answers, never as something Jobx already did.
+ */
+export function moveBannerCopy(company: WatchedCompanyResponse, moved: MovedTo): string {
+  if (moved.reason === 'NATIVE_AVAILABLE') {
+    return `${company.companyName}'s careers page now uses ${PLATFORM_LABEL[moved.atsPlatform]}. Switch to the direct feed for more complete data?`;
+  }
+  return `${company.companyName} seems to have moved to ${PLATFORM_LABEL[moved.atsPlatform]}. Switch this watch to their new board?`;
 }

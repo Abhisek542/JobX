@@ -9,6 +9,7 @@ import com.jobx.fetcher.FetcherRegistry;
 import com.jobx.repository.CompanyRepository;
 import com.jobx.repository.ExpiredJobRepository;
 import com.jobx.repository.JobRepository;
+import com.jobx.resolve.BoardRedetector;
 import com.jobx.service.MatchingService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
@@ -51,6 +52,7 @@ public class FetchScheduler {
     private final ExpiredJobRepository expiredJobRepository;
     private final FetcherRegistry fetcherRegistry;
     private final MatchingService matchingService;
+    private final BoardRedetector boardRedetector;
     /** Own proxy, so fetchCompany's writes get real transactions of their own. */
     private final ObjectProvider<FetchScheduler> self;
     /** Same property JobRetentionSweeper reads, so the two can never disagree. */
@@ -69,6 +71,7 @@ public class FetchScheduler {
                           ExpiredJobRepository expiredJobRepository,
                           FetcherRegistry fetcherRegistry,
                           MatchingService matchingService,
+                          BoardRedetector boardRedetector,
                           ObjectProvider<FetchScheduler> self,
                           @Value("${jobx.retention.job-ttl-days:6}") int ttlDays) {
         this.companyRepository = companyRepository;
@@ -76,6 +79,7 @@ public class FetchScheduler {
         this.expiredJobRepository = expiredJobRepository;
         this.fetcherRegistry = fetcherRegistry;
         this.matchingService = matchingService;
+        this.boardRedetector = boardRedetector;
         this.self = self;
         this.ttlDays = ttlDays;
     }
@@ -136,6 +140,18 @@ public class FetchScheduler {
                 log.error("Fetch cycle: {} failed, continuing with the rest",
                         company.getDisplayName(), e);
             }
+        }
+
+        // PR D: boards that have been failing for a while get a look at where
+        // the company's careers page points now. Proposals only; capped per
+        // cycle, and never allowed to fail the cycle.
+        try {
+            int checked = boardRedetector.redetectDue(companies);
+            if (checked > 0) {
+                log.info("Redetect: checked {} failing board(s)", checked);
+            }
+        } catch (Exception e) {
+            log.error("Redetect pass failed", e);
         }
 
         log.info("Fetch cycle complete");
@@ -266,6 +282,13 @@ public class FetchScheduler {
         company.setLastFetchedAt(Instant.now());
         company.setLastFetchStatus(Company.FetchStatus.SUCCESS);
         company.setLastFetchError(null);
+        // The board works again, so a "they moved" proposal made while it was
+        // failing no longer applies. A NATIVE_AVAILABLE proposal stays: it was
+        // made about a working board, and the better feed is still out there.
+        company.setFailingSince(null);
+        if (company.getMovedToReason() == Company.MoveReason.FAILING) {
+            company.clearMoveProposal();
+        }
         companyRepository.save(company);
 
         if (newCount > 0) {
@@ -287,6 +310,11 @@ public class FetchScheduler {
         company.setLastFetchedAt(Instant.now());
         company.setLastFetchStatus(Company.FetchStatus.FAILED);
         company.setLastFetchError(error);
+        // Start of the failing streak, kept across later failures: it is what
+        // BoardRedetector's 12h gate measures.
+        if (company.getFailingSince() == null) {
+            company.setFailingSince(company.getLastFetchedAt());
+        }
         companyRepository.save(company);
         return FetchResult.failure();
     }

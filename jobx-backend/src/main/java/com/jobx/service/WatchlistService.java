@@ -4,10 +4,13 @@ import com.jobx.entity.Company;
 import com.jobx.entity.User;
 import com.jobx.entity.WatchedCompany;
 import com.jobx.repository.CompanyRepository;
+import com.jobx.repository.MatchRepository;
 import com.jobx.repository.WatchedCompanyRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.Optional;
 
 /**
  * The write half of POST /watchlist, kept apart from the controller so that the
@@ -33,6 +36,7 @@ public class WatchlistService {
     private final CompanyRepository companyRepository;
     private final WatchedCompanyRepository watchedCompanyRepository;
     private final MatchingService matchingService;
+    private final MatchRepository matchRepository;
 
     /**
      * Persist a board nobody watches yet. The caller has already proved the token
@@ -70,6 +74,36 @@ public class WatchlistService {
 
         WatchedCompany saved = watchedCompanyRepository.saveAndFlush(watch);
         matchingService.backfillForWatcher(user, company);
+        return saved;
+    }
+
+    /**
+     * Point a user's watch at the board their company moved to (PR D,
+     * POST /watchlist/{id}/move), in one transaction.
+     *
+     * The user's matches on the old board are deleted, the same as unwatching
+     * it. The watch row itself is kept and re-pointed, so its id and its
+     * ACTIVE/PAUSED status survive the switch. If the user somehow already
+     * watches the new board too, the old row is simply dropped and the existing
+     * one returned.
+     *
+     * The old company row stays, like any orphan: the scheduler skips it once
+     * nobody watches it, and other watchers still see the proposal on it.
+     */
+    @Transactional
+    public WatchedCompany moveWatch(User user, WatchedCompany watch, Company target) {
+        Company old = watch.getCompany();
+        matchRepository.deleteByUserAndCompany(user, old);
+
+        Optional<WatchedCompany> existing = watchedCompanyRepository.findByUserAndCompany(user, target);
+        if (existing.isPresent()) {
+            watchedCompanyRepository.delete(watch);
+            return existing.get();
+        }
+
+        watch.setCompany(target);
+        WatchedCompany saved = watchedCompanyRepository.saveAndFlush(watch);
+        matchingService.backfillForWatcher(user, target);
         return saved;
     }
 }
