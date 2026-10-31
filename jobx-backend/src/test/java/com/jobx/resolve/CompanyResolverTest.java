@@ -13,24 +13,31 @@ import com.jobx.fetcher.FixtureSupport;
 import com.jobx.repository.CompanyRepository;
 import com.jobx.repository.JobRepository;
 import com.jobx.repository.WatchedCompanyRepository;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.net.URI;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import static com.jobx.enums.ResolveMode.NAME;
+import static com.jobx.enums.ResolveMode.URL;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.ArgumentMatchers.startsWith;
 import static org.mockito.Mockito.*;
 
 /**
- * Strategy ordering, and the guarantee that nothing is ever offered without
- * evidence behind it.
+ * Strategy ordering per mode, and the guarantee that nothing is ever offered
+ * without evidence behind it.
  *
- * The four strategies are cheapest-and-most-certain first, and each is only
- * reached because the ones before it found nothing. The two middle ones are
+ * NAME mode is catalog then probe and never fetches a page; URL mode is parse,
+ * sniff, probe and never consults the catalog. Within a mode each step is only
+ * reached because the ones before it found nothing. SNIFF and PROBE are
  * complementary rather than alternatives, which these tests show directly:
  * sniffing recovers Razorpay's unguessable token from real page markup, and
  * probing recovers Atlan, whose page names Ashby but never names the board.
@@ -43,6 +50,7 @@ class CompanyResolverTest {
     private FetcherRegistry fetcherRegistry;
     private SafeUrlFetcher safeUrlFetcher;
     private BoardProbe boardProbe;
+    private CareersLinkFollower follower;
     private CompanyResolver resolver;
 
     private User user;
@@ -60,7 +68,7 @@ class CompanyResolverTest {
         when(companyRepository.findByPlatformAndTokenIgnoreCase(any(), anyString()))
                 .thenReturn(Optional.empty());
         when(fetcherRegistry.getFetcher(any())).thenReturn(Optional.empty());
-        when(safeUrlFetcher.fetch(anyString())).thenReturn(Optional.empty());
+        when(safeUrlFetcher.fetchPage(anyString())).thenReturn(Optional.empty());
         when(boardProbe.probe(any(), any())).thenReturn(List.of());
         // Catalog rows are assumed to have stored jobs unless a test says
         // otherwise; a row with none falls back to a live board preview.
@@ -68,12 +76,25 @@ class CompanyResolverTest {
         when(jobRepository.findTitlesByCompany(any(), any()))
                 .thenReturn(List.of("Backend Engineer"));
 
+        // A real follower over the mocked fetcher, so tests see every follow fetch.
+        follower = new CareersLinkFollower(safeUrlFetcher, 3, 5000, 3);
         resolver = new CompanyResolver(companyRepository, watchedCompanyRepository, jobRepository,
-                fetcherRegistry, safeUrlFetcher, boardProbe, 4, 3, 8);
+                fetcherRegistry, safeUrlFetcher, boardProbe, follower, 4, 3, 8);
 
         user = new User();
         user.setId(UUID.randomUUID());
         user.setEmail("resolver@jobx.dev");
+    }
+
+    @AfterEach
+    void tearDown() {
+        follower.shutdown();
+    }
+
+    /** The page {@code url} serves, as SafeUrlFetcher would return it with no redirect. */
+    private void serve(String url, String html) {
+        when(safeUrlFetcher.fetchPage(url))
+                .thenReturn(Optional.of(new SafeUrlFetcher.FetchedPage(URI.create(url), html)));
     }
 
     private AtsFetcher stubBoard(AtsPlatform platform, BoardPreview preview) {
@@ -106,7 +127,7 @@ class CompanyResolverTest {
         when(jobRepository.findTitlesByCompany(eq(razorpay), any()))
                 .thenReturn(List.of("Senior Backend Engineer", "Product Designer"));
 
-        ResolveResponse response = resolver.resolve(user, "Razorpay");
+        ResolveResponse response = resolver.resolve(user, NAME, "Razorpay");
 
         ResolvedBoardResponse candidate = response.candidates().get(0);
         assertEquals("CATALOG", candidate.source());
@@ -124,7 +145,7 @@ class CompanyResolverTest {
         when(companyRepository.searchByNameOrToken(anyString(), any())).thenReturn(List.of(groww));
         when(watchedCompanyRepository.existsByUserAndCompany(user, groww)).thenReturn(true);
 
-        assertTrue(resolver.resolve(user, "Groww").candidates().get(0).alreadyWatched());
+        assertTrue(resolver.resolve(user, NAME, "Groww").candidates().get(0).alreadyWatched());
     }
 
     /**
@@ -139,7 +160,7 @@ class CompanyResolverTest {
         alive.setLastFetchStatus(Company.FetchStatus.SUCCESS);
         when(companyRepository.searchByNameOrToken(anyString(), any())).thenReturn(List.of(dead, alive));
 
-        List<ResolvedBoardResponse> candidates = resolver.resolve(user, "PhonePe").candidates();
+        List<ResolvedBoardResponse> candidates = resolver.resolve(user, NAME, "PhonePe").candidates();
 
         assertEquals("PHONEPELIMITED", candidates.get(0).boardToken());
         assertEquals("phonepe", candidates.get(1).boardToken());
@@ -171,7 +192,7 @@ class CompanyResolverTest {
         when(jobRepository.countByCompany(atlan)).thenReturn(0L);
         stubBoard(AtsPlatform.ASHBY, new BoardPreview(null, 6, List.of("Field Security Engineer")));
 
-        ResolvedBoardResponse candidate = resolver.resolve(user, "Atlan").candidates().get(0);
+        ResolvedBoardResponse candidate = resolver.resolve(user, NAME, "Atlan").candidates().get(0);
 
         assertEquals("CATALOG", candidate.source());
         assertEquals("Atlan", candidate.companyName());
@@ -189,7 +210,7 @@ class CompanyResolverTest {
         when(greenhouse.previewBoard(any())).thenThrow(new AtsFetchException("404"));
         when(fetcherRegistry.getFetcher(AtsPlatform.GREENHOUSE)).thenReturn(Optional.of(greenhouse));
 
-        assertTrue(resolver.resolve(user, "PhonePe").isEmpty());
+        assertTrue(resolver.resolve(user, NAME, "PhonePe").isEmpty());
     }
 
     // -------------------------------------------------------------------- URL
@@ -198,7 +219,7 @@ class CompanyResolverTest {
     void aPastedAtsLinkIsReadDirectly() {
         stubBoard(AtsPlatform.LEVER, new BoardPreview(null, 14, List.of("Android Engineer")));
 
-        ResolveResponse response = resolver.resolve(user, "https://jobs.lever.co/fampay");
+        ResolveResponse response = resolver.resolve(user, URL, "https://jobs.lever.co/fampay");
 
         ResolvedBoardResponse candidate = response.candidates().get(0);
         assertEquals("URL", candidate.source());
@@ -215,10 +236,10 @@ class CompanyResolverTest {
         when(greenhouse.previewBoard(any())).thenThrow(new AtsFetchException("404"));
         when(fetcherRegistry.getFetcher(AtsPlatform.GREENHOUSE)).thenReturn(Optional.of(greenhouse));
 
-        ResolveResponse response = resolver.resolve(user, "https://boards.greenhouse.io/phonepe");
+        ResolveResponse response = resolver.resolve(user, URL, "https://boards.greenhouse.io/phonepe");
 
         assertTrue(response.isEmpty());
-        verify(safeUrlFetcher).fetch("https://boards.greenhouse.io/phonepe");
+        verify(safeUrlFetcher).fetchPage("https://boards.greenhouse.io/phonepe");
     }
 
     /**
@@ -228,7 +249,7 @@ class CompanyResolverTest {
      */
     @Test
     void aPastedLinkToAnUnwatchablePlatformIsNamedWithoutAnyNetwork() {
-        ResolveResponse response = resolver.resolve(user, "https://ats.rippling.com/acme/jobs");
+        ResolveResponse response = resolver.resolve(user, URL, "https://ats.rippling.com/acme/jobs");
 
         assertTrue(response.candidates().isEmpty());
         assertEquals(AtsPlatform.RIPPLING, response.platformHint());
@@ -244,12 +265,11 @@ class CompanyResolverTest {
      */
     @Test
     void sniffsAnUnguessableTokenOutOfARealCareersPage() {
-        when(safeUrlFetcher.fetch("https://razorpay.com/jobs/"))
-                .thenReturn(Optional.of(FixtureSupport.fixture("careers-razorpay-excerpt.html")));
+        serve("https://razorpay.com/jobs/", FixtureSupport.fixture("careers-razorpay-excerpt.html"));
         stubBoard(AtsPlatform.GREENHOUSE, new BoardPreview(null, 25, List.of("Engineering Manager")));
 
         ResolvedBoardResponse candidate =
-                resolver.resolve(user, "https://razorpay.com/jobs/").candidates().get(0);
+                resolver.resolve(user, URL, "https://razorpay.com/jobs/").candidates().get(0);
 
         assertEquals("SNIFF", candidate.source());
         assertEquals("razorpaysoftwareprivatelimited", candidate.boardToken());
@@ -264,13 +284,12 @@ class CompanyResolverTest {
      */
     @Test
     void aPlatformHintNarrowsTheProbeToOnePlatform() {
-        when(safeUrlFetcher.fetch("https://atlan.com/careers/"))
-                .thenReturn(Optional.of(FixtureSupport.fixture("careers-atlan-excerpt.html")));
+        serve("https://atlan.com/careers/", FixtureSupport.fixture("careers-atlan-excerpt.html"));
         when(boardProbe.probe(eq(List.of(AtsPlatform.ASHBY)), any())).thenReturn(List.of(
                 new BoardProbe.Hit(new BoardRef(AtsPlatform.ASHBY, "atlan"),
                         new BoardPreview(null, 5, List.of("Senior Security Engineer")))));
 
-        ResolveResponse response = resolver.resolve(user, "https://atlan.com/careers/");
+        ResolveResponse response = resolver.resolve(user, URL, "https://atlan.com/careers/");
 
         ResolvedBoardResponse candidate = response.candidates().get(0);
         assertEquals("PROBE", candidate.source());
@@ -287,12 +306,12 @@ class CompanyResolverTest {
      */
     @Test
     void aSniffedBoardOnAnUnwatchablePlatformBecomesTheHint() {
-        when(safeUrlFetcher.fetch("https://acme.com/careers/")).thenReturn(Optional.of("""
+        serve("https://acme.com/careers/", """
                 <script src="https://boards.greenhouse.io/static/widget.js"></script>
                 <a href="https://careers-acme.icims.com/jobs/search">Open roles</a>
-                """));
+                """);
 
-        ResolveResponse response = resolver.resolve(user, "https://acme.com/careers/");
+        ResolveResponse response = resolver.resolve(user, URL, "https://acme.com/careers/");
 
         assertTrue(response.candidates().isEmpty());
         // iCIMS is the one recognised platform with no fetcher (dropped 2026-10-25),
@@ -310,10 +329,9 @@ class CompanyResolverTest {
     @Test
     void aHintForANonProbeablePlatformIsAnHonestEmptyAnswer() {
         stubBoard(AtsPlatform.WORKDAY, new BoardPreview(null, 1523, List.of("Engineer")));
-        when(safeUrlFetcher.fetch("https://acme.com/careers/"))
-                .thenReturn(Optional.of("<link rel=\"preconnect\" href=\"https://myworkdayjobs.com\">"));
+        serve("https://acme.com/careers/", "<link rel=\"preconnect\" href=\"https://myworkdayjobs.com\">");
 
-        ResolveResponse response = resolver.resolve(user, "https://acme.com/careers/");
+        ResolveResponse response = resolver.resolve(user, URL, "https://acme.com/careers/");
 
         assertTrue(response.candidates().isEmpty());
         assertEquals(AtsPlatform.WORKDAY, response.platformHint());
@@ -325,7 +343,7 @@ class CompanyResolverTest {
     void aPastedWorkdayLinkResolvesToTheCompositeToken() {
         stubBoard(AtsPlatform.WORKDAY, new BoardPreview(null, 1523, List.of("Software Engineering MTS")));
 
-        ResolveResponse response = resolver.resolve(user,
+        ResolveResponse response = resolver.resolve(user, URL,
                 "https://salesforce.wd12.myworkdayjobs.com/en-US/External_Career_Site");
 
         ResolvedBoardResponse candidate = response.candidates().get(0);
@@ -343,7 +361,7 @@ class CompanyResolverTest {
                 new BoardProbe.Hit(new BoardRef(AtsPlatform.LEVER, "fampay"),
                         new BoardPreview(null, 14, List.of("Android Engineer")))));
 
-        ResolvedBoardResponse candidate = resolver.resolve(user, "FamPay").candidates().get(0);
+        ResolvedBoardResponse candidate = resolver.resolve(user, NAME, "FamPay").candidates().get(0);
 
         assertEquals("PROBE", candidate.source());
         assertEquals("fampay", candidate.boardToken());
@@ -359,7 +377,7 @@ class CompanyResolverTest {
     /** A plain name never triggers an outbound page fetch. */
     @Test
     void aCompanyNameIsNotTreatedAsAUrl() {
-        resolver.resolve(user, "Razorpay");
+        resolver.resolve(user, NAME, "Razorpay");
         verifyNoInteractions(safeUrlFetcher);
     }
 
@@ -375,34 +393,183 @@ class CompanyResolverTest {
                 new BoardProbe.Hit(new BoardRef(AtsPlatform.SMARTRECRUITERS, "PHONEPELIMITED"),
                         new BoardPreview("PHONEPE LIMITED", 6, List.of("SRE")))));
         assertEquals("PHONEPE LIMITED",
-                resolver.resolve(user, "PHONEPELIMITED").candidates().get(0).companyName());
+                resolver.resolve(user, NAME, "PHONEPELIMITED").candidates().get(0).companyName());
 
         when(boardProbe.probe(any(), any())).thenReturn(List.of(
                 new BoardProbe.Hit(new BoardRef(AtsPlatform.ASHBY, "atlan"),
                         new BoardPreview(null, 5, List.of("Engineer")))));
         when(companyRepository.findByPlatformAndTokenIgnoreCase(AtsPlatform.ASHBY, "atlan"))
                 .thenReturn(Optional.of(company(AtsPlatform.ASHBY, "atlan", "Atlan")));
-        assertEquals("Atlan", resolver.resolve(user, "atlan").candidates().get(0).companyName());
+        assertEquals("Atlan", resolver.resolve(user, NAME, "atlan").candidates().get(0).companyName());
 
         when(companyRepository.findByPlatformAndTokenIgnoreCase(AtsPlatform.ASHBY, "atlan"))
                 .thenReturn(Optional.empty());
-        assertEquals("atlan", resolver.resolve(user, "atlan").candidates().get(0).companyName());
+        assertEquals("atlan", resolver.resolve(user, NAME, "atlan").candidates().get(0).companyName());
     }
 
     /** Nothing found is a normal answer — plenty of portals have no public API. */
     @Test
     void anEmptyResultIsAnHonestAnswer() {
-        ResolveResponse response = resolver.resolve(user, "Some Company On Workday");
+        ResolveResponse response = resolver.resolve(user, NAME, "Some Company On Workday");
         assertTrue(response.isEmpty());
         assertNull(response.platformHint());
     }
 
     @Test
     void blankQueryResolvesToNothingWithoutAnyWork() {
-        assertTrue(resolver.resolve(user, "   ").isEmpty());
-        assertTrue(resolver.resolve(user, null).isEmpty());
+        assertTrue(resolver.resolve(user, NAME, "   ").isEmpty());
+        assertTrue(resolver.resolve(user, NAME, null).isEmpty());
+        assertTrue(resolver.resolve(user, URL, "   ").isEmpty());
+        assertTrue(resolver.resolve(user, URL, null).isEmpty());
         verifyNoInteractions(boardProbe);
         verifyNoInteractions(safeUrlFetcher);
+    }
+
+    // --------------------------------------------------------- one-hop follow
+
+    /**
+     * A landing page that never names its ATS: the board is one click away,
+     * behind "See open roles". Following that link finds it.
+     */
+    @Test
+    void followsACareersLinkOneHopToFindTheBoard() {
+        serve("https://acme.com/careers", FixtureSupport.fixture("careers-landing-onehop.html"));
+        serve("https://acme.com/careers/open-roles", FixtureSupport.fixture("careers-onehop-target.html"));
+        stubBoard(AtsPlatform.GREENHOUSE, new BoardPreview(null, 12, List.of("Backend Engineer")));
+
+        ResolveResponse response = resolver.resolve(user, URL, "https://acme.com/careers");
+
+        ResolvedBoardResponse candidate = response.candidates().get(0);
+        assertEquals("SNIFF", candidate.source());
+        assertEquals(AtsPlatform.GREENHOUSE, candidate.atsPlatform());
+        assertEquals("acme", candidate.boardToken());
+        verifyNoInteractions(boardProbe);
+    }
+
+    /** The cross-domain "Careers" link, the mailto and the PDF are never fetched. */
+    @Test
+    void neverFollowsOffSiteOrNonPageLinks() {
+        serve("https://acme.com/careers", FixtureSupport.fixture("careers-landing-onehop.html"));
+
+        resolver.resolve(user, URL, "https://acme.com/careers");
+
+        verify(safeUrlFetcher).fetchPage("https://acme.com/careers");
+        verify(safeUrlFetcher).fetchPage("https://acme.com/careers/open-roles");
+        verify(safeUrlFetcher, never()).fetchPage(contains("partner-careers.example.org"));
+        verify(safeUrlFetcher, never()).fetchPage(contains(".pdf"));
+        verify(safeUrlFetcher, never()).fetchPage(startsWith("mailto:"));
+        verifyNoMoreInteractions(safeUrlFetcher);
+    }
+
+    /** One hop and at most three links, however many careers links the page has. */
+    @Test
+    void followsAtMostThreeLinks() {
+        serve("https://acme.com/", """
+                <a href="/jobs/engineering">Engineering jobs</a>
+                <a href="/jobs/design">Design jobs</a>
+                <a href="/jobs/sales">Sales jobs</a>
+                <a href="/jobs/ops">Ops jobs</a>
+                <a href="/jobs/support">Support jobs</a>
+                """);
+
+        resolver.resolve(user, URL, "https://acme.com/");
+
+        verify(safeUrlFetcher, times(4)).fetchPage(anyString()); // landing + 3
+        verify(safeUrlFetcher, never()).fetchPage("https://acme.com/jobs/ops");
+    }
+
+    /**
+     * A link the SSRF guard refuses was the page's choice, not the user's, so it
+     * is a dead end rather than a 400, and resolution carries on to the probe.
+     */
+    @Test
+    void aRefusedFollowedLinkIsADeadEndNotA400() {
+        serve("https://acme.com/careers", "<a href=\"https://jobs.acme.com/\">Jobs</a>");
+        when(safeUrlFetcher.fetchPage("https://jobs.acme.com"))
+                .thenThrow(new SafeUrlFetcher.UnsafeUrlException("that address is not on the public internet"));
+
+        ResolveResponse response = assertDoesNotThrow(
+                () -> resolver.resolve(user, URL, "https://acme.com/careers"));
+
+        assertTrue(response.isEmpty());
+        verify(safeUrlFetcher).fetchPage("https://jobs.acme.com");
+        verify(boardProbe).probe(any(), any());
+    }
+
+    /** A hint found only one hop away still narrows the probe. */
+    @Test
+    void aHintOnAFollowedPageNarrowsTheProbe() {
+        serve("https://atlan.com/", "<a href=\"/careers\">Careers</a>");
+        serve("https://atlan.com/careers", FixtureSupport.fixture("careers-atlan-excerpt.html"));
+
+        ResolveResponse response = resolver.resolve(user, URL, "https://atlan.com/");
+
+        assertEquals(AtsPlatform.ASHBY, response.platformHint());
+        verify(boardProbe).probe(eq(List.of(AtsPlatform.ASHBY)), any());
+    }
+
+    /** A page that already names its board costs no extra fetches. */
+    @Test
+    void noFollowWhenTheLandingPageNamesItsBoard() {
+        serve("https://razorpay.com/jobs/", FixtureSupport.fixture("careers-razorpay-excerpt.html"));
+        stubBoard(AtsPlatform.GREENHOUSE, new BoardPreview(null, 25, List.of("Engineering Manager")));
+
+        resolver.resolve(user, URL, "https://razorpay.com/jobs/");
+
+        verify(safeUrlFetcher, times(1)).fetchPage(anyString());
+    }
+
+    // ------------------------------------------------------------------ modes
+
+    /**
+     * Someone who chose "Company name" and typed a domain meant the company.
+     * NAME mode never fetches a page; slug derivation still uses the label.
+     */
+    @Test
+    void nameModeNeverFetchesAPageEvenForADomain() {
+        resolver.resolve(user, NAME, "razorpay.com");
+
+        verifyNoInteractions(safeUrlFetcher);
+        verify(boardProbe).probe(any(), eq(List.of("razorpay", "Razorpay")));
+    }
+
+    /** NAME mode doesn't read an ATS link as a link either: no URL candidate. */
+    @Test
+    void nameModeDoesNotParseAnAtsLink() {
+        AtsFetcher lever = stubBoard(AtsPlatform.LEVER,
+                new BoardPreview(null, 14, List.of("Android Engineer")));
+
+        ResolveResponse response = resolver.resolve(user, NAME, "https://jobs.lever.co/fampay");
+
+        assertTrue(response.candidates().stream().noneMatch(c -> c.source().equals("URL")));
+        verify(lever, never()).previewBoard(any());
+        verifyNoInteractions(safeUrlFetcher);
+    }
+
+    /** URL mode with a bare name is the user's mistake to fix, so it's a 400. */
+    @Test
+    void urlModeRefusesSomethingThatIsNotALink() {
+        SafeUrlFetcher.UnsafeUrlException refused = assertThrows(
+                SafeUrlFetcher.UnsafeUrlException.class,
+                () -> resolver.resolve(user, URL, "Razorpay"));
+
+        assertTrue(refused.getMessage().contains("careers page link"));
+        verifyNoInteractions(safeUrlFetcher);
+        verifyNoInteractions(boardProbe);
+        verify(companyRepository, never()).searchByNameOrToken(anyString(), any());
+    }
+
+    /** A pasted link is more specific than any name match, so the catalog is skipped. */
+    @Test
+    void urlModeSkipsTheCatalog() {
+        Company acme = company(AtsPlatform.GREENHOUSE, "acme", "acme.com");
+        when(companyRepository.searchByNameOrToken(anyString(), any())).thenReturn(List.of(acme));
+
+        ResolveResponse response = resolver.resolve(user, URL, "acme.com/careers");
+
+        assertTrue(response.candidates().stream().noneMatch(c -> c.source().equals("CATALOG")));
+        verify(companyRepository, never()).searchByNameOrToken(anyString(), any());
+        verify(safeUrlFetcher).fetchPage("acme.com/careers");
     }
 
     /** Resolution is read-only: watching a board is a separate, explicit act. */
@@ -412,7 +579,7 @@ class CompanyResolverTest {
                 new BoardProbe.Hit(new BoardRef(AtsPlatform.LEVER, "fampay"),
                         new BoardPreview(null, 14, List.of("Android Engineer")))));
 
-        resolver.resolve(user, "FamPay");
+        resolver.resolve(user, NAME, "FamPay");
 
         verify(companyRepository, never()).save(any());
         verify(companyRepository, never()).saveAndFlush(any());
@@ -426,11 +593,11 @@ class CompanyResolverTest {
      */
     @Test
     void anExplicitSchemeIsTreatedAsAUrlEvenWhenWeWillNotFetchIt() {
-        when(safeUrlFetcher.fetch("file:///etc/passwd"))
+        when(safeUrlFetcher.fetchPage("file:///etc/passwd"))
                 .thenThrow(new SafeUrlFetcher.UnsafeUrlException("only http and https links can be checked"));
 
         assertThrows(SafeUrlFetcher.UnsafeUrlException.class,
-                () -> resolver.resolve(user, "file:///etc/passwd"));
+                () -> resolver.resolve(user, URL, "file:///etc/passwd"));
     }
 
     // -------------------------------------------------------- catalog preview

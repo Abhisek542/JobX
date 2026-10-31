@@ -87,11 +87,10 @@ export const PLATFORM_LABEL: Record<AtsPlatform, string> = {
 };
 
 /**
- * Board-token hints, straight from the mockup's TOKEN_HINTS. `suffix` follows
- * the token for platforms whose token is a subdomain (JazzHR).
  * Board-token hints, straight from the mockup's TOKEN_HINTS. Rendered as
  * `url` + bold `token` + `suffix`; `suffix` exists for platforms whose token is
- * a subdomain (BambooHR) rather than a path segment.
+ * a subdomain (JazzHR, BambooHR) rather than a path segment, and `note` for a
+ * token that is more than one URL segment (Workday).
  */
 export const TOKEN_HINTS: Record<
   string,
@@ -181,7 +180,15 @@ export interface ResolveResponse {
   platformHint: AtsPlatform | null;
 }
 
+/**
+ * How the user asked to look a company up. Mirrors com.jobx.enums.ResolveMode.
+ * NAME: catalog, then slug probing; never fetches a page.
+ * URL: read the link, sniff the careers page, then probe on the domain label.
+ */
+export type ResolveMode = 'NAME' | 'URL';
+
 export interface ResolveRequest {
+  mode: ResolveMode;
   query: string;
 }
 
@@ -197,6 +204,8 @@ export interface CompanySearchResponse {
 export interface UnsupportedBoardReportRequest {
   query: string;
   platformHint: AtsPlatform | null;
+  /** The mode the dead end happened in, so demand splits by kind. */
+  mode: ResolveMode | null;
 }
 
 /** Explains where a candidate came from, in the user's terms rather than ours. */

@@ -115,8 +115,9 @@ public class WatchlistController {
     @PostMapping("/resolve")
     public ResolveResponse resolve(@AuthenticationPrincipal User user,
                                    @Valid @RequestBody ResolveRequest request) {
-        ResolveResponse response = companyResolver.resolve(user, request.query());
-        log.info("Resolve '{}' -> {} candidate(s){}", request.query(), response.candidates().size(),
+        ResolveResponse response = companyResolver.resolve(user, request.mode(), request.query());
+        log.info("Resolve [{}] '{}' -> {} candidate(s){}", request.mode(), request.query(),
+                response.candidates().size(),
                 response.platformHint() == null ? "" : " (hint: " + response.platformHint() + ")");
         return response;
     }
@@ -157,9 +158,10 @@ public class WatchlistController {
         requested.setUser(user);
         requested.setQuery(request.query());
         requested.setPlatformHint(request.platformHint());
+        requested.setMode(request.mode());
         unsupportedBoardRequestRepository.save(requested);
-        log.info("Unsupported board requested: '{}' (hint: {})",
-                request.query(), request.platformHint());
+        log.info("Unsupported board requested [{}]: '{}' (hint: {})",
+                request.mode(), request.query(), request.platformHint());
     }
 
     /**

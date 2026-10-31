@@ -6,6 +6,7 @@ import {
   CompanySearchResponse,
   CompanyStatus,
   ManualFetchResponse,
+  ResolveRequest,
   ResolveResponse,
   ResolvedBoardResponse,
   UnsupportedBoardReportRequest,
@@ -34,16 +35,17 @@ export class WatchlistApi {
   }
 
   /**
-   * Works out the ATS board behind a company name, a website, or a careers link.
+   * Works out the ATS board behind a company name (`NAME` mode) or a careers
+   * page link (`URL` mode).
    *
    * Read-only: this proposes boards with live job titles attached, and `add()`
    * below is what actually starts watching one. An empty candidate list is a
    * normal 200 — plenty of companies are on a portal with no public API. A 400
-   * means the input itself was refused (`invalid_url`), which is the one failure
-   * the user can act on.
+   * means the input itself was refused (`invalid_url`: not a link in URL mode,
+   * or a link Jobx won't fetch), which is the one failure the user can act on.
    */
-  resolve(query: string): Observable<ResolveResponse> {
-    return this.http.post<ResolveResponse>(`${this.base}/watchlist/resolve`, { query });
+  resolve(request: ResolveRequest): Observable<ResolveResponse> {
+    return this.http.post<ResolveResponse>(`${this.base}/watchlist/resolve`, request);
   }
 
   /**

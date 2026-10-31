@@ -393,8 +393,15 @@ touching any fetcher code, not this one.
 
 **Add-company improvements (PLANNED 2026-09-27, not built yet)**, plan in
 `jobx-backend/add-company-improvements.md`. Frontend impact:
-- the add-company modal gets two modes, **Company name** (with typeahead) and
-  **Careers page link**, and sends `{ mode, query }` to `/watchlist/resolve`;
+- **Built 2026-10-31 (PR A):** the add-company modal has two modes, picked
+  with a segmented `.ac-mode` radiogroup: **Company name** (catalog typeahead)
+  and **Careers page link** (no typeahead; `core/util/url.ts` `looksLikeUrl`
+  mirrors the backend rule and rejects a bare name before any request). It
+  sends `{ mode, query }` to `/watchlist/resolve` and `mode` with the
+  unsupported report. Switching mode keeps the typed text. A NAME-mode dead
+  end says "Try pasting their careers page link" and offers **Paste a careers
+  link instead**, which switches to URL mode. Advanced manual entry, the four
+  steps and the post-add feed reload are unchanged;
 - the confirm card gets a "no open roles right now" state (`jobCount === 0`) and
   a "Read from their careers page" state for `CUSTOM` crawled boards;
 - feed cards and the detail drawer show department and employment type when

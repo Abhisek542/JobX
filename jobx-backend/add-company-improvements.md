@@ -39,6 +39,17 @@ confirms it against real evidence. Nothing is watched or switched silently.
 
 ## PR A: Two add-company modes
 
+> **Built 2026-10-31.** Shipped as planned, with these differences:
+> - The migration is `V8__unsupported_request_mode.sql` (only the `mode`
+>   column), so PR C's columns and later ones move to V9+.
+> - The one-hop follow lives in a separate `resolve/CareersLinkFollower`
+>   (parallel fetches under `jobx.resolve.follow-budget-ms`, 8 s) with link
+>   picking in `resolve/CareersLinkFinder`. `SafeUrlFetcher` gained
+>   `fetchPage` (body + final URL after redirects).
+> - Same-site means the same registrable domain
+>   (`SlugCandidates.registrableDomain`) or any subdomain of it.
+> - URL mode's "not a link" 400 reuses `UnsafeUrlException` (`invalid_url`).
+
 **Backend**
 - `dto/ResolveRequest.java`: add `@NotNull Mode mode` (`NAME | URL`), and change
   the validation messages to match the mode.

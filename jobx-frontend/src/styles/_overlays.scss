@@ -285,6 +285,44 @@
    the theme toggle, which is what makes it total (_tokens.scss).
    --------------------------------------------------------------------------- */
 
+/* Mode picker: "Company name" | "Careers page link". Same segmented look as the
+   feed's .view-toggle, stretched to the modal width so both halves read as
+   equal choices. */
+.ac-mode {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  margin-bottom: 14px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.ac-mode button {
+  flex: 1;
+  padding: 7px 11px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ac-mode button:hover {
+  color: var(--text);
+}
+.ac-mode button[aria-checked='true'] {
+  background: var(--panel-3);
+  color: var(--text);
+  box-shadow: var(--sh-1);
+}
+.ac-mode button:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 1px;
+}
+
 /* Catalog typeahead: boards Jobx already knows, offered as the user types. */
 .ac-suggestions {
   list-style: none;

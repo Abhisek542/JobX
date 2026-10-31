@@ -6,6 +6,7 @@ import com.jobx.dto.ResolvedBoardResponse;
 import com.jobx.entity.Company;
 import com.jobx.entity.User;
 import com.jobx.enums.AtsPlatform;
+import com.jobx.enums.ResolveMode;
 import com.jobx.fetcher.AtsFetcher;
 import com.jobx.fetcher.BoardPreview;
 import com.jobx.fetcher.FetcherRegistry;
@@ -26,20 +27,26 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Works out which ATS board a user means from a company name, a website, or a
- * careers link — so that the add-company form can stop asking for an ATS
- * platform and a board token, neither of which any user knows.
+ * Works out which ATS board a user means, so that the add-company form can stop
+ * asking for an ATS platform and a board token, neither of which any user knows.
  *
- * Four strategies, cheapest and most certain first, stopping at the first that
- * produces anything:
+ * The user picks one of two modes, and each takes one predictable path, stopping
+ * at the first step that produces anything:
  *
- *  1. CATALOG — a board Jobx already knows. No network, no guessing.
- *  2. URL — the input is itself an ATS link; the token is read straight out of it.
- *  3. SNIFF — fetch the careers page and read the ATS link out of the HTML.
- *  4. PROBE — derive candidate slugs and ask the five APIs which one is real.
+ *  NAME (a company name; never fetches a web page, even if the text has a dot)
+ *    1. CATALOG — a board Jobx already knows. No network, no guessing.
+ *    2. PROBE — derive candidate slugs and ask the ATS APIs which one is real.
  *
- * Steps 3 and 4 are complementary rather than redundant, which is why both
- * exist. Measured live: sniffing is the only thing that recovers Razorpay's
+ *  URL (a careers page link; the catalog is skipped, a link is more specific)
+ *    1. URL — the input is itself an ATS link; the token is read straight out of it.
+ *    2. SNIFF — fetch the careers page and read the ATS link out of the HTML.
+ *       If it names no board, follow at most three same-site careers links on
+ *       it, one hop, and sniff those ({@link CareersLinkFollower}).
+ *    3. PROBE — on the domain label, narrowed to one platform when the page
+ *       named its ATS without naming the board.
+ *
+ * SNIFF and PROBE are complementary rather than redundant, which is why URL mode
+ * has both. Measured live: sniffing is the only thing that recovers Razorpay's
  * {@code razorpaysoftwareprivatelimited}, a token no derivation from the name
  * reaches; probing is the only thing that finds Atlan and FamPay, whose careers
  * pages render the board in JavaScript and expose nothing to a server-side
@@ -79,6 +86,7 @@ public class CompanyResolver {
     private final FetcherRegistry fetcherRegistry;
     private final SafeUrlFetcher safeUrlFetcher;
     private final BoardProbe boardProbe;
+    private final CareersLinkFollower careersLinkFollower;
     private final int maxSlugCandidates;
     private final int maxSniffedBoards;
     private final int catalogPageSize;
@@ -89,6 +97,7 @@ public class CompanyResolver {
                            FetcherRegistry fetcherRegistry,
                            SafeUrlFetcher safeUrlFetcher,
                            BoardProbe boardProbe,
+                           CareersLinkFollower careersLinkFollower,
                            @Value("${jobx.resolve.max-slug-candidates:4}") int maxSlugCandidates,
                            @Value("${jobx.resolve.max-sniffed-boards:3}") int maxSniffedBoards,
                            @Value("${jobx.resolve.catalog-page-size:8}") int catalogPageSize) {
@@ -98,6 +107,7 @@ public class CompanyResolver {
         this.fetcherRegistry = fetcherRegistry;
         this.safeUrlFetcher = safeUrlFetcher;
         this.boardProbe = boardProbe;
+        this.careersLinkFollower = careersLinkFollower;
         this.maxSlugCandidates = maxSlugCandidates;
         this.maxSniffedBoards = maxSniffedBoards;
         this.catalogPageSize = catalogPageSize;
@@ -120,9 +130,10 @@ public class CompanyResolver {
     }
 
     /**
-     * @throws SafeUrlFetcher.UnsafeUrlException when the input is a URL Jobx
-     *         refuses to request at all — the controller turns that into a 400,
-     *         because it is the one failure the user can actually act on.
+     * @throws SafeUrlFetcher.UnsafeUrlException in URL mode, when the input is
+     *         not a link at all, or is a URL Jobx refuses to request (a non-HTTP
+     *         scheme, a non-public address). The controller turns that into a
+     *         400, because it is the one failure the user can actually act on.
      */
     // Deliberately NOT @Transactional. Every strategy below reaches the
     // network — a careers-page fetch, a 9s probe budget, a preview call per
@@ -130,20 +141,45 @@ public class CompanyResolver {
     // connections for all of it, which is what stalled every other request
     // (BUG_REPORT #6). The repository calls are independent short reads; they
     // do not need one consistent snapshot, so each runs on its own.
-    public ResolveResponse resolve(User user, String query) {
+    public ResolveResponse resolve(User user, ResolveMode mode, String query) {
         String trimmed = query == null ? "" : query.trim();
         if (trimmed.isEmpty()) {
             return new ResolveResponse(List.of(), null);
         }
+        return mode == ResolveMode.URL
+                ? resolveByUrl(user, trimmed)
+                : resolveByName(user, trimmed);
+    }
 
+    /**
+     * Catalog, then probing. Never fetches a page and never parses the input as
+     * a link: someone who chose "Company name" and typed "razorpay.com" meant the
+     * company, and slug derivation already turns a host into its domain label.
+     */
+    private ResolveResponse resolveByName(User user, String name) {
         // 1. CATALOG — a board someone already proved real.
-        List<ResolvedBoardResponse> catalog = resolveFromCatalog(user, trimmed);
+        List<ResolvedBoardResponse> catalog = resolveFromCatalog(user, name);
         if (!catalog.isEmpty()) {
             return new ResolveResponse(catalog, null);
         }
 
-        // 2. URL — the user pasted the ATS link itself.
-        Optional<BoardRef> direct = AtsUrlParser.parse(trimmed);
+        // 2. PROBE — guess the slug, then make the ATS prove it.
+        return probe(user, name, null);
+    }
+
+    /**
+     * Parse, sniff, probe. The catalog is skipped: a pasted link names one
+     * specific board or page, and a fuzzy name match against it could only
+     * offer something less specific than what the user gave.
+     */
+    private ResolveResponse resolveByUrl(User user, String url) {
+        if (!looksLikeUrl(url)) {
+            throw new SafeUrlFetcher.UnsafeUrlException(
+                    "Enter a careers page link, like razorpay.com/careers");
+        }
+
+        // 1. URL — the user pasted the ATS link itself.
+        Optional<BoardRef> direct = AtsUrlParser.parse(url);
         if (direct.isPresent()) {
             if (fetcherRegistry.getFetcher(direct.get().platform()).isEmpty()) {
                 // A board on a platform Jobx recognises but can't watch yet
@@ -163,44 +199,80 @@ public class CompanyResolver {
                     direct.get().platform(), direct.get().token());
         }
 
-        // 3. SNIFF — fetch the careers page and read the board off it.
+        // 2. SNIFF — fetch the careers page and read the board off it.
         AtsPlatform platformHint = null;
-        if (looksLikeUrl(trimmed)) {
-            Optional<String> html = safeUrlFetcher.fetch(trimmed);
-            if (html.isPresent()) {
-                List<ResolvedBoardResponse> sniffed = new ArrayList<>();
-                AtsPlatform unwatchable = null;
-                for (BoardRef ref : AtsUrlParser.findAll(html.get())) {
-                    if (sniffed.size() >= maxSniffedBoards) {
-                        break;
-                    }
-                    if (fetcherRegistry.getFetcher(ref.platform()).isEmpty()) {
-                        if (unwatchable == null) {
-                            unwatchable = ref.platform();
-                        }
-                        continue;
-                    }
-                    previewCandidate(user, ref, Source.SNIFF, null).ifPresent(sniffed::add);
+        Optional<SafeUrlFetcher.FetchedPage> page = safeUrlFetcher.fetchPage(url);
+        if (page.isPresent()) {
+            SniffResult sniffed = sniff(user, page.get().body());
+            if (!sniffed.candidates().isEmpty()) {
+                return new ResolveResponse(sniffed.candidates(), null);
+            }
+            platformHint = sniffed.platformHint();
+
+            // 2b. ONE HOP — a landing page whose board sits behind an "Open
+            // roles" link. At most a few same-site links, never further than
+            // one hop; the first followed page that yields a board wins, in
+            // link order. The landing page's own hint outranks theirs.
+            for (SafeUrlFetcher.FetchedPage next : careersLinkFollower.follow(page.get())) {
+                SniffResult hop = sniff(user, next.body());
+                if (!hop.candidates().isEmpty()) {
+                    return new ResolveResponse(hop.candidates(), null);
                 }
-                if (!sniffed.isEmpty()) {
-                    return new ResolveResponse(sniffed, null);
+                if (platformHint == null) {
+                    platformHint = hop.platformHint();
                 }
-                // No usable token, but the page may still have named the
-                // platform. A board link on a platform we can't watch yet is the
-                // strongest evidence; failing that, a bare host mention — Atlan's
-                // only mentions Ashby in a CSP header. Worth a great deal: it
-                // narrows the probe below to one platform.
-                platformHint = unwatchable != null
-                        ? unwatchable
-                        : AtsUrlParser.platformHint(html.get()).orElse(null);
             }
         }
 
-        // 4. PROBE — guess the slug, then make the ATS prove it.
-        // A hint for a platform whose tokens can't be guessed (Workday's
-        // tenant/wdN/site) names the platform but rules probing out entirely.
+        // 3. PROBE — on the domain label, narrowed by the hint if the page gave one.
+        return probe(user, url, platformHint);
+    }
+
+    /** What one careers page yielded: confirmed boards, or failing that a hint. */
+    private record SniffResult(List<ResolvedBoardResponse> candidates, AtsPlatform platformHint) {
+    }
+
+    /**
+     * Reads ATS boards out of a page's HTML and confirms each against its ATS.
+     *
+     * With no usable board, the page may still have named the platform. A board
+     * link on a platform we can't watch yet is the strongest evidence; failing
+     * that, a bare host mention — Atlan's only mentions Ashby in a CSP header.
+     * Worth a great deal: it narrows the probe to one platform.
+     */
+    private SniffResult sniff(User user, String html) {
+        List<ResolvedBoardResponse> sniffed = new ArrayList<>();
+        AtsPlatform unwatchable = null;
+        for (BoardRef ref : AtsUrlParser.findAll(html)) {
+            if (sniffed.size() >= maxSniffedBoards) {
+                break;
+            }
+            if (fetcherRegistry.getFetcher(ref.platform()).isEmpty()) {
+                if (unwatchable == null) {
+                    unwatchable = ref.platform();
+                }
+                continue;
+            }
+            previewCandidate(user, ref, Source.SNIFF, null).ifPresent(sniffed::add);
+        }
+        if (!sniffed.isEmpty()) {
+            return new SniffResult(sniffed, null);
+        }
+        AtsPlatform hint = unwatchable != null
+                ? unwatchable
+                : AtsUrlParser.platformHint(html).orElse(null);
+        return new SniffResult(List.of(), hint);
+    }
+
+    /**
+     * Guess the slug, then make the ATS prove it. A hint for a platform whose
+     * tokens can't be guessed (Workday's tenant/wdN/site) names the platform but
+     * rules probing out entirely. Nothing found is an honest empty answer, with
+     * the hint if there is one.
+     */
+    private ResolveResponse probe(User user, String query, AtsPlatform platformHint) {
         List<String> tokens = platformHint == null || PROBEABLE.contains(platformHint)
-                ? SlugCandidates.from(trimmed, maxSlugCandidates)
+                ? SlugCandidates.from(query, maxSlugCandidates)
                 : List.of();
         if (!tokens.isEmpty()) {
             List<AtsPlatform> platforms = platformHint == null ? PROBEABLE : List.of(platformHint);
@@ -211,8 +283,6 @@ public class CompanyResolver {
                 return new ResolveResponse(probed, platformHint);
             }
         }
-
-        // Nothing. An honest empty answer, with the hint if we have one.
         return new ResolveResponse(List.of(), platformHint);
     }
 
@@ -370,7 +440,8 @@ public class CompanyResolver {
     }
 
     /**
-     * A name is a name even with a dot in it; a host is a host.
+     * Whether URL-mode input is a link at all. A name is a name even with a dot
+     * in it; a host is a host. The frontend mirrors this rule client-side.
      *
      * An explicit {@code scheme://} counts too, even a scheme we will not fetch.
      * Somebody who pastes {@code file:///etc/passwd} has unambiguously given us a

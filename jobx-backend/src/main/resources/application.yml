@@ -98,6 +98,14 @@ jobx:
     # search doesn't re-spend an ATS vendor's rate limit on the same near-miss.
     probe-miss-ttl-ms: 120000
     max-sniffed-boards: 3
+    # URL mode's one-hop follow: when the pasted careers page names no board,
+    # fetch at most this many same-site careers links on it ("Open roles",
+    # /jobs, careers.<domain>) and sniff those. One hop, never further. They
+    # run in parallel under a wall-clock budget, since each could otherwise
+    # take the full response timeout above while a person waits.
+    max-followed-links: 3
+    follow-budget-ms: 8000
+    follow-threads: 6
     catalog-page-size: 8
     rate-limit:
       # Resolution makes outbound requests on the user's behalf, so it gets its
