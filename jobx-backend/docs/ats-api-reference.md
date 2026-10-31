@@ -428,6 +428,23 @@ postings). NVIDIA (`nvidia/wd5/NVIDIAExternalCareerSite`) was spot-checked.
   gets the platform hint and no probe. Boards are found from a pasted link or a
   sniffed board URL.
 
+## Department, team and employment type (display-only, V8, 2026-10-31)
+
+Read by each fetcher into `jobs.department` / `team` / `employment_type` via
+`JobLabels`. Never scored. Paths confirmed against the fixtures:
+
+| Platform | department | team | employment type |
+|---|---|---|---|
+| Greenhouse (`?content=true`) | `departments[0].name` | none | none |
+| Lever | `categories.department` (FamPay/Sprinto omit it) | `categories.team` | `categories.commitment` (`Full Time`; Sprinto puts `Remote` here, kept as-is) |
+| Ashby | `department` | `team` (often equals department) | `employmentType` (`FullTime`) |
+| SmartRecruiters (list item) | `department.label` (PhonePe sends `{}`) | none | `typeOfEmployment.label` (`Full-time`) |
+| Workable (widget list row) | `department` | none | `employment_type` (`Full-time`) |
+| BambooHR (list row) | `departmentLabel` | none | `employmentStatusLabel` (`employmentType` is usually null) |
+| Rippling (v1 list row) | `department.label` | none | not mapped: the v2 detail's `employmentType` has label and id swapped (`{"label":"SALARIED_FT"}`) |
+| Workday (detail `jobPostingInfo`) | none | none | `timeType` (`Full time`) |
+| Jobvite, JazzHR, Gusto | not mapped (HTML tier) | | |
+
 ## Test fixtures
 
 Real captured responses live in `src/test/resources/fixtures/` and back the fetcher

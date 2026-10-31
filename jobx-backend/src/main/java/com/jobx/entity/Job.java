@@ -57,6 +57,18 @@ public class Job {
     @Column
     private String location;     // display only, not used in scoring v1
 
+    // Display only, since V8 — MatchScorer never reads these. Nullable: not
+    // every platform has them, and rows from before V8 were never backfilled.
+    // Fetchers set them through JobLabels so spellings stay consistent.
+    @Column(columnDefinition = "TEXT")
+    private String department;
+
+    @Column(columnDefinition = "TEXT")
+    private String team;
+
+    @Column(name = "employment_type", columnDefinition = "TEXT")
+    private String employmentType;
+
     // Soft experience range — nullable if parsing from JD text fails
     // MatchScorer treats null as distance=0 (full 30 pts), never hard-excludes
     @Column(name = "exp_min")

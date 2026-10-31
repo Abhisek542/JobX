@@ -166,4 +166,16 @@ class WorkdayFetcherTest {
             assertThrows(AtsFetchException.class, () -> fetcher.previewBoard(hostile), token);
         }
     }
+
+    /** Display-only label (V8): timeType from the detail. */
+    @Test
+    void detailSuppliesTheEmploymentType() throws Exception {
+        Job job = new Job();
+        job.setExternalId("/job/x");
+
+        fetcher.applyDetail(FixtureSupport.fixture("workday-salesforce-detail.json"), job);
+
+        assertEquals("Full-time", job.getEmploymentType());
+        assertNull(job.getDepartment());
+    }
 }
