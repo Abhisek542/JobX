@@ -3,6 +3,7 @@ package com.jobx.repository;
 import com.jobx.entity.Company;
 import com.jobx.entity.Match;
 import com.jobx.entity.User;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -16,6 +17,13 @@ import java.util.UUID;
 
 @Repository
 public interface MatchRepository extends JpaRepository<Match, UUID> {
+    /**
+     * The feed. Since V8 every card reads department/team/type through
+     * match.getJob(), and every card already read the company's name, so both
+     * are fetched in the same query; lazily they were one query per card each.
+     * The job join is a LEFT join, so an expired match (job_id null) stays in.
+     */
+    @EntityGraph(attributePaths = {"job", "company"})
     List<Match> findByUserOrderByCreatedAtDesc(User user);
     boolean existsByUserAndJob_Id(User user, UUID jobId);
 

@@ -399,7 +399,10 @@ touching any fetcher code, not this one.
   **built 2026-10-31 with PR B**, Watch stays enabled) and a "Read from their
   careers page" state for `CUSTOM` crawled boards;
 - feed cards and the detail drawer show department and employment type when
-  present, plus a **"Crawled"** badge when `MatchResponse.atsPlatform ===
+  present. **Done 2026-10-31 (PR C):** `jobLabels()` in `feed-logic.ts` builds
+  "Engineering · Payments · Full-time" (nulls dropped, a team equal to the
+  department dropped) and returns null when there is nothing, so the line is
+  simply absent. Still to come with PR E: a **"Crawled"** badge when `MatchResponse.atsPlatform ===
   'CUSTOM'`;
 - a watchlist row with `movedTo` shows a banner with Switch and Dismiss buttons.
   The copy depends on `movedTo.reason`:

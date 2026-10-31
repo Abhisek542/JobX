@@ -10,6 +10,7 @@ import com.jobx.fetcher.AtsFetcher;
 import com.jobx.fetcher.BoardPreview;
 import com.jobx.fetcher.ExperienceParser;
 import com.jobx.fetcher.FetchFilter;
+import com.jobx.fetcher.JobLabels;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jsoup.Jsoup;
@@ -137,6 +138,11 @@ public class GreenhouseFetcher implements AtsFetcher {
             if (locNode != null && locNode.get("name") != null) {
                 job.setLocation(locNode.get("name").asText());
             }
+
+            // department: display only. ?content=true adds a departments array;
+            // the first entry is the posting's own department. Greenhouse has
+            // no team or employment-type field.
+            job.setDepartment(JobLabels.clean(node.path("departments").path(0).path("name").asText(null)));
 
             // apply_url: absolute_url confirmed in Phase 0
             job.setApplyUrl(node.path("absolute_url").asText(""));

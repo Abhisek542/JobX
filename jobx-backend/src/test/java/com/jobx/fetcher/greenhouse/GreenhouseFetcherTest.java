@@ -95,4 +95,28 @@ class GreenhouseFetcherTest {
         assertThrows(AtsFetchException.class, () -> fetcher.parsePreview("{\"error\":\"x\"}", "bogus"));
         assertThrows(AtsFetchException.class, () -> fetcher.parsePreview("<html>404</html>", "bogus"));
     }
+
+    /**
+     * Display-only label (V8): the first entry of ?content=true's departments
+     * array. A posting with no departments, or an empty array, has none.
+     */
+    @Test
+    void mapsTheFirstDepartment() throws Exception {
+        String body = """
+                {"jobs":[
+                  {"id":1,"internal_job_id":11,"title":"Backend Engineer","absolute_url":"https://x",
+                   "departments":[{"id":7,"name":"Engineering"},{"id":8,"name":"Platform"}]},
+                  {"id":2,"internal_job_id":12,"title":"Designer","absolute_url":"https://y","departments":[]},
+                  {"id":3,"internal_job_id":13,"title":"Analyst","absolute_url":"https://z"}
+                ],"meta":{"total":3}}
+                """;
+        Company company = FixtureSupport.company("Razorpay", AtsPlatform.GREENHOUSE, "razorpay");
+
+        var jobs = fetcher.parse(body, company);
+
+        assertEquals("Engineering", jobs.get(0).getDepartment());
+        assertNull(jobs.get(1).getDepartment());
+        assertNull(jobs.get(2).getDepartment());
+        assertNull(jobs.get(0).getEmploymentType());
+    }
 }

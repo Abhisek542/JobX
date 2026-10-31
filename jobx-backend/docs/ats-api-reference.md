@@ -448,6 +448,22 @@ pasted link (URL) or the company's own careers page (SNIFF). PROBE and CATALOG
 candidates still need live roles. Rippling, BambooHR and Workday also have a clean
 dead-board signal (above), but they haven't been opted in. Opting a platform in
 means repeating this check and updating `ValidateBoardTest`.
+## Department, team and employment type (display-only, V8, 2026-10-31)
+
+Read by each fetcher into `jobs.department` / `team` / `employment_type` via
+`JobLabels`. Never scored. Paths confirmed against the fixtures:
+
+| Platform | department | team | employment type |
+|---|---|---|---|
+| Greenhouse (`?content=true`) | `departments[0].name` | none | none |
+| Lever | `categories.department` (FamPay/Sprinto omit it) | `categories.team` | `categories.commitment` (`Full Time`; Sprinto puts `Remote` here, kept as-is) |
+| Ashby | `department` | `team` (often equals department) | `employmentType` (`FullTime`) |
+| SmartRecruiters (list item) | `department.label` (PhonePe sends `{}`) | none | `typeOfEmployment.label` (`Full-time`) |
+| Workable (widget list row) | `department` | none | `employment_type` (`Full-time`) |
+| BambooHR (list row) | `departmentLabel` | none | `employmentStatusLabel` (`employmentType` is usually null) |
+| Rippling (v1 list row) | `department.label` | none | not mapped: the v2 detail's `employmentType` has label and id swapped (`{"label":"SALARIED_FT"}`) |
+| Workday (detail `jobPostingInfo`) | none | none | `timeType` (`Full time`) |
+| Jobvite, JazzHR, Gusto | not mapped (HTML tier) | | |
 
 ## Test fixtures
 

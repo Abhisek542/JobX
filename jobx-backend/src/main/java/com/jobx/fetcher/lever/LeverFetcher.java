@@ -10,6 +10,7 @@ import com.jobx.fetcher.AtsFetcher;
 import com.jobx.fetcher.BoardPreview;
 import com.jobx.fetcher.ExperienceParser;
 import com.jobx.fetcher.FetchFilter;
+import com.jobx.fetcher.JobLabels;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jsoup.Jsoup;
@@ -117,10 +118,15 @@ public class LeverFetcher implements AtsFetcher {
             job.setExternalId(node.path("id").asText());
             job.setTitle(node.path("text").asText(""));
 
-            String location = node.path("categories").path("location").asText("");
+            JsonNode categories = node.path("categories");
+            String location = categories.path("location").asText("");
             if (!location.isBlank()) {
                 job.setLocation(location.trim());
             }
+            // Display only. Many boards set team but not department (FamPay).
+            job.setDepartment(JobLabels.clean(categories.path("department").asText(null)));
+            job.setTeam(JobLabels.clean(categories.path("team").asText(null)));
+            job.setEmploymentType(JobLabels.employmentType(categories.path("commitment").asText(null)));
 
             job.setApplyUrl(node.path("hostedUrl").asText(""));
 

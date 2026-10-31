@@ -1,5 +1,6 @@
 package com.jobx.dto;
 
+import com.jobx.entity.Job;
 import com.jobx.entity.Match;
 
 import java.time.Instant;
@@ -37,12 +38,22 @@ public record MatchResponse(
         Match.MatchStatus status,
         Instant createdAt,
         /** When Jobx dropped the posting; null while it is still live. */
-        Instant expiredAt
+        Instant expiredAt,
+        /*
+         * Display-only labels from the posting (since V8). Unlike the fields
+         * above these are read through match.getJob(), so all three are null
+         * once the posting has expired, as well as whenever the board doesn't
+         * publish them. An expired card already shows less; that's accepted.
+         */
+        String department,
+        String team,
+        String employmentType
 ) {
     public static MatchResponse from(Match match) {
+        Job job = match.getJob();
         return new MatchResponse(
                 match.getId(),
-                match.getJob() != null ? match.getJob().getId() : null,
+                job != null ? job.getId() : null,
                 match.getJobTitle(),
                 match.getCompany().getId(),
                 match.getCompany().getDisplayName(),
@@ -51,7 +62,10 @@ public record MatchResponse(
                 match.getMatchedKeywords(),
                 match.getStatus(),
                 match.getCreatedAt(),
-                match.getJobExpiredAt()
+                match.getJobExpiredAt(),
+                job != null ? job.getDepartment() : null,
+                job != null ? job.getTeam() : null,
+                job != null ? job.getEmploymentType() : null
         );
     }
 }
