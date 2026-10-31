@@ -157,4 +157,14 @@ class BambooHrFetcherTest {
         }
         assertTrue(urls.isEmpty(), "no request may be made for a hostile token: " + urls);
     }
+
+    /** Display-only labels (V8): departmentLabel and employmentStatusLabel. */
+    @Test
+    void mapsDepartmentAndEmploymentStatus() throws Exception {
+        List<Job> jobs = listOnly();
+
+        assertEquals("Technology", jobs.get(0).getDepartment());
+        assertEquals("Sales", jobs.get(1).getDepartment());
+        assertEquals("Full-time", jobs.get(0).getEmploymentType());
+    }
 }

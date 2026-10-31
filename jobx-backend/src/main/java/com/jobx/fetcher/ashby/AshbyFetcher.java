@@ -10,6 +10,7 @@ import com.jobx.fetcher.AtsFetcher;
 import com.jobx.fetcher.BoardPreview;
 import com.jobx.fetcher.ExperienceParser;
 import com.jobx.fetcher.FetchFilter;
+import com.jobx.fetcher.JobLabels;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -118,6 +119,11 @@ public class AshbyFetcher implements AtsFetcher {
             if (!location.isBlank()) {
                 job.setLocation(location.trim());
             }
+
+            // Display only. employmentType is an enum spelling ("FullTime").
+            job.setDepartment(JobLabels.clean(node.path("department").asText(null)));
+            job.setTeam(JobLabels.clean(node.path("team").asText(null)));
+            job.setEmploymentType(JobLabels.employmentType(node.path("employmentType").asText(null)));
 
             job.setApplyUrl(node.path("jobUrl").asText(""));
 

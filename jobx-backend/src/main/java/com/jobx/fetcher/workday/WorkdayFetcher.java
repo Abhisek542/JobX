@@ -11,6 +11,7 @@ import com.jobx.fetcher.BoardPreview;
 import com.jobx.fetcher.BoardTokens.WorkdayToken;
 import com.jobx.fetcher.ExperienceParser;
 import com.jobx.fetcher.FetchFilter;
+import com.jobx.fetcher.JobLabels;
 import lombok.extern.slf4j.Slf4j;
 import org.jsoup.Jsoup;
 import org.springframework.beans.factory.annotation.Value;
@@ -325,6 +326,9 @@ public class WorkdayFetcher implements AtsFetcher {
         if (!places.isEmpty()) {
             job.setLocation(String.join("; ", places));
         }
+
+        // Display only ("Full time"). Workday exposes no department field.
+        job.setEmploymentType(JobLabels.employmentType(info.path("timeType").asText(null)));
 
         // jobPostingInfo only — the rest of the detail is "similarJobs" noise.
         job.setRawJson(info.toString());

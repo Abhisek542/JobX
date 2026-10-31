@@ -113,4 +113,16 @@ class LeverFetcherTest {
         assertThrows(AtsFetchException.class,
                 () -> fetcher.parsePreview("{\"error\":\"Document not found\"}", "postman"));
     }
+
+    /** Display-only labels (V8). FamPay sets team, never department; one posting has no commitment. */
+    @Test
+    void mapsTeamAndCommitment() throws Exception {
+        List<Job> jobs = fetcher.parse(FixtureSupport.fixture("lever-fampay.json"), company);
+
+        assertEquals("Marketing", jobs.get(0).getTeam());
+        assertNull(jobs.get(0).getDepartment());
+        assertNull(jobs.get(0).getEmploymentType());
+        assertEquals("Business", jobs.get(1).getTeam());
+        assertEquals("Full-time", jobs.get(1).getEmploymentType());
+    }
 }
