@@ -5,6 +5,7 @@ import { logoText } from './logo';
 import { safeNext } from './redirect';
 import { normalizeList, parseList } from './text-lists';
 import { relTime } from './time';
+import { looksLikeUrl } from './url';
 import { companyStatusLine } from './watchlist-status';
 
 describe('identity (derived from the email local-part)', () => {
@@ -142,5 +143,25 @@ describe('companyStatusLine', () => {
     expect(
       companyStatusLine(company({ status: 'UNSUPPORTED', atsPlatform: 'UNSUPPORTED' }), now),
     ).toMatchObject({ dot: 'idle', text: 'Board has no public API', canCheck: false });
+  });
+});
+
+describe('looksLikeUrl (mirrors CompanyResolver.looksLikeUrl)', () => {
+  it('treats company names as names, even with a dot', () => {
+    expect(looksLikeUrl('Razorpay')).toBe(false);
+    expect(looksLikeUrl('Acme Inc.')).toBe(false);
+    expect(looksLikeUrl('  ')).toBe(false);
+    expect(looksLikeUrl('')).toBe(false);
+  });
+
+  it('accepts hosts with or without a scheme or path', () => {
+    expect(looksLikeUrl('razorpay.com')).toBe(true);
+    expect(looksLikeUrl('razorpay.com/careers')).toBe(true);
+    expect(looksLikeUrl('https://jobs.lever.co/fampay')).toBe(true);
+    expect(looksLikeUrl('careers.acme.co.in:8443/jobs')).toBe(true);
+  });
+
+  it('counts an explicit scheme as a URL, even one the server will refuse', () => {
+    expect(looksLikeUrl('file:///etc/passwd')).toBe(true);
   });
 });

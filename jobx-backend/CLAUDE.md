@@ -427,7 +427,9 @@ nothing to a job seeker, and the token is opaque, **case-sensitive**, and often
 not the company name (`razorpaysoftwareprivatelimited`, `Sprinto`,
 `PHONEPELIMITED`). Now one field takes a name, a website or a careers link, and
 `CompanyResolver` (new `com.jobx.resolve` package) works the board out through
-four strategies, cheapest first, stopping at the first that yields anything:
+four strategies, cheapest first, stopping at the first that yields anything
+(**superseded 2026-10-31 by the two explicit modes of PR A**, see "Add-company
+improvements" below):
 
 1. **CATALOG** — `companies` has been a registry of proven boards since V4, so a
    typeahead over it (`GET /companies/search`) needs no network and no guessing.
@@ -466,7 +468,8 @@ links `job-boards.eu.greenhouse.io/groww`.
   silent-acceptance bugs closed, both verified as live 400s: `WORKABLE`/`razorpay`
   (the ghost account) and any bogus Greenhouse/Lever/Ashby token, all of which
   used to sit on the watchlist looking healthy and never produce a job.
-- **SSRF**: `SafeUrlFetcher` fetches only the pasted URL (no crawling), http/https
+- **SSRF**: `SafeUrlFetcher` fetches only the URL it is given (since PR A the resolver
+  may also hand it up to 3 same-site careers links, one hop), http/https
   only, rejects every non-public address for **every** resolved IP, and follows
   redirects **by hand** re-checking each hop — leaving Netty's own redirect
   handling on would let a public URL bounce into 127.0.0.1 or a metadata
@@ -902,6 +905,37 @@ Full plan: `jobx-backend/add-company-improvements.md`. Suggested order:
 A → B → C → E1 → E2 → D. Until each PR ships, the add-company and ATS sections
 above still describe the code that is live. Update them as each PR lands.
 
+- **A: two add-company modes. Built 2026-10-31** (migration
+  `V8__unsupported_request_mode.sql`; PR C's columns therefore move to V9+).
+  This supersedes the "four strategies" description in the 2026-09-06
+  add-company entry above.
+  - `ResolveRequest.mode` (`com.jobx.enums.ResolveMode`, required) is `NAME`
+    or `URL`. `CompanyResolver.resolve(user, mode, query)`:
+    - `NAME`: catalog → probe. **Never fetches a page and never parses the
+      input as a link**, even `razorpay.com` (slug derivation still uses the
+      domain label).
+    - `URL`: input must pass `looksLikeUrl`, else `UnsafeUrlException` → 400
+      `invalid_url` "Enter a careers page link…". Then parse → sniff
+      (+ one-hop follow) → probe on the domain label, narrowed by the hint.
+      **The catalog is skipped.**
+  - **One-hop follow (A2):** when the pasted page yields no board,
+    `CareersLinkFollower` fetches at most `jobx.resolve.max-followed-links` (3)
+    links chosen by `CareersLinkFinder` (jsoup; anchor text or path matches
+    careers/jobs/open roles/join us/…; **same registrable domain or a
+    subdomain of it only**, via `SlugCandidates.registrableDomain`). They run
+    in parallel under `follow-budget-ms` (8000) and are sniffed in link order;
+    the landing page's hint outranks theirs. Never more than one hop. Each
+    fetch is its own `SafeUrlFetcher.fetchPage` call, so every SSRF rule
+    applies per link, and a link the guard refuses is a dead end, **never a
+    400** (the page chose it, not the user). `fetchPage` returns the final
+    URL after redirects so relative links resolve correctly. This amends
+    `SafeUrlFetcher`'s former rule 5 ("no crawling"); the class itself still
+    fetches only the URL it is given.
+  - `unsupported_board_requests.mode` (nullable) records the dead end's mode,
+    splitting "a name with no board" from "a real page on an unreadable ATS".
+  - New tests: `CompanyResolverTest` mode + one-hop cases,
+    `CareersLinkFinderTest`, `WatchlistControllerResolveModeTest`.
+- **B: empty boards.** A board with 0 roles is watchable only if it came from
 - **A: two add-company modes.** `ResolveRequest.mode` is `NAME` (catalog →
   probe, never fetches a page) or `URL` (parse → sniff → probe). URL mode may
   follow **at most 3 same-site careers links, one hop**, each through

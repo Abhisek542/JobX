@@ -13,6 +13,7 @@ import {
   AtsPlatform,
   CompanySearchResponse,
   PLATFORM_LABEL,
+  ResolveMode,
   ResolvedBoardResponse,
   SOURCE_LABEL,
   SUPPORTED_PLATFORMS,
@@ -22,6 +23,7 @@ import {
 import { WatchlistApi } from '../../core/api/watchlist.api';
 import { ToastService } from '../../core/services/toast.service';
 import { WatchlistStore } from '../../core/services/watchlist.store';
+import { looksLikeUrl } from '../../core/util/url';
 import { CompanyLogo } from '../ui/company-logo';
 import { Icon } from '../ui/icon';
 import { OverlayShell } from './overlay-shell';
@@ -36,10 +38,15 @@ type Step = 'input' | 'resolving' | 'confirm' | 'dead-end';
  * token is an opaque, case-sensitive string that is frequently not the company
  * name at all (Razorpay's is `razorpaysoftwareprivatelimited`, Lever's Sprinto
  * board 404s as `sprinto`). So this now asks for the one thing a user actually
- * has — a name, a website, or a careers link — and works the board out.
+ * has — a company name or a careers page link — and works the board out.
+ *
+ * Two modes, picked explicitly so each input takes one predictable path:
+ *   Company name       catalog typeahead, then slug probing; never fetches a page
+ *   Careers page link  read the link, sniff their careers page, then probe;
+ *                      no typeahead, and the input must look like a link
  *
  * Four steps:
- *   input     one field, with catalog suggestions as they type
+ *   input     mode picker + one field (catalog suggestions in name mode)
  *   resolving the probe path takes seconds; it must not look frozen
  *   confirm   the board, with REAL job titles off it, and a Watch button
  *   dead-end  honest "we can't watch this portal yet", request recorded
@@ -79,26 +86,56 @@ type Step = 'input' | 'resolving' | 'confirm' | 'dead-end';
 
         @switch (step()) {
           @case ('input') {
+            <div class="ac-mode" role="radiogroup" aria-label="Look the company up by">
+              <button
+                type="button"
+                role="radio"
+                [attr.aria-checked]="mode() === 'NAME'"
+                (click)="setMode('NAME')"
+              >
+                Company name
+              </button>
+              <button
+                type="button"
+                role="radio"
+                [attr.aria-checked]="mode() === 'URL'"
+                (click)="setMode('URL')"
+              >
+                Careers page link
+              </button>
+            </div>
+
             <div class="field" [class.invalid]="fieldError('query')">
-              <label for="ac-query">Company name, website or careers link</label>
+              @if (mode() === 'NAME') {
+                <label for="ac-query">Company name</label>
+              } @else {
+                <label for="ac-query">Careers page link</label>
+              }
               <input
                 id="ac-query"
                 type="text"
                 autocomplete="off"
-                placeholder="Razorpay · razorpay.com · jobs.lever.co/fampay"
+                [attr.inputmode]="mode() === 'URL' ? 'url' : null"
+                [placeholder]="
+                  mode() === 'NAME' ? 'Razorpay' : 'razorpay.com/careers · jobs.lever.co/fampay'
+                "
                 [value]="query()"
                 (input)="onQueryInput($any($event.target).value)"
                 (keydown.enter)="findBoard()"
               />
               <p class="hint">
-                Any of the three works. You don't need to know which system they use.
+                @if (mode() === 'NAME') {
+                  We'll look for their job board. You don't need to know which system they use.
+                } @else {
+                  Their careers page, or a direct link to their job board.
+                }
               </p>
               @if (fieldError('query'); as message) {
                 <p class="err">{{ message }}</p>
               }
             </div>
 
-            @if (suggestions().length) {
+            @if (mode() === 'NAME' && suggestions().length) {
               <ul class="ac-suggestions" role="listbox" aria-label="Companies Jobx already tracks">
                 @for (option of suggestions(); track option.companyId) {
                   <li>
@@ -267,6 +304,11 @@ type Step = 'input' | 'resolving' | 'confirm' | 'dead-end';
                       {{ label(hinted) }} boards yet.
                     </p>
                   }
+                } @else if (mode() === 'NAME') {
+                  <p>
+                    We couldn't find a job board for “{{ query() }}”. Try pasting their careers page
+                    link.
+                  </p>
                 } @else {
                   <p>
                     We couldn't find a job board for “{{ query() }}”. Some careers portals aren't
@@ -276,6 +318,12 @@ type Step = 'input' | 'resolving' | 'confirm' | 'dead-end';
                 <p>We've noted the request — it helps us decide what to support next.</p>
               </div>
             </div>
+
+            @if (mode() === 'NAME') {
+              <button type="button" class="btn btn-primary ac-manual" (click)="switchToUrlMode()">
+                Paste a careers link instead
+              </button>
+            }
 
             <button
               type="button"
@@ -346,6 +394,8 @@ export class AddCompanyModal {
   protected readonly platforms = SUPPORTED_PLATFORMS;
 
   protected readonly step = signal<Step>('input');
+  /** Name → catalog typeahead + probing; URL → read the link and their careers page. */
+  protected readonly mode = signal<ResolveMode>('NAME');
   protected readonly query = signal('');
   protected readonly suggestions = signal<CompanySearchResponse[]>([]);
   protected readonly candidates = signal<ResolvedBoardResponse[]>([]);
@@ -416,9 +466,40 @@ export class AddCompanyModal {
     this.formError.set(null);
   }
 
+  /**
+   * Keeps what was typed: someone who pasted a link while still on "Company
+   * name" should be able to switch without retyping it.
+   */
+  protected setMode(mode: ResolveMode): void {
+    if (mode === this.mode()) {
+      return;
+    }
+    this.mode.set(mode);
+    this.fieldErrors.set({});
+    this.formError.set(null);
+    // Suggestions are kept but only rendered in NAME mode. Switching back
+    // re-offers them for whatever is typed now; distinctUntilChanged drops
+    // the search when the text is the one they were already fetched for.
+    if (mode === 'NAME' && this.query().trim().length >= 2) {
+      this.typed.next(this.query().trim());
+    }
+  }
+
+  /** From the NAME dead end: a name we couldn't place may still have a careers page. */
+  protected switchToUrlMode(): void {
+    this.setMode('URL');
+    this.query.set('');
+    this.step.set('input');
+  }
+
   protected onQueryInput(value: string): void {
     this.query.set(value);
     const trimmed = value.trim();
+    // Links have no typeahead: the catalog is searched by name, and URL mode
+    // skips it on the server too. (setMode re-offers on the way back.)
+    if (this.mode() === 'URL') {
+      return;
+    }
     if (trimmed.length < 2) {
       this.suggestions.set([]);
       return;
@@ -474,19 +555,27 @@ export class AddCompanyModal {
     this.formError.set(null);
     this.resolvingKnown.set(false);
 
+    const mode = this.mode();
     if (!query) {
-      this.fieldErrors.set({ query: 'Enter a company name, website or careers link' });
+      this.fieldErrors.set({
+        query: mode === 'NAME' ? 'Enter a company name' : 'Enter a careers page link',
+      });
+      return;
+    }
+    // Same rule the server applies, checked here to save a round trip.
+    if (mode === 'URL' && !looksLikeUrl(query)) {
+      this.fieldErrors.set({ query: 'Enter a careers page link, like razorpay.com/careers' });
       return;
     }
 
     this.suggestions.set([]);
     this.step.set('resolving');
 
-    this.api.resolve(query).subscribe({
+    this.api.resolve({ mode, query }).subscribe({
       next: (response) => {
         this.platformHint.set(response.platformHint);
         if (!response.candidates.length) {
-          this.reportUnsupported(query, response.platformHint);
+          this.reportUnsupported(query, response.platformHint, mode);
           this.step.set('dead-end');
           return;
         }
@@ -511,8 +600,8 @@ export class AddCompanyModal {
    * Fire-and-forget. The user is already being told we can't help; a failure to
    * record that is our problem, not theirs.
    */
-  private reportUnsupported(query: string, hint: AtsPlatform | null): void {
-    this.api.reportUnsupported({ query, platformHint: hint }).subscribe({ error: () => {} });
+  private reportUnsupported(query: string, hint: AtsPlatform | null, mode: ResolveMode): void {
+    this.api.reportUnsupported({ query, platformHint: hint, mode }).subscribe({ error: () => {} });
   }
 
   protected watchSelected(): void {
