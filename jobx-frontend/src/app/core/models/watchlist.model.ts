@@ -155,10 +155,12 @@ export type ResolveSource = 'CATALOG' | 'URL' | 'SNIFF' | 'PROBE';
  *
  * `jobCount` and `sampleTitles` are not decoration. Everything except a CATALOG
  * hit is derived — read off a careers page, or guessed from a slug and then
- * checked — so the card shows real roles and the user confirms. A candidate is
- * never offered with `jobCount: 0`: two platforms answer a token that was never
- * theirs with a cheerful empty 200, and Workable even echoes back the right
- * company name, so a live posting is the only trustworthy signal.
+ * checked — so the card shows real roles and the user confirms. `jobCount: 0`
+ * appears only for a URL or SNIFF board on a platform that 404s unknown tokens
+ * (Greenhouse, Lever, Ashby), where the board provably exists and the card says
+ * "No open roles right now". Anywhere else two platforms answer a token that was
+ * never theirs with a cheerful empty 200, and Workable even echoes back the
+ * right company name, so a live posting is the only trustworthy signal.
  */
 export interface ResolvedBoardResponse {
   source: ResolveSource;

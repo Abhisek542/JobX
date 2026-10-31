@@ -907,9 +907,15 @@ above still describe the code that is live. Update them as each PR lands.
   follow **at most 3 same-site careers links, one hop**, each through
   `SafeUrlFetcher`. This deliberately amends `SafeUrlFetcher`'s "no crawling"
   rule; the link-following lives in the resolver, not the fetcher.
-- **B: empty boards.** A board with 0 roles is watchable only if it came from
+- **B: empty boards. BUILT 2026-10-31.** A board with 0 roles is watchable only if it came from
   URL/SNIFF **and** its platform 404s unknown tokens
-  (`AtsFetcher.distinguishesMissingBoard()`: Greenhouse, Lever, Ashby).
+  (`AtsFetcher.distinguishesMissingBoard()`: Greenhouse, Lever, Ashby; recon
+  in `docs/ats-api-reference.md` "Bogus-token behaviour"). Code:
+  `CompanyResolver.acceptsEmptyBoard`, default `validateBoard`; tests in
+  `ValidateBoardTest`, `CompanyResolverTest`, `BoardProbeTest`. The confirm card
+  says "No open roles right now" for `jobCount === 0`. This supersedes the
+  "≥1 live role" rule under Add-company resolution for those two sources only.
+  Not yet live-verified in the app.
   Workable and SmartRecruiters keep the strict rule. PROBE/CATALOG always
   require live roles.
 - **C: new job fields. DONE 2026-10-31** (migration `V8__job_department_team_type.sql`,

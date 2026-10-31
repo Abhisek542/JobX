@@ -208,12 +208,23 @@ type Step = 'input' | 'resolving' | 'confirm' | 'dead-end';
                 <app-company-logo [companyName]="board.companyName" [size]="40" />
                 <div class="ac-card-main">
                   <b>{{ board.companyName }}</b>
-                  <span class="ac-card-meta">
-                    {{ label(board.atsPlatform) }} · {{ board.jobCount }}
-                    {{ board.jobCount === 1 ? 'open role' : 'open roles' }}
-                  </span>
-                  @if (board.sampleTitles.length) {
-                    <span class="ac-card-titles">{{ board.sampleTitles.join(' · ') }}</span>
+                  @if (board.jobCount === 0) {
+                    <!-- Only offered for a board from the user's own link or the
+                         company's page, on a platform that 404s unknown tokens:
+                         the board provably exists, it just isn't hiring yet. -->
+                    <span class="ac-card-meta">{{ label(board.atsPlatform) }} · no open roles</span>
+                    <span class="ac-card-empty">
+                      No open roles right now. We'll keep checking and new ones will show up in your
+                      feed.
+                    </span>
+                  } @else {
+                    <span class="ac-card-meta">
+                      {{ label(board.atsPlatform) }} · {{ board.jobCount }}
+                      {{ board.jobCount === 1 ? 'open role' : 'open roles' }}
+                    </span>
+                    @if (board.sampleTitles.length) {
+                      <span class="ac-card-titles">{{ board.sampleTitles.join(' · ') }}</span>
+                    }
                   }
                   <span class="ac-card-source">
                     <app-icon name="check" size="sm" />{{ sourceLabel(board) }}

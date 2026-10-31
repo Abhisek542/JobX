@@ -428,6 +428,26 @@ postings). NVIDIA (`nvidia/wd5/NVIDIAExternalCareerSite`) was spot-checked.
   gets the platform hint and no probe. Boards are found from a pasted link or a
   sniffed board URL.
 
+## Bogus-token behaviour (recon 2026-10-31, for empty-board watching)
+
+Checked with curl and an honest user agent against the list endpoints the fetchers
+call, using the made-up token `jobx-bogus-token-zz91` alongside a known-good one:
+
+| Platform | Bogus token | Known-good token |
+|---|---|---|
+| Greenhouse | **404** `{"status":404,"error":"Job not found"}` | 200 (`razorpaysoftwareprivatelimited`) |
+| Lever | **404** `{"ok":false,"error":"Document not found"}` | 200 (`fampay`) |
+| Ashby | **404** `Not Found` (plain text) | 200 (`atlan`) |
+| Workable | 200 with an empty `jobs` array (ghost account, see above) | |
+| SmartRecruiters | 200 `{"totalFound":0,"content":[]}` (see above) | |
+
+On these three platforms `previewBoard` throws on the 404, so an empty 200 proves
+the board exists. They override `AtsFetcher.distinguishesMissingBoard()` to
+`true`, which lets a board with zero open roles be watched when it came from a
+pasted link (URL) or the company's own careers page (SNIFF). PROBE and CATALOG
+candidates still need live roles. Rippling, BambooHR and Workday also have a clean
+dead-board signal (above), but they haven't been opted in. Opting a platform in
+means repeating this check and updating `ValidateBoardTest`.
 ## Department, team and employment type (display-only, V8, 2026-10-31)
 
 Read by each fetcher into `jobs.department` / `team` / `employment_type` via

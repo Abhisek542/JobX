@@ -69,9 +69,13 @@ class GreenhouseFetcherTest {
         assertEquals("Backend Engineer", preview.sampleTitles().get(0));
     }
 
-    /** A real board with nothing open parses fine; validateBoard is what rejects it. */
+    /**
+     * A real board with nothing open parses fine, and since PR B validateBoard
+     * accepts it: Greenhouse 404s an unknown token, so an empty 200 proves the
+     * board exists.
+     */
     @Test
-    void anEmptyBoardIsParseableButFailsValidation() {
+    void anEmptyBoardIsParseableAndPassesValidation() {
         BoardPreview preview = fetcher.parsePreview("{\"jobs\":[]}", "quiet");
         assertEquals(0, preview.jobCount());
         assertTrue(preview.sampleTitles().isEmpty());
@@ -82,7 +86,7 @@ class GreenhouseFetcherTest {
                 return parsePreview("{\"jobs\":[]}", company.getBoardToken());
             }
         };
-        assertThrows(AtsFetchException.class, () -> stub.validateBoard(
+        assertDoesNotThrow(() -> stub.validateBoard(
                 FixtureSupport.company("Quiet", AtsPlatform.GREENHOUSE, "quiet")));
     }
 
