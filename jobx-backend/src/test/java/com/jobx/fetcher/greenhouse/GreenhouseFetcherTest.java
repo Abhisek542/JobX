@@ -69,9 +69,13 @@ class GreenhouseFetcherTest {
         assertEquals("Backend Engineer", preview.sampleTitles().get(0));
     }
 
-    /** A real board with nothing open parses fine; validateBoard is what rejects it. */
+    /**
+     * A real board with nothing open parses fine, and since PR B validateBoard
+     * accepts it: Greenhouse 404s an unknown token, so an empty 200 proves the
+     * board exists.
+     */
     @Test
-    void anEmptyBoardIsParseableButFailsValidation() {
+    void anEmptyBoardIsParseableAndPassesValidation() {
         BoardPreview preview = fetcher.parsePreview("{\"jobs\":[]}", "quiet");
         assertEquals(0, preview.jobCount());
         assertTrue(preview.sampleTitles().isEmpty());
@@ -82,7 +86,7 @@ class GreenhouseFetcherTest {
                 return parsePreview("{\"jobs\":[]}", company.getBoardToken());
             }
         };
-        assertThrows(AtsFetchException.class, () -> stub.validateBoard(
+        assertDoesNotThrow(() -> stub.validateBoard(
                 FixtureSupport.company("Quiet", AtsPlatform.GREENHOUSE, "quiet")));
     }
 
@@ -90,5 +94,29 @@ class GreenhouseFetcherTest {
     void rejectsAPayloadThatIsNotABoard() {
         assertThrows(AtsFetchException.class, () -> fetcher.parsePreview("{\"error\":\"x\"}", "bogus"));
         assertThrows(AtsFetchException.class, () -> fetcher.parsePreview("<html>404</html>", "bogus"));
+    }
+
+    /**
+     * Display-only label (V8): the first entry of ?content=true's departments
+     * array. A posting with no departments, or an empty array, has none.
+     */
+    @Test
+    void mapsTheFirstDepartment() throws Exception {
+        String body = """
+                {"jobs":[
+                  {"id":1,"internal_job_id":11,"title":"Backend Engineer","absolute_url":"https://x",
+                   "departments":[{"id":7,"name":"Engineering"},{"id":8,"name":"Platform"}]},
+                  {"id":2,"internal_job_id":12,"title":"Designer","absolute_url":"https://y","departments":[]},
+                  {"id":3,"internal_job_id":13,"title":"Analyst","absolute_url":"https://z"}
+                ],"meta":{"total":3}}
+                """;
+        Company company = FixtureSupport.company("Razorpay", AtsPlatform.GREENHOUSE, "razorpay");
+
+        var jobs = fetcher.parse(body, company);
+
+        assertEquals("Engineering", jobs.get(0).getDepartment());
+        assertNull(jobs.get(1).getDepartment());
+        assertNull(jobs.get(2).getDepartment());
+        assertNull(jobs.get(0).getEmploymentType());
     }
 }

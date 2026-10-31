@@ -380,6 +380,8 @@ public class CompanyResolver {
      * Empty when the board does not exist, cannot be read, or has no live roles
      * — the last of which is the case that matters, because two platforms answer
      * a token that was never theirs with a cheerful empty 200.
+     *
+     * One exception to "no live roles": see {@link #acceptsEmptyBoard}.
      */
     private Optional<ResolvedBoardResponse> previewCandidate(User user, BoardRef ref,
                                                              Source source, String fallbackName) {
@@ -395,7 +397,7 @@ public class CompanyResolver {
 
         try {
             BoardPreview preview = fetcher.get().previewBoard(probe);
-            if (preview.jobCount() <= 0) {
+            if (preview.jobCount() <= 0 && !acceptsEmptyBoard(source, fetcher.get())) {
                 return Optional.empty();
             }
             return Optional.of(toResponse(user, ref, preview, source, fallbackName));
@@ -403,6 +405,23 @@ public class CompanyResolver {
             log.debug("No {} board at '{}': {}", ref.platform(), ref.token(), e.toString());
             return Optional.empty();
         }
+    }
+
+    /**
+     * A board with zero open roles is offered only when both of these hold:
+     *
+     *  - the token came from the user's own link (URL) or the company's own
+     *    careers page (SNIFF), so it names <em>this</em> company. A PROBE or
+     *    CATALOG token is a guess or a name match, and a guessed slug that
+     *    exists but is empty may belong to a different company. Live roles are
+     *    the only evidence a human can check against there.
+     *  - the platform 404s an unknown token, so the successful empty preview
+     *    proves the board exists. On Workable and SmartRecruiters an empty 200
+     *    says nothing.
+     */
+    static boolean acceptsEmptyBoard(Source source, AtsFetcher fetcher) {
+        return (source == Source.URL || source == Source.SNIFF)
+                && fetcher.distinguishesMissingBoard();
     }
 
     /**

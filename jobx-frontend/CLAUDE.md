@@ -404,8 +404,16 @@ touching any fetcher code, not this one.
   steps and the post-add feed reload are unchanged;
 - the confirm card gets a "no open roles right now" state (`jobCount === 0`) and
   a "Read from their careers page" state for `CUSTOM` crawled boards;
+- the add-company modal gets two modes, **Company name** (with typeahead) and
+  **Careers page link**, and sends `{ mode, query }` to `/watchlist/resolve`;
+- the confirm card gets a "no open roles right now" state (`jobCount === 0`,
+  **built 2026-10-31 with PR B**, Watch stays enabled) and a "Read from their
+  careers page" state for `CUSTOM` crawled boards;
 - feed cards and the detail drawer show department and employment type when
-  present, plus a **"Crawled"** badge when `MatchResponse.atsPlatform ===
+  present. **Done 2026-10-31 (PR C):** `jobLabels()` in `feed-logic.ts` builds
+  "Engineering · Payments · Full-time" (nulls dropped, a team equal to the
+  department dropped) and returns null when there is nothing, so the line is
+  simply absent. Still to come with PR E: a **"Crawled"** badge when `MatchResponse.atsPlatform ===
   'CUSTOM'`;
 - a watchlist row with `movedTo` shows a banner with Switch and Dismiss buttons.
   The copy depends on `movedTo.reason`:

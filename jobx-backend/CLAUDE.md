@@ -936,12 +936,35 @@ above still describe the code that is live. Update them as each PR lands.
   - New tests: `CompanyResolverTest` mode + one-hop cases,
     `CareersLinkFinderTest`, `WatchlistControllerResolveModeTest`.
 - **B: empty boards.** A board with 0 roles is watchable only if it came from
+- **A: two add-company modes.** `ResolveRequest.mode` is `NAME` (catalog →
+  probe, never fetches a page) or `URL` (parse → sniff → probe). URL mode may
+  follow **at most 3 same-site careers links, one hop**, each through
+  `SafeUrlFetcher`. This deliberately amends `SafeUrlFetcher`'s "no crawling"
+  rule; the link-following lives in the resolver, not the fetcher.
+- **B: empty boards. BUILT 2026-10-31.** A board with 0 roles is watchable only if it came from
   URL/SNIFF **and** its platform 404s unknown tokens
-  (`AtsFetcher.distinguishesMissingBoard()`: Greenhouse, Lever, Ashby).
+  (`AtsFetcher.distinguishesMissingBoard()`: Greenhouse, Lever, Ashby; recon
+  in `docs/ats-api-reference.md` "Bogus-token behaviour"). Code:
+  `CompanyResolver.acceptsEmptyBoard`, default `validateBoard`; tests in
+  `ValidateBoardTest`, `CompanyResolverTest`, `BoardProbeTest`. The confirm card
+  says "No open roles right now" for `jobCount === 0`. This supersedes the
+  "≥1 live role" rule under Add-company resolution for those two sources only.
+  Not yet live-verified in the app.
   Workable and SmartRecruiters keep the strict rule. PROBE/CATALOG always
   require live roles.
-- **C: new job fields.** `department`, `team`, `employment_type` on jobs. Display
-  only; `MatchScorer` is unchanged.
+- **C: new job fields. DONE 2026-10-31** (migration `V8__job_department_team_type.sql`,
+  holding only these three columns, so A/D/E take V9+). `department`, `team`,
+  `employment_type` on jobs. **Display only; `MatchScorer` is unchanged.** Fetchers
+  set them through `fetcher/JobLabels` (blank → null, capped at 120 chars, one
+  spelling per common employment type: `FullTime`/`Full Time`/`full` → `Full-time`;
+  unknown values kept as written). Mapped on Greenhouse, Lever, Ashby,
+  SmartRecruiters, Workable, plus BambooHR, Rippling (department only) and Workday
+  (type only). Field paths are in `docs/ats-api-reference.md`. No backfill. Old
+  rows stay null. `MatchResponse` gained `department`/`team`/`employmentType`, read
+  through `match.getJob()`, so they are null once a posting expires. Because of that,
+  the feed query (`findByUserOrderByCreatedAtDesc`) now has an `@EntityGraph` on
+  `job` + `company`. Reading them lazily would have been an N+1 per card; it also
+  closes the old `job.company` N+1 on the feed.
 - **D: ATS moves.** `companies.failing_since` → `BoardRedetector` (12h failing,
   at most once a day) re-sniffs `careers_url` or re-probes → stores a
   `moved_to_*` **proposal**. The user confirms via `POST /watchlist/{id}/move`.
@@ -1026,7 +1049,8 @@ Company         (id, ats_platform, board_token, display_name,        ← since V
                  last_fetched_at, last_fetch_status, last_fetch_error)
 WatchedCompany  (id, user_id, company_id, status)   ← join row since V4
 Job             (id, company_id → companies, external_id, title, description,
-                 location, exp_min, exp_max, apply_url, posted_at, ats_platform)
+                 location, exp_min, exp_max, apply_url, posted_at, ats_platform,
+                 department?, team?, employment_type?)   ← display-only, since V8
 ExpiredJob      (id, company_id, external_id, posted_at, expired_at)  ← since V5
                  tombstone: a job the TTL dropped, so a fetch can't re-add it
 Match           (id, user_id, job_id?, company_id, job_title, apply_url,

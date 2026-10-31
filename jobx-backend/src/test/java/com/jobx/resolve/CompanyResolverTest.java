@@ -242,6 +242,88 @@ class CompanyResolverTest {
         verify(safeUrlFetcher).fetchPage("https://boards.greenhouse.io/phonepe");
     }
 
+    // ----------------------------------------------------------- empty boards
+
+    /**
+     * Greenhouse 404s an unknown token, so an empty preview of a token the user
+     * pasted proves the board is real: it is offered with zero roles, so they
+     * can watch the company until it starts hiring.
+     */
+    @Test
+    void anEmptyBoardFromAPastedLinkIsOfferedOnAPlatformThat404sUnknownTokens() {
+        AtsFetcher greenhouse = stubBoard(AtsPlatform.GREENHOUSE, new BoardPreview(null, 0, List.of()));
+        when(greenhouse.distinguishesMissingBoard()).thenReturn(true);
+
+        ResolveResponse response = resolver.resolve(user, "https://boards.greenhouse.io/quietco");
+
+        ResolvedBoardResponse candidate = response.candidates().get(0);
+        assertEquals("URL", candidate.source());
+        assertEquals("quietco", candidate.boardToken());
+        assertEquals(0, candidate.jobCount());
+        assertEquals(List.of(), candidate.sampleTitles());
+        verifyNoInteractions(safeUrlFetcher);
+        verifyNoInteractions(boardProbe);
+    }
+
+    @Test
+    void anEmptyBoardSniffedOffTheCareersPageIsOfferedOnAPlatformThat404sUnknownTokens() {
+        when(safeUrlFetcher.fetch("https://razorpay.com/jobs/"))
+                .thenReturn(Optional.of(FixtureSupport.fixture("careers-razorpay-excerpt.html")));
+        AtsFetcher greenhouse = stubBoard(AtsPlatform.GREENHOUSE, new BoardPreview(null, 0, List.of()));
+        when(greenhouse.distinguishesMissingBoard()).thenReturn(true);
+
+        ResolvedBoardResponse candidate =
+                resolver.resolve(user, "https://razorpay.com/jobs/").candidates().get(0);
+
+        assertEquals("SNIFF", candidate.source());
+        assertEquals("razorpaysoftwareprivatelimited", candidate.boardToken());
+        assertEquals(0, candidate.jobCount());
+        verifyNoInteractions(boardProbe);
+    }
+
+    /**
+     * Workable answers a token that was never theirs with an empty 200, so an
+     * empty preview proves nothing even for a pasted link.
+     */
+    @Test
+    void anEmptyBoardFromAPastedLinkIsNotOfferedOnAPlatformThatCannotTellMissingFromEmpty() {
+        stubBoard(AtsPlatform.WORKABLE, new BoardPreview("Razorpay", 0, List.of()));
+
+        ResolveResponse response = resolver.resolve(user, "https://apply.workable.com/razorpay/");
+
+        assertTrue(response.candidates().isEmpty());
+    }
+
+    /**
+     * A catalog row is a name match, not the user's own link, so an empty board
+     * there is still not offered, even on Greenhouse.
+     */
+    @Test
+    void anEmptyCatalogBoardIsNotOfferedEvenOnAPlatformThat404sUnknownTokens() {
+        Company quiet = company(AtsPlatform.GREENHOUSE, "quietco", "QuietCo");
+        when(companyRepository.findById(quiet.getId())).thenReturn(Optional.of(quiet));
+        when(jobRepository.countByCompany(quiet)).thenReturn(0L);
+        AtsFetcher greenhouse = stubBoard(AtsPlatform.GREENHOUSE, new BoardPreview(null, 0, List.of()));
+        when(greenhouse.distinguishesMissingBoard()).thenReturn(true);
+
+        assertTrue(resolver.previewCatalog(user, quiet.getId()).isEmpty());
+    }
+
+    @Test
+    void onlyUrlAndSniffSourcesOnAMissingBoardAwarePlatformAcceptAnEmptyBoard() {
+        AtsFetcher strict = mock(AtsFetcher.class);
+        AtsFetcher aware = mock(AtsFetcher.class);
+        when(aware.distinguishesMissingBoard()).thenReturn(true);
+
+        assertTrue(CompanyResolver.acceptsEmptyBoard(CompanyResolver.Source.URL, aware));
+        assertTrue(CompanyResolver.acceptsEmptyBoard(CompanyResolver.Source.SNIFF, aware));
+        assertFalse(CompanyResolver.acceptsEmptyBoard(CompanyResolver.Source.PROBE, aware));
+        assertFalse(CompanyResolver.acceptsEmptyBoard(CompanyResolver.Source.CATALOG, aware));
+        for (CompanyResolver.Source source : CompanyResolver.Source.values()) {
+            assertFalse(CompanyResolver.acceptsEmptyBoard(source, strict), source.name());
+        }
+    }
+
     /**
      * A link to a platform Jobx recognises but has no fetcher for is answered at
      * once, naming the platform. Sniffing the ATS's own page or probing other
