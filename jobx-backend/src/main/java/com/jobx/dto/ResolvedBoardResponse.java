@@ -20,9 +20,11 @@ import java.util.List;
  *                      to have live roles).
  * @param companyName   the board's own name for the company where the API gives
  *                      one, else the catalog name, else what the user typed.
- * @param jobCount      live openings right now. Never zero: a board with nothing
- *                      on it is indistinguishable from a wrong guess and is not
- *                      offered.
+ * @param jobCount      live openings right now. Zero only for a URL/SNIFF board
+ *                      on a platform that 404s unknown tokens (Greenhouse,
+ *                      Lever, Ashby), where the board provably exists. Anywhere
+ *                      else an empty board is indistinguishable from a wrong
+ *                      guess and is not offered.
  * @param sampleTitles  a few real titles — the thing a human actually recognises.
  * @param alreadyWatched this user already watches this board.
  */

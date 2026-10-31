@@ -52,6 +52,16 @@ public class LeverFetcher implements AtsFetcher {
         return AtsPlatform.LEVER;
     }
 
+    /**
+     * An unknown token is a 404, which previewBoard throws on (verified live
+     * 2026-10-31, see docs/ats-api-reference.md). So an empty board is provably
+     * real and may be watched.
+     */
+    @Override
+    public boolean distinguishesMissingBoard() {
+        return true;
+    }
+
     @Override
     public List<Job> fetch(Company company, FetchFilter filter) {
         // One call returns everything — nothing to save by filtering here.

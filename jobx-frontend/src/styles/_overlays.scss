@@ -446,6 +446,10 @@
   line-clamp: 2;
   -webkit-box-orient: vertical;
 }
+.ac-card-empty {
+  color: var(--muted);
+  font-size: 12px;
+}
 .ac-card-source {
   display: inline-flex;
   align-items: center;
