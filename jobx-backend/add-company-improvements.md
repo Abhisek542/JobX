@@ -175,12 +175,13 @@ platforms that 404 an unknown token, an empty board is provably real.
 
 ## PR D: Re-detecting a company that moved to another ATS
 
-> **Built 2026-10-31, native ↔ native only.** PR E (the CUSTOM crawler) hasn't
-> shipped, so D was built ahead of it, and everything that needs
-> `CareerPageExtractor` or the rendered SNIFF is left for E:
-> - **Not built:** native → CUSTOM proposals, re-sniffing a failing CUSTOM
+> **Built 2026-10-31, native ↔ native only. The CUSTOM directions were built
+> with PR E on 2026-11-01** (see PR E's note). D was built ahead of E, and
+> everything that needed `CareerPageExtractor` or the rendered SNIFF was left
+> for E:
+> - **Built with E:** native → CUSTOM proposals, re-sniffing a failing CUSTOM
 >   board's own URL, and the weekly CUSTOM → native (`NATIVE_AVAILABLE`) check
->   (step 3b). They slot into `BoardRedetector.findCandidate` / `isDue`.
+>   (step 3b), in `BoardRedetector.findCandidate` / `isDue`.
 >   `MoveReason.NATIVE_AVAILABLE`, its CHECK value, the "not cleared by a
 >   successful fetch" rule and the banner copy already exist, so E only has to
 >   produce it.
@@ -297,6 +298,43 @@ rendered SNIFF and PROBE all find no native board, because a native API always
 beats crawling. It is split into **E1, static extraction** (jsoup, no new
 infrastructure) and **E2, a headless browser** (Playwright), so E1 can ship and
 prove itself first.
+
+> **E1, E-bench, E2 and PR D's CUSTOM directions built 2026-11-01** (migration
+> `V11__company_crawl_mode.sql`). E3 is **not built**: the benchmark loses
+> recall to neither pagination nor iframes. Code lives in `com.jobx.crawler`
+> (`CareerPageExtractor`, `PageSignals`, `CanonicalUrl`, `RobotsTxt`,
+> `BrowserRenderer`, `CustomCrawler`) and `fetcher/custom/CustomPageFetcher`.
+> Differences from the plan below:
+> - **The board token keeps the scheme the page was served on** instead of
+>   forcing `https`. A site served only over http would otherwise get a token
+>   that never loads. Host is lower-cased; fragment, tracking parameters
+>   (`utm_*`, `gclid`, `fbclid`, `ref`…) and a trailing slash are dropped.
+>   `POST /watchlist` canonicalises a CUSTOM token the same way (a bare host
+>   gets `https://`; a non-web link is a 400).
+> - **A landing page that says it has no openings is offered as a 0-role
+>   candidate** (source `CRAWL`), like PR B's empty native boards: the page
+>   provably exists and says so in words.
+> - **One-hop pages are crawled statically only.** Rendering each followed
+>   link would multiply a person's wait; only the landing page is rendered.
+> - **A healthy CUSTOM board's weekly clock starts at `created_at`** when it
+>   has never been re-detected, not at "overdue": the resolver sniffed that
+>   same page moments before the board was created.
+> - **Benchmark floors are 0.99 precision / 0.99 recall** (baseline 1.000 /
+>   0.996, 460 of 462 jobs across 19 snapshots, 3 rendered), in
+>   `src/test/resources/crawler-bench/floors.properties`. Snapshots are
+>   captured with `CrawlerBenchCapture` (honours robots.txt, `--render` for
+>   JS pages).
+> - **`ResolveResponse.crawlBlocked`** (`BOT_PROTECTED` / `ROBOTS_DISALLOWED`)
+>   lets the dead end say why, instead of a generic "not found".
+> - Rendering defaults **off in code** (`jobx.crawler.render.enabled`) and on
+>   in `application.yml` (`JOBX_CRAWLER_RENDER`, default true), so unit tests
+>   never start a browser. Off means JS-only pages are unreadable; nothing
+>   else changes.
+> - Playwright Java is pinned to **1.63.0**.
+> - **Residual, accepted:** DNS rebinding on the recurring CUSTOM fetch, the
+>   same residual `SafeUrlFetcher` already documents. The browser route
+>   re-checks each request's host, but a host can resolve differently
+>   between the check and Chromium's own lookup.
 
 ### E1: Static extraction
 

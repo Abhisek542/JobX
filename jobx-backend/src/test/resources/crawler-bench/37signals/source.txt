@@ -1,0 +1,4 @@
+url: https://37signals.com/jobs
+requested: https://37signals.com/jobs
+captured: 2026-11-01
+mode: STATIC

@@ -1,5 +1,6 @@
 package com.jobx.controller;
 
+import com.jobx.crawler.CanonicalUrl;
 import com.jobx.dto.ManualFetchResponse;
 import com.jobx.dto.MoveWatchRequest;
 import com.jobx.dto.ResolveRequest;
@@ -184,7 +185,8 @@ public class WatchlistController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Jobx can't watch " + request.atsPlatform() + " boards yet");
         }
-        Company company = getOrCreateCompany(request.atsPlatform(), request.boardToken(), request.companyName());
+        Company company = getOrCreateCompany(request.atsPlatform(),
+                boardToken(request.atsPlatform(), request.boardToken()), request.companyName());
         rememberCareersUrl(company, request.careersUrl());
 
         try {
@@ -326,6 +328,23 @@ public class WatchlistController {
         return WatchedCompanyResponse.from(moved);
     }
 
+    /**
+     * A CUSTOM board's token is its careers URL, and companies is UNIQUE
+     * (ats_platform, board_token): canonicalise it so two spellings of one page
+     * share one board. Every other platform's token is used as given.
+     */
+    private static String boardToken(AtsPlatform platform, String token) {
+        if (platform != AtsPlatform.CUSTOM) {
+            return token;
+        }
+        String candidate = token.trim();
+        if (!candidate.matches("(?i)^[a-z][a-z0-9+.-]*://.*")) {
+            candidate = "https://" + candidate;
+        }
+        return CanonicalUrl.of(candidate).orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "a careers page board needs an http or https link"));
+    }
+
     private boolean hasLiveRoles(AtsFetcher fetcher, AtsPlatform platform, String token) {
         Company probe = new Company();
         probe.setAtsPlatform(platform);
@@ -423,6 +442,12 @@ public class WatchlistController {
         } catch (AtsFetchException e) {
             log.info("Rejected watch on {} board '{}': {}",
                     company.getAtsPlatform(), company.getBoardToken(), e.getMessage());
+            if (company.getAtsPlatform() == AtsPlatform.CUSTOM) {
+                // The crawler's reason is the useful part: bot protection,
+                // robots.txt, or no listing it can recognise.
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "we couldn't read job listings from that careers page: " + e.getMessage());
+            }
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "we couldn't find a " + company.getAtsPlatform() + " board called '"
                             + company.getBoardToken() + "' — check the company ID in your careers URL");

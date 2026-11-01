@@ -311,13 +311,23 @@ class AtsUrlParserTest {
         @Test
         void areThemselvesParseable() {
             for (AtsPlatform platform : AtsPlatform.values()) {
-                if (platform == AtsPlatform.UNSUPPORTED) {
+                // A CUSTOM board's URL is the company's own careers page, which
+                // is exactly what must NOT read as an ATS link (see below).
+                if (platform == AtsPlatform.UNSUPPORTED || platform == AtsPlatform.CUSTOM) {
                     continue;
                 }
                 String token = platform == AtsPlatform.WORKDAY ? "acme/wd5/External" : "acme";
                 String url = AtsUrlParser.boardUrl(platform, token);
                 assertEquals(new BoardRef(platform, token), parsed(url), url);
             }
+        }
+
+        /** PR E: a crawled board's token is its careers URL, which is also its board link. */
+        @Test
+        void customBoardUrlIsTheCareersPageAndNotAnAtsLink() {
+            String page = "https://www.acme.com/careers";
+            assertEquals(page, AtsUrlParser.boardUrl(AtsPlatform.CUSTOM, page));
+            assertTrue(AtsUrlParser.parse(page).isEmpty());
         }
 
         @Test

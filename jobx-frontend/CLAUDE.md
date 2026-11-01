@@ -413,8 +413,24 @@ touching any fetcher code, not this one.
   present. **Done 2026-10-31 (PR C):** `jobLabels()` in `feed-logic.ts` builds
   "Engineering · Payments · Full-time" (nulls dropped, a team equal to the
   department dropped) and returns null when there is nothing, so the line is
-  simply absent. Still to come with PR E: a **"Crawled"** badge when `MatchResponse.atsPlatform ===
-  'CUSTOM'`;
+  simply absent;
+- **PR E built 2026-11-01 (crawled `CUSTOM` boards):**
+  - `AtsPlatform` gains `'CUSTOM'` (`PLATFORM_LABEL` "Careers page"). It is
+    **not** in `SUPPORTED_PLATFORMS`, so the Advanced manual form never offers it.
+  - `MatchResponse.atsPlatform` is new. `isCrawled()` in `match.model.ts`
+    drives a **"Crawled"** `.tag-crawled` badge (info tokens) on the feed card's
+    title row and in the detail drawer, with the tooltip `CRAWLED_TOOLTIP`
+    ("Read from the company's careers page. Details may be incomplete.").
+  - Resolve source `'CRAWL'` reads "Read from their careers page", and its
+    confirm card adds "Crawled, so some roles may be missed." A 0-role CRAWL
+    card reuses the PR B "No open roles right now" state. `careersUrl` is sent
+    for CRAWL candidates too.
+  - `ResolveResponse.crawlBlocked` (`BOT_PROTECTED` / `ROBOTS_DISALLOWED`)
+    gives the dead end its own explanation; Jobx never gets around either.
+  - Watchlist rows show a CUSTOM token as host + path (`boardTokenLabel()` in
+    `watchlist-status.ts`), with the full URL as the tooltip. A move proposal
+    to CUSTOM reads "moved to their own careers page", with the caveat.
+  - **Not visually verified in a browser yet.**
 - a watchlist row with `movedTo` shows a banner with Switch and Dismiss buttons.
   **Built 2026-10-31 (PR D).** The `.wl-move` banner sits under the row on the
   Watchlist page, with copy from `moveBannerCopy()` in `watchlist-status.ts` and
@@ -424,7 +440,7 @@ touching any fetcher code, not this one.
   move boards server-side). A 409 reloads the watchlist. **Dismiss** is
   session-only, keyed on watch id + proposed board, and cleared by `reset()`.
   The modal sends `careersUrl` (the URL-mode input captured when the resolve
-  was sent) when the chosen candidate's source is URL or SNIFF.
+  was sent) when the chosen candidate's source is URL, SNIFF or CRAWL.
   **Not visually verified in a browser yet.** The copy for each reason:
   The copy depends on `movedTo.reason`:
   - `FAILING`: "moved to {Platform}";

@@ -121,7 +121,38 @@ jobx:
     # Look at the same company at most this often.
     retry-after-hours: 24
     # Each look is outbound HTTP on the scheduler thread, so cap it per cycle.
+    # Shared by failing boards and the weekly CUSTOM check below.
     max-per-cycle: 5
+    # PR E: a HEALTHY crawled (CUSTOM) board gets its careers page re-sniffed
+    # this often, in case the company adopted a real ATS. A hit is a
+    # NATIVE_AVAILABLE proposal ("switch to the direct feed?"), never a switch.
+    custom-check-days: 7
+  crawler:
+    # PR E: the smart crawler for careers pages with no standard ATS (platform
+    # CUSTOM). Every request goes through SafeUrlFetcher or the guarded browser.
+    #
+    # New postings whose description is not on the list page cost one plain GET
+    # of their detail page; at most this many per board per cycle, the rest
+    # wait for the next cycle.
+    max-detail-fetches: 25
+    render:
+      # Headless Chromium (Playwright) for JavaScript-built careers pages: the
+      # rendered SNIFF at add time, and boards stored with crawl_mode RENDER.
+      # Needs Chromium installed once (see CLAUDE.md dev setup). Off means those
+      # pages simply are not readable; nothing else changes. Unit tests never
+      # load this file, and the code default is off.
+      enabled: ${JOBX_CRAWLER_RENDER:true}
+      # One render may take this long in total, of which at most network-idle-ms
+      # is spent waiting for the page to go quiet (chatty pages never do).
+      page-budget-ms: 20000
+      network-idle-ms: 8000
+      # Two single-thread lanes, each owning one Chromium (~100-200 MB): the
+      # interactive lane serves add-company resolves, where a person is waiting
+      # (and gives up after interactive-wait-ms); the background lane serves the
+      # scheduler. Raise background-threads past ~50 RENDER boards.
+      interactive-threads: 1
+      background-threads: 1
+      interactive-wait-ms: 25000
   cors:
     # Origins allowed to call this API from a browser. The Angular dev server is
     # the dev default; add the deployed dashboard origin per environment.

@@ -1,0 +1,4 @@
+url: https://www.mozilla.org/en-US/careers/listings/
+requested: https://www.mozilla.org/en-US/careers/listings/
+captured: 2026-11-01
+mode: STATIC

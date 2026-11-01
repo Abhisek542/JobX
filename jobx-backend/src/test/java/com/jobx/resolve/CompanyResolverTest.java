@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import static com.jobx.crawler.CrawlerTestSupport.crawler;
 import static com.jobx.enums.ResolveMode.NAME;
 import static com.jobx.enums.ResolveMode.URL;
 import static org.junit.jupiter.api.Assertions.*;
@@ -79,7 +80,7 @@ class CompanyResolverTest {
         // A real follower over the mocked fetcher, so tests see every follow fetch.
         follower = new CareersLinkFollower(safeUrlFetcher, 3, 5000, 3);
         resolver = new CompanyResolver(companyRepository, watchedCompanyRepository, jobRepository,
-                fetcherRegistry, safeUrlFetcher, boardProbe, follower, 4, 3, 8);
+                fetcherRegistry, safeUrlFetcher, boardProbe, follower, crawler(safeUrlFetcher), 4, 3, 8);
 
         user = new User();
         user.setId(UUID.randomUUID());
@@ -539,6 +540,9 @@ class CompanyResolverTest {
         verify(safeUrlFetcher, never()).fetchPage(contains("partner-careers.example.org"));
         verify(safeUrlFetcher, never()).fetchPage(contains(".pdf"));
         verify(safeUrlFetcher, never()).fetchPage(startsWith("mailto:"));
+        // PR E: nothing native was found, so the crawl step asked robots.txt
+        // (once, cached) before reading the pages already fetched above.
+        verify(safeUrlFetcher).fetch("https://acme.com/robots.txt");
         verifyNoMoreInteractions(safeUrlFetcher);
     }
 
@@ -754,5 +758,87 @@ class CompanyResolverTest {
 
         assertTrue(resolver.previewCatalog(user, unknown).isEmpty());
         verifyNoInteractions(fetcherRegistry);
+    }
+
+    // ------------------------------------------------------- crawl (PR E, last resort)
+
+    /** No ATS anywhere, but the page lists jobs itself: offered as a crawled board. */
+    @Test
+    void aCareersPageWithItsOwnListingIsOfferedAsACrawledBoard() {
+        serve("https://acme.example/careers", FixtureSupport.fixture("custom/static-listing.html"));
+
+        ResolveResponse response = resolver.resolve(user, URL, "https://acme.example/careers");
+
+        ResolvedBoardResponse candidate = response.candidates().get(0);
+        assertEquals("CRAWL", candidate.source());
+        assertEquals(AtsPlatform.CUSTOM, candidate.atsPlatform());
+        assertEquals("https://acme.example/careers", candidate.boardToken());
+        assertEquals("https://acme.example/careers", candidate.boardUrl());
+        assertEquals(4, candidate.jobCount());
+        assertEquals("Backend Engineer", candidate.sampleTitles().get(0));
+        assertNull(response.crawlBlocked());
+    }
+
+    /** The crawl is the last resort: a probed ATS board wins over the page's own list. */
+    @Test
+    void aProbedAtsBoardOutranksTheCrawl() {
+        serve("https://acme.example/careers", FixtureSupport.fixture("custom/static-listing.html"));
+        when(boardProbe.probe(any(), any())).thenReturn(List.of(new BoardProbe.Hit(
+                new BoardRef(AtsPlatform.LEVER, "acme"), new BoardPreview("Acme", 5, List.of("Engineer")))));
+
+        ResolveResponse response = resolver.resolve(user, URL, "https://acme.example/careers");
+
+        assertEquals(AtsPlatform.LEVER, response.candidates().get(0).atsPlatform());
+    }
+
+    @Test
+    void aPageSayingItHasNoOpeningsIsOfferedWithZeroRoles() {
+        serve("https://acme.example/careers", FixtureSupport.fixture("custom/no-openings.html"));
+
+        ResolveResponse response = resolver.resolve(user, URL, "https://acme.example/careers");
+
+        ResolvedBoardResponse candidate = response.candidates().get(0);
+        assertEquals("CRAWL", candidate.source());
+        assertEquals(0, candidate.jobCount());
+    }
+
+    @Test
+    void aBotWallIsReportedAsTheReasonNotWorkedAround() {
+        serve("https://acme.example/careers", FixtureSupport.fixture("custom/challenge.html"));
+
+        ResolveResponse response = resolver.resolve(user, URL, "https://acme.example/careers");
+
+        assertTrue(response.candidates().isEmpty());
+        assertEquals("BOT_PROTECTED", response.crawlBlocked());
+    }
+
+    @Test
+    void robotsTxtCanStopTheCrawl() {
+        serve("https://acme.example/careers", FixtureSupport.fixture("custom/static-listing.html"));
+        when(safeUrlFetcher.fetch("https://acme.example/robots.txt"))
+                .thenReturn(Optional.of("User-agent: *\nDisallow: /careers\n"));
+
+        ResolveResponse response = resolver.resolve(user, URL, "https://acme.example/careers");
+
+        assertTrue(response.candidates().isEmpty());
+        assertEquals("ROBOTS_DISALLOWED", response.crawlBlocked());
+    }
+
+    @Test
+    void aPageThatIsNeitherAListingNorEmptyIsAPlainDeadEnd() {
+        serve("https://acme.example/careers", FixtureSupport.fixture("custom/noise.html"));
+
+        ResolveResponse response = resolver.resolve(user, URL, "https://acme.example/careers");
+
+        assertTrue(response.candidates().isEmpty());
+        assertNull(response.crawlBlocked());
+    }
+
+    @Test
+    void nameModeNeverCrawls() {
+        ResolveResponse response = resolver.resolve(user, NAME, "Acme");
+
+        assertTrue(response.candidates().isEmpty());
+        verifyNoInteractions(safeUrlFetcher);
     }
 }

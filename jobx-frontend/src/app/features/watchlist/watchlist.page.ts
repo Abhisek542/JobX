@@ -2,7 +2,11 @@ import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@a
 import { MovedTo, WatchedCompanyResponse, PLATFORM_LABEL } from '../../core/models/watchlist.model';
 import { UiStore } from '../../core/services/ui.store';
 import { WatchlistStore } from '../../core/services/watchlist.store';
-import { companyStatusLine, moveBannerCopy } from '../../core/util/watchlist-status';
+import {
+  boardTokenLabel,
+  companyStatusLine,
+  moveBannerCopy,
+} from '../../core/util/watchlist-status';
 import { ActionBar } from '../../shared/layout/action-bar';
 import { CompanyLogo } from '../../shared/ui/company-logo';
 import { EmptyState } from '../../shared/ui/empty-state';
@@ -90,7 +94,7 @@ import { Icon } from '../../shared/ui/icon';
                   </div>
                   <div class="sub">
                     <span>{{ platform(company) }}</span>
-                    <code>{{ company.boardToken }}</code>
+                    <code [title]="company.boardToken">{{ boardLabel(company) }}</code>
                     <span class="dot"></span>
                     <span [class.bad]="line(company).bad">{{ line(company).text }}</span>
                   </div>
@@ -214,6 +218,10 @@ export class WatchlistPage {
 
   protected platform(company: WatchedCompanyResponse): string {
     return PLATFORM_LABEL[company.atsPlatform];
+  }
+
+  protected boardLabel(company: WatchedCompanyResponse): string {
+    return boardTokenLabel(company.atsPlatform, company.boardToken);
   }
 
   protected remove(company: WatchedCompanyResponse): void {

@@ -2,6 +2,7 @@ package com.jobx.dto;
 
 import com.jobx.entity.Job;
 import com.jobx.entity.Match;
+import com.jobx.enums.AtsPlatform;
 
 import java.time.Instant;
 import java.util.List;
@@ -47,7 +48,14 @@ public record MatchResponse(
          */
         String department,
         String team,
-        String employmentType
+        String employmentType,
+        /**
+         * The board's platform. CUSTOM means the role was read off the
+         * company's own careers page by the crawler (PR E), and the card shows
+         * a "Crawled" badge. Read through the company, like companyId, so it
+         * survives the posting's expiry.
+         */
+        AtsPlatform atsPlatform
 ) {
     public static MatchResponse from(Match match) {
         Job job = match.getJob();
@@ -65,7 +73,8 @@ public record MatchResponse(
                 match.getJobExpiredAt(),
                 job != null ? job.getDepartment() : null,
                 job != null ? job.getTeam() : null,
-                job != null ? job.getEmploymentType() : null
+                job != null ? job.getEmploymentType() : null,
+                match.getCompany().getAtsPlatform()
         );
     }
 }

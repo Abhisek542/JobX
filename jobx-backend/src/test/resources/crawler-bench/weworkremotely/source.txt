@@ -1,0 +1,4 @@
+url: https://weworkremotely.com/
+requested: https://weworkremotely.com/
+captured: 2026-11-01
+mode: STATIC

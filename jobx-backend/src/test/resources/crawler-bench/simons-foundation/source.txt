@@ -1,0 +1,4 @@
+url: https://www.simonsfoundation.org/careers/
+requested: https://www.simonsfoundation.org/careers/
+captured: 2026-11-01
+mode: STATIC

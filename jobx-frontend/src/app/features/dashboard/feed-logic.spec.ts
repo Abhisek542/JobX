@@ -36,6 +36,7 @@ function match(over: Partial<MatchResponse> = {}): MatchResponse {
     department: null,
     team: null,
     employmentType: null,
+    atsPlatform: 'GREENHOUSE',
     ...over,
   };
 }

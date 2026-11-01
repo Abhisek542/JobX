@@ -884,6 +884,12 @@ Detect ATS from careers URL, hit that platform's public job API directly:
   results found"; any 3xx means the board is gone; paging is capped by
   `jobx.fetch.jobvite.max-pages`.
 
+**Native API first; otherwise the `CUSTOM` smart crawler** (PR E, built
+2026-11-01), which reads a company's own careers page and is labelled
+"Crawled" everywhere it shows. It is a last resort, never a way past a bot
+wall or a robots.txt refusal. Its rules are in the PR E entry under
+"Add-company improvements" below.
+
 **Eleven platforms are implemented**: Greenhouse, Lever, Ashby and Workable
 (2026-08-02), SmartRecruiters (2026-08-29), and Workday, Rippling, BambooHR, Jobvite,
 JazzHR and Gusto (2026-10-04). Workday, Rippling, BambooHR and Jobvite were
@@ -901,7 +907,7 @@ in six days when they moved to SmartRecruiters. Since PR D (2026-10-31),
 `careers_url` re-sniffed (else a name probe on the other platforms), and what it
 finds is shown to watchers as a "moved to X" proposal. Still not a fetcher bug.
 
-## Add-company improvements + custom careers-page crawler (PLANNED 2026-09-27, not built yet)
+## Add-company improvements + custom careers-page crawler (PLANNED 2026-09-27; A–E built, E3 gated)
 
 Full plan: `jobx-backend/add-company-improvements.md`. Suggested order:
 A → B → C → E1 → E2 → D. Until each PR ships, the add-company and ATS sections
@@ -986,20 +992,56 @@ above still describe the code that is live. Update them as each PR lands.
     board (no live roles → 409), get-or-creates it, deletes this user's matches
     on the old board, re-points the same watch row and backfills.
   - Also fixed on the way: PR A and PR C both shipped a `V8`; PR A's is now `V9`.
-  - **Still waiting on E:** the CUSTOM directions below.
+  - **CUSTOM directions built with E (2026-11-01):** a failing native board
+    whose careers page now lists jobs itself gets a CUSTOM proposal (only
+    after the name probe found nothing); a failing CUSTOM board's own URL is
+    re-sniffed for a native board; a **healthy** CUSTOM board is re-sniffed
+    every `jobx.redetect.custom-check-days` (7, clocked from `created_at` until
+    its first look) and a native board with live roles becomes a
+    `NATIVE_AVAILABLE` proposal. Healthy CUSTOM boards are never probed or
+    re-crawled. Both kinds share `max-per-cycle`.
   Never switch silently. Moves work in both directions between native and custom:
   - native → `CUSTOM`, when a company leaves its ATS for an in-house page;
   - `CUSTOM` → native (`NATIVE_AVAILABLE`), checked weekly even on healthy
     boards, because native API data beats crawled data.
-- **E: `CUSTOM` smart crawler** for companies without a standard ATS. Last
-  resort in URL mode only. `board_token` is the canonical careers URL.
+- **E: `CUSTOM` smart crawler. E1 + E-bench + E2 built 2026-11-01**
+  (migration `V11__company_crawl_mode.sql`; differences from the plan are in
+  the PR E note of `add-company-improvements.md`). For companies without a
+  standard ATS. Last resort in URL mode only (resolve source `CRAWL`).
+  `board_token` is the canonical careers URL (`crawler/CanonicalUrl`: scheme
+  kept as served, host lower-cased, no fragment, tracking params and trailing
+  slash dropped). `external_id` is a SHA-256 prefix of the posting's canonical
+  URL (else title + location).
+  - Code: `com.jobx.crawler` (`CareerPageExtractor`, `PageSignals`,
+    `RobotsTxt`, `BrowserRenderer`, `CustomCrawler`) and
+    `fetcher/custom/CustomPageFetcher` (Workable-style two-call: list page,
+    then a plain detail GET only for unknown postings, capped at
+    `jobx.crawler.max-detail-fetches` (25) per cycle, the rest deferred).
+  - `companies.crawl_mode` (`STATIC`/`RENDER`) is set by `validateBoard` from
+    the pass that found the jobs at add time. The scheduler reads a board the
+    same way every cycle with **no fallback**, so a page that stops yielding
+    jobs shows up as FAILED.
+  - `ResolveResponse.crawlBlocked` (`BOT_PROTECTED`/`ROBOTS_DISALLOWED`) tells
+    the dead end why the crawl was refused. A page that says it has no
+    openings is offered as a 0-role CRAWL candidate.
+  - `MatchResponse.atsPlatform` drives the "Crawled" badge.
+  - **Dev setup:** rendering needs Chromium installed once:
+    `./mvnw -q exec:java -Dexec.mainClass=com.microsoft.playwright.CLI -Dexec.args="install chromium"`
+    (or `java -cp <test classpath> com.microsoft.playwright.CLI install chromium`).
+    On Linux also run `... install-deps chromium`. Set `JOBX_CRAWLER_RENDER=false`
+    (`jobx.crawler.render.enabled`) to run without a browser; the code default
+    is off, so unit tests never start one. An opt-in Chromium integration test
+    does not exist yet.
+  - Known residual: DNS rebinding on the recurring fetch, as for
+    `SafeUrlFetcher`.
   - E1: static extraction. JSON-LD `JobPosting` first, then a repeated-DOM-
     structure heuristic with title and URL filters.
   - E2: Playwright rendering for JS-heavy pages. Also used for "rendered
     SNIFF", which finds ATS links that are loaded in JavaScript.
     **Playwright Java is not thread-safe**, so `BrowserRenderer` confines each
-    `Playwright`/Chromium to its own single-thread lane, and callers get a
-    `Future<String>`:
+    `Playwright`/Chromium to its own single-thread lane. Callers block on the
+    lane's result (the interactive lane gives up after
+    `interactive-wait-ms`):
     - `interactive` (1 thread) serves resolve requests where a user is waiting;
     - `background` (1 thread) serves scheduler `RENDER` boards;
     - the split exists so a user never queues behind a scheduler cycle;

@@ -1,5 +1,10 @@
 import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
-import { MatchResponse, MatchStatus } from '../../core/models/match.model';
+import {
+  CRAWLED_TOOLTIP,
+  isCrawled,
+  MatchResponse,
+  MatchStatus,
+} from '../../core/models/match.model';
 import { absoluteTime, relTime } from '../../core/util/time';
 import { band, jobLabels } from '../../features/dashboard/feed-logic';
 import { CompanyLogo } from '../ui/company-logo';
@@ -34,6 +39,15 @@ const STATUS_LABEL: Record<MatchStatus, string> = {
           <div class="company">{{ match().companyName }}</div>
           @if (labels(); as l) {
             <div class="company">{{ l }}</div>
+          }
+          @if (crawled()) {
+            <span
+              class="tag tag-crawled"
+              style="display:inline-block;margin-top:6px"
+              [title]="crawledTooltip"
+            >
+              Crawled
+            </span>
           }
         </div>
         <button class="x-btn" type="button" aria-label="Close" (click)="closed.emit()">
@@ -123,6 +137,9 @@ export class MatchDetailDrawer {
 
   protected readonly scoreBand = computed(() => band(this.match().score));
   protected readonly labels = computed(() => jobLabels(this.match()));
+  /** Read off the company's careers page by the crawler (backend PR E). */
+  protected readonly crawled = computed(() => isCrawled(this.match()));
+  protected readonly crawledTooltip = CRAWLED_TOOLTIP;
   protected readonly statusLabel = computed(() => STATUS_LABEL[this.match().status]);
   protected readonly found = computed(() => relTime(this.match().createdAt));
   protected readonly absolute = computed(() => absoluteTime(this.match().createdAt));

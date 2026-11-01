@@ -14,6 +14,9 @@ export type AtsPlatform =
   | 'JAZZHR'
   | 'ICIMS'
   | 'GUSTO'
+  // A company's own careers page, read by the crawler (PR E). The board token
+  // is the canonical careers URL. Never offered in the manual form.
+  | 'CUSTOM'
   | 'UNSUPPORTED';
 export type CompanyStatus = 'ACTIVE' | 'PAUSED' | 'UNSUPPORTED';
 export type FetchStatus = 'SUCCESS' | 'FAILED';
@@ -114,6 +117,7 @@ export const PLATFORM_LABEL: Record<AtsPlatform, string> = {
   JAZZHR: 'JazzHR',
   ICIMS: 'iCIMS',
   GUSTO: 'Gusto',
+  CUSTOM: 'Careers page',
   UNSUPPORTED: 'Unsupported board',
 };
 
@@ -178,7 +182,7 @@ export const TOKEN_HINTS: Record<
 // --------------------------------------------------------------------------
 
 /** How a candidate board was found. Mirrors com.jobx.resolve.CompanyResolver.Source. */
-export type ResolveSource = 'CATALOG' | 'URL' | 'SNIFF' | 'PROBE';
+export type ResolveSource = 'CATALOG' | 'URL' | 'SNIFF' | 'PROBE' | 'CRAWL';
 
 /**
  * One board Jobx believes matches what the user typed, with its evidence.
@@ -211,7 +215,15 @@ export interface ResolveResponse {
    * dead end say something more useful than "not found".
    */
   platformHint: AtsPlatform | null;
+  /**
+   * Set when the last-resort crawl of the careers page was refused rather than
+   * merely empty: BOT_PROTECTED (a challenge wall, never bypassed) or
+   * ROBOTS_DISALLOWED. Null otherwise.
+   */
+  crawlBlocked?: CrawlBlocked | null;
 }
+
+export type CrawlBlocked = 'BOT_PROTECTED' | 'ROBOTS_DISALLOWED';
 
 /**
  * How the user asked to look a company up. Mirrors com.jobx.enums.ResolveMode.
@@ -247,4 +259,5 @@ export const SOURCE_LABEL: Record<ResolveSource, string> = {
   URL: 'From the link you pasted',
   SNIFF: 'Found on their careers page',
   PROBE: 'Matched to their job board',
+  CRAWL: 'Read from their careers page',
 };

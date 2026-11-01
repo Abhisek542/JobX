@@ -66,6 +66,15 @@
             <version>1.17.2</version>
         </dependency>
 
+        <!-- Headless Chromium for JavaScript-built careers pages (add-company PR E2).
+             Browsers are installed separately, once:
+             mvn exec:java -e -D exec.mainClass=com.microsoft.playwright.CLI -D exec.args="install chromium" -->
+        <dependency>
+            <groupId>com.microsoft.playwright</groupId>
+            <artifactId>playwright</artifactId>
+            <version>1.63.0</version>
+        </dependency>
+
         <!-- Lombok — reduce boilerplate -->
         <dependency>
             <groupId>org.projectlombok</groupId>

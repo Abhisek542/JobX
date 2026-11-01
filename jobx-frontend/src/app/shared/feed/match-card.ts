@@ -1,5 +1,10 @@
 import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
-import { MatchResponse, MatchStatus } from '../../core/models/match.model';
+import {
+  CRAWLED_TOOLTIP,
+  isCrawled,
+  MatchResponse,
+  MatchStatus,
+} from '../../core/models/match.model';
 import { relTime } from '../../core/util/time';
 import { band, jobLabels } from '../../features/dashboard/feed-logic';
 import { CompanyLogo } from '../ui/company-logo';
@@ -91,6 +96,9 @@ const STATUS_TAG: Record<MatchStatus, { cls: string; text: string } | null> = {
               @if (tag(); as t) {
                 <span class="tag" [class]="'tag ' + t.cls">{{ t.text }}</span>
               }
+              @if (crawled()) {
+                <span class="tag tag-crawled" [title]="crawledTooltip">Crawled</span>
+              }
             </div>
 
             <div class="meta">
@@ -166,6 +174,9 @@ export class MatchCard {
   );
   protected readonly scorePct = computed(() => Math.round(this.match().score));
   protected readonly tag = computed(() => STATUS_TAG[this.match().status]);
+  /** Read off the company's careers page by the crawler, not an ATS API. */
+  protected readonly crawled = computed(() => isCrawled(this.match()));
+  protected readonly crawledTooltip = CRAWLED_TOOLTIP;
   protected readonly found = computed(() => relTime(this.match().createdAt));
   /** Set once the backend's six-day TTL has swept the posting away. */
   protected readonly expired = computed(() => {

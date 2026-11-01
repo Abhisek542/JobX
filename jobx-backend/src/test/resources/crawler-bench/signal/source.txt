@@ -1,0 +1,4 @@
+url: https://signal.org/workworkwork/
+requested: https://signal.org/workworkwork/
+captured: 2026-11-01
+mode: STATIC

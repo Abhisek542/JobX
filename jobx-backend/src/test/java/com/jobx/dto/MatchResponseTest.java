@@ -3,6 +3,7 @@ package com.jobx.dto;
 import com.jobx.entity.Company;
 import com.jobx.entity.Job;
 import com.jobx.entity.Match;
+import com.jobx.enums.AtsPlatform;
 import org.junit.jupiter.api.Test;
 
 import java.util.UUID;
@@ -48,5 +49,14 @@ class MatchResponseTest {
         assertNull(response.department());
         assertNull(response.team());
         assertNull(response.employmentType());
+    }
+
+    /** The "Crawled" badge reads the board's platform, which outlives the posting. */
+    @Test
+    void carriesTheBoardsPlatformEvenAfterExpiry() {
+        Match match = match();
+        match.getCompany().setAtsPlatform(AtsPlatform.CUSTOM);
+
+        assertEquals(AtsPlatform.CUSTOM, MatchResponse.from(match).atsPlatform());
     }
 }

@@ -24,12 +24,12 @@ import java.net.InetAddress;
  * Cloud metadata endpoints (169.254.169.254 and friends) fall out of the
  * link-local rule rather than needing a name of their own.
  */
-final class PrivateAddressGuard {
+public final class PrivateAddressGuard {
 
     private PrivateAddressGuard() {
     }
 
-    static boolean isBlocked(InetAddress address) {
+    public static boolean isBlocked(InetAddress address) {
         if (address == null) {
             return true;
         }
