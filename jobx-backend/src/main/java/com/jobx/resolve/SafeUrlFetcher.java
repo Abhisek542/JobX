@@ -78,7 +78,7 @@ public class SafeUrlFetcher {
      * HTML a user would see, not about hiding: the fetch happens once, on that
      * user's own request, for a URL they typed.
      */
-    private static final String USER_AGENT =
+    public static final String USER_AGENT =
             "Mozilla/5.0 (compatible; Jobx/1.0; +https://github.com/jobx)";
 
     private final WebClient webClient;

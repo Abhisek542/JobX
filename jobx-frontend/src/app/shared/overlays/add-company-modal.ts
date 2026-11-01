@@ -12,6 +12,7 @@ import { AppError } from '../../core/models/api-error.model';
 import {
   AtsPlatform,
   CompanySearchResponse,
+  CrawlBlocked,
   PLATFORM_LABEL,
   ResolveMode,
   ResolvedBoardResponse,
@@ -266,6 +267,11 @@ type Step = 'input' | 'resolving' | 'confirm' | 'dead-end';
                   <span class="ac-card-source">
                     <app-icon name="check" size="sm" />{{ sourceLabel(board) }}
                   </span>
+                  @if (board.source === 'CRAWL') {
+                    <!-- No ATS behind this page: Jobx reads the page itself, so
+                         say plainly that it can miss things (honesty, §7). -->
+                    <span class="ac-card-empty">Crawled, so some roles may be missed.</span>
+                  }
                   @if (board.alreadyWatched) {
                     <span class="ac-card-watched">Already on your watchlist</span>
                   }
@@ -291,7 +297,17 @@ type Step = 'input' | 'resolving' | 'confirm' | 'dead-end';
               <app-icon name="info" size="sm" />
               <div>
                 <b>We can't watch this one yet.</b>
-                @if (platformHint(); as hinted) {
+                @if (crawlBlocked() === 'BOT_PROTECTED') {
+                  <p>
+                    Their careers page is behind bot protection, and Jobx doesn't get around that.
+                    If they use a job board, pasting its direct link may work.
+                  </p>
+                } @else if (crawlBlocked() === 'ROBOTS_DISALLOWED') {
+                  <p>
+                    Their careers page asks automated readers not to visit it (robots.txt), so Jobx
+                    won't. If they use a job board, pasting its direct link may work.
+                  </p>
+                } @else if (platformHint(); as hinted) {
                   @if (isWatchable(hinted)) {
                     <p>
                       {{ query() }} looks like it uses {{ label(hinted) }}, but their board is
@@ -407,6 +423,8 @@ export class AddCompanyModal {
   protected readonly candidates = signal<ResolvedBoardResponse[]>([]);
   protected readonly selected = signal<ResolvedBoardResponse | null>(null);
   protected readonly platformHint = signal<AtsPlatform | null>(null);
+  /** Why the last-resort crawl was refused (bot wall, robots.txt), if it was. */
+  protected readonly crawlBlocked = signal<CrawlBlocked | null>(null);
   /** The resolving step is loading a known catalog board, not searching for one. */
   protected readonly resolvingKnown = signal(false);
   protected readonly advancedOpen = signal(false);
@@ -581,6 +599,7 @@ export class AddCompanyModal {
     this.api.resolve({ mode, query }).subscribe({
       next: (response) => {
         this.platformHint.set(response.platformHint);
+        this.crawlBlocked.set(response.crawlBlocked ?? null);
         if (!response.candidates.length) {
           this.reportUnsupported(query, response.platformHint, mode);
           this.step.set('dead-end');
@@ -618,8 +637,9 @@ export class AddCompanyModal {
     }
     // Only a board read off the pasted link or the page it points to was
     // found on that page; it is where Jobx looks again if the board later
-    // stops working. A probed guess on the domain label was not.
-    const fromPage = board.source === 'URL' || board.source === 'SNIFF';
+    // stops working. A probed guess on the domain label was not. A crawled
+    // (CUSTOM) board is that page, so it is stored too.
+    const fromPage = board.source === 'URL' || board.source === 'SNIFF' || board.source === 'CRAWL';
     const careersUrl = fromPage ? (this.resolvedCareersUrl() ?? undefined) : undefined;
     void this.watch(board.companyName, board.atsPlatform, board.boardToken, careersUrl);
   }

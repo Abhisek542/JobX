@@ -184,7 +184,7 @@ public final class SlugCandidates {
      * No full public-suffix list, on purpose: this only has to recognise the
      * ccTLD shapes an India-first product meets. Null for a host with no dot.
      */
-    static String registrableDomain(String host) {
+    public static String registrableDomain(String host) {
         if (host == null) {
             return null;
         }

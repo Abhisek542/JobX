@@ -6,7 +6,8 @@ import { safeNext } from './redirect';
 import { normalizeList, parseList } from './text-lists';
 import { relTime } from './time';
 import { looksLikeUrl } from './url';
-import { companyStatusLine, moveBannerCopy } from './watchlist-status';
+import { boardTokenLabel, companyStatusLine, moveBannerCopy } from './watchlist-status';
+import { isCrawled } from '../models/match.model';
 
 describe('identity (derived from the email local-part)', () => {
   it('derives a display name', () => {
@@ -201,5 +202,31 @@ describe('moveBannerCopy', () => {
       reason: 'NATIVE_AVAILABLE',
     });
     expect(copy).toContain("PhonePe's careers page now uses Greenhouse");
+  });
+});
+
+describe('crawled (CUSTOM) boards', () => {
+  it('words a move to an in-house careers page as a question, with the caveat', () => {
+    const company = { companyName: 'PhonePe' } as WatchedCompanyResponse;
+    const copy = moveBannerCopy(company, {
+      atsPlatform: 'CUSTOM',
+      boardToken: 'https://phonepe.com/careers',
+      boardUrl: 'https://phonepe.com/careers',
+      reason: 'FAILING',
+    });
+    expect(copy).toContain('moved to their own careers page');
+    expect(copy).toContain('some roles may be missed');
+  });
+
+  it('shows a careers URL as host + path, and other tokens as they are', () => {
+    expect(boardTokenLabel('CUSTOM', 'https://www.acme.com/careers')).toBe('acme.com/careers');
+    expect(boardTokenLabel('CUSTOM', 'https://jobs.acme.com/')).toBe('jobs.acme.com');
+    expect(boardTokenLabel('CUSTOM', 'not a url')).toBe('not a url');
+    expect(boardTokenLabel('GREENHOUSE', 'razorpay')).toBe('razorpay');
+  });
+
+  it('flags only CUSTOM matches as crawled', () => {
+    expect(isCrawled({ atsPlatform: 'CUSTOM' })).toBe(true);
+    expect(isCrawled({ atsPlatform: 'GREENHOUSE' })).toBe(false);
   });
 });

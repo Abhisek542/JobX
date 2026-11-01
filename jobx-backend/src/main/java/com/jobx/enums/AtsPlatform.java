@@ -20,5 +20,11 @@ public enum AtsPlatform {
     JAZZHR,
     ICIMS,
     GUSTO,
+    /**
+     * A careers page on the company's own site, read by the smart crawler
+     * (add-company PR E). The board token is the canonical careers URL. Never
+     * probed, never offered in the manual form, and labelled "Crawled" in the feed.
+     */
+    CUSTOM,
     UNSUPPORTED // no recognised platform
 }

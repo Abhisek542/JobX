@@ -1,0 +1,4 @@
+url: https://careers.swiggy.in/
+requested: https://careers.swiggy.in/
+captured: 2026-11-01
+mode: RENDER

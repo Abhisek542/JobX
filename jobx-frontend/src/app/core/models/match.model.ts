@@ -1,3 +1,5 @@
+import { AtsPlatform } from './watchlist.model';
+
 /** Mirrors com.jobx.dto.MatchResponse. Read from backend source, not the docs. */
 export type MatchStatus = 'NEW' | 'SEEN' | 'APPLIED' | 'DISMISSED';
 
@@ -37,7 +39,20 @@ export interface MatchResponse {
   department: string | null;
   team: string | null;
   employmentType: string | null;
+  /**
+   * The board's platform. 'CUSTOM' means the role was read off the company's
+   * own careers page by the crawler, so the card shows a "Crawled" badge:
+   * crawled details may be incomplete. Survives the posting's expiry.
+   */
+  atsPlatform: AtsPlatform;
 }
+
+/** True for a role read off a careers page by the crawler rather than an ATS API. */
+export function isCrawled(match: Pick<MatchResponse, 'atsPlatform'>): boolean {
+  return match.atsPlatform === 'CUSTOM';
+}
+
+export const CRAWLED_TOOLTIP = "Read from the company's careers page. Details may be incomplete.";
 
 /** PATCH /matches/{id} body. */
 export interface UpdateMatchStatusRequest {

@@ -286,6 +286,7 @@ public final class AtsUrlParser {
             case JAZZHR -> "https://" + token + ".applytojob.com/apply";
             case ICIMS -> "https://" + token + ".icims.com/jobs";
             case GUSTO -> "https://jobs.gusto.com/boards/" + token;
+            case CUSTOM -> token; // the token is the careers page URL itself
             case UNSUPPORTED -> null;
         };
     }

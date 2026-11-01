@@ -303,6 +303,12 @@ a {
   background: var(--panel-3);
   color: var(--muted);
 }
+/* A role read off a careers page by the crawler (backend PR E), not an ATS API. */
+.tag-crawled {
+  background: var(--info-wash);
+  color: var(--info);
+  cursor: help;
+}
 
 @media (prefers-reduced-motion: reduce) {
   * {

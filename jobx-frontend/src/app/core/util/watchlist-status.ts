@@ -1,4 +1,9 @@
-import { MovedTo, PLATFORM_LABEL, WatchedCompanyResponse } from '../models/watchlist.model';
+import {
+  AtsPlatform,
+  MovedTo,
+  PLATFORM_LABEL,
+  WatchedCompanyResponse,
+} from '../models/watchlist.model';
 import { relTime } from './time';
 
 export type StatusDot = 'ok' | 'warn' | 'bad' | 'idle';
@@ -54,11 +59,33 @@ export function companyStatusLine(
 }
 
 /**
+ * How a board's token reads on a watchlist row. A crawled (CUSTOM) board's
+ * token is a whole careers URL; the host (plus path when there is one) is what
+ * identifies it at a glance. Every other token is shown as is.
+ */
+export function boardTokenLabel(platform: AtsPlatform, token: string): string {
+  if (platform !== 'CUSTOM') {
+    return token;
+  }
+  try {
+    const url = new URL(token);
+    const path = url.pathname === '/' ? '' : url.pathname;
+    return url.host.replace(/^www\./, '') + path;
+  } catch {
+    return token;
+  }
+}
+
+/**
  * The "they moved" banner on a watchlist row (add-company-improvements PR D).
  * The backend only proposes; this copy must read as a question the user
  * answers, never as something Jobx already did.
  */
 export function moveBannerCopy(company: WatchedCompanyResponse, moved: MovedTo): string {
+  if (moved.atsPlatform === 'CUSTOM') {
+    // They left their ATS for an in-house page that the crawler can read.
+    return `${company.companyName} seems to have moved to their own careers page. Switch this watch to read it directly? Crawled, so some roles may be missed.`;
+  }
   if (moved.reason === 'NATIVE_AVAILABLE') {
     return `${company.companyName}'s careers page now uses ${PLATFORM_LABEL[moved.atsPlatform]}. Switch to the direct feed for more complete data?`;
   }

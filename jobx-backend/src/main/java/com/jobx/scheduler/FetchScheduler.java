@@ -148,7 +148,7 @@ public class FetchScheduler {
         try {
             int checked = boardRedetector.redetectDue(companies);
             if (checked > 0) {
-                log.info("Redetect: checked {} failing board(s)", checked);
+                log.info("Redetect: checked {} board(s)", checked);
             }
         } catch (Exception e) {
             log.error("Redetect pass failed", e);

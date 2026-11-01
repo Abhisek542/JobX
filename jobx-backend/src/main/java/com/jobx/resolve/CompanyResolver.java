@@ -1,5 +1,9 @@
 package com.jobx.resolve;
 
+import com.jobx.crawler.BrowserRenderer;
+import com.jobx.crawler.CustomCrawler;
+import com.jobx.crawler.ExtractedJob;
+import com.jobx.crawler.PageSignals;
 import com.jobx.dto.CompanySearchResponse;
 import com.jobx.dto.ResolveResponse;
 import com.jobx.dto.ResolvedBoardResponse;
@@ -14,6 +18,7 @@ import com.jobx.repository.CompanyRepository;
 import com.jobx.repository.JobRepository;
 import com.jobx.repository.WatchedCompanyRepository;
 import lombok.extern.slf4j.Slf4j;
+import org.jsoup.Jsoup;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -42,8 +47,15 @@ import java.util.UUID;
  *    2. SNIFF — fetch the careers page and read the ATS link out of the HTML.
  *       If it names no board, follow at most three same-site careers links on
  *       it, one hop, and sniff those ({@link CareersLinkFollower}).
+ *       Still nothing, and the page looks JavaScript-built: render it in
+ *       headless Chromium (interactive lane) and sniff the rendered DOM.
  *    3. PROBE — on the domain label, narrowed to one platform when the page
  *       named its ATS without naming the board.
+ *    4. CRAWL (PR E, last resort) — the careers page lists jobs itself: offer it
+ *       as a CUSTOM board read by {@link CustomCrawler} (landing page, static
+ *       or rendered, then the one-hop pages, static only). A page that says it
+ *       has no openings is offered with 0 roles. A bot wall or a robots.txt
+ *       refusal is reported as {@code crawlBlocked}, never worked around.
  *
  * SNIFF and PROBE are complementary rather than redundant, which is why URL mode
  * has both. Measured live: sniffing is the only thing that recovers Razorpay's
@@ -65,7 +77,9 @@ public class CompanyResolver {
 
     /** How this candidate was found — surfaced so the UI can be honest about it. */
     public enum Source {
-        CATALOG, URL, SNIFF, PROBE
+        CATALOG, URL, SNIFF, PROBE,
+        /** Read off the company's own careers page by the smart crawler (PR E). */
+        CRAWL
     }
 
     /**
@@ -87,6 +101,7 @@ public class CompanyResolver {
     private final SafeUrlFetcher safeUrlFetcher;
     private final BoardProbe boardProbe;
     private final CareersLinkFollower careersLinkFollower;
+    private final CustomCrawler customCrawler;
     private final int maxSlugCandidates;
     private final int maxSniffedBoards;
     private final int catalogPageSize;
@@ -98,6 +113,7 @@ public class CompanyResolver {
                            SafeUrlFetcher safeUrlFetcher,
                            BoardProbe boardProbe,
                            CareersLinkFollower careersLinkFollower,
+                           CustomCrawler customCrawler,
                            @Value("${jobx.resolve.max-slug-candidates:4}") int maxSlugCandidates,
                            @Value("${jobx.resolve.max-sniffed-boards:3}") int maxSniffedBoards,
                            @Value("${jobx.resolve.catalog-page-size:8}") int catalogPageSize) {
@@ -108,6 +124,7 @@ public class CompanyResolver {
         this.safeUrlFetcher = safeUrlFetcher;
         this.boardProbe = boardProbe;
         this.careersLinkFollower = careersLinkFollower;
+        this.customCrawler = customCrawler;
         this.maxSlugCandidates = maxSlugCandidates;
         this.maxSniffedBoards = maxSniffedBoards;
         this.catalogPageSize = catalogPageSize;
@@ -202,6 +219,8 @@ public class CompanyResolver {
         // 2. SNIFF — fetch the careers page and read the board off it.
         AtsPlatform platformHint = null;
         Optional<SafeUrlFetcher.FetchedPage> page = safeUrlFetcher.fetchPage(url);
+        List<SafeUrlFetcher.FetchedPage> hops = List.of();
+        BrowserRenderer.Rendered rendered = null;
         if (page.isPresent()) {
             SniffResult sniffed = sniff(user, page.get().body());
             if (!sniffed.candidates().isEmpty()) {
@@ -213,7 +232,8 @@ public class CompanyResolver {
             // roles" link. At most a few same-site links, never further than
             // one hop; the first followed page that yields a board wins, in
             // link order. The landing page's own hint outranks theirs.
-            for (SafeUrlFetcher.FetchedPage next : careersLinkFollower.follow(page.get())) {
+            hops = careersLinkFollower.follow(page.get());
+            for (SafeUrlFetcher.FetchedPage next : hops) {
                 SniffResult hop = sniff(user, next.body());
                 if (!hop.candidates().isEmpty()) {
                     return new ResolveResponse(hop.candidates(), null);
@@ -222,10 +242,82 @@ public class CompanyResolver {
                     platformHint = hop.platformHint();
                 }
             }
+
+            // 2c. RENDERED SNIFF (PR E2) — a page that builds itself in
+            // JavaScript may load its ATS board link only in the browser (the
+            // Atlan/FamPay case). Only for pages that look JS-driven: a render
+            // costs a Chromium page load while the user waits.
+            if (looksJsDriven(page.get())) {
+                rendered = customCrawler.render(page.get().finalUri(), BrowserRenderer.Lane.INTERACTIVE).orElse(null);
+                if (rendered != null) {
+                    SniffResult renderedSniff = sniff(user, rendered.html());
+                    if (!renderedSniff.candidates().isEmpty()) {
+                        return new ResolveResponse(renderedSniff.candidates(), null);
+                    }
+                    if (platformHint == null) {
+                        platformHint = renderedSniff.platformHint();
+                    }
+                }
+            }
         }
 
         // 3. PROBE — on the domain label, narrowed by the hint if the page gave one.
-        return probe(user, url, platformHint);
+        ResolveResponse probed = probe(user, url, platformHint);
+        if (!probed.isEmpty() || page.isEmpty()) {
+            return probed;
+        }
+
+        // 4. CRAWL (PR E) — no native board anywhere, so read the jobs off the
+        // company's own page. Last on purpose: a native API always beats
+        // crawling.
+        return crawl(user, page.get(), hops, rendered, platformHint);
+    }
+
+    /**
+     * The last resort: the pasted page itself (static, then rendered), then the
+     * one-hop careers pages already fetched above. The first page with jobs
+     * becomes a CUSTOM candidate whose token is that page's canonical URL. The
+     * pasted page saying "no open roles" is offered too, as an empty board:
+     * the user named this page as the company's careers page, and it says so.
+     */
+    private ResolveResponse crawl(User user, SafeUrlFetcher.FetchedPage landing,
+                                  List<SafeUrlFetcher.FetchedPage> hops,
+                                  BrowserRenderer.Rendered rendered, AtsPlatform platformHint) {
+        CustomCrawler.Outcome landingOutcome = customCrawler.discover(landing, rendered, BrowserRenderer.Lane.INTERACTIVE);
+        if (landingOutcome.status() == CustomCrawler.Status.JOBS) {
+            return new ResolveResponse(List.of(crawlCandidate(user, landingOutcome)), platformHint);
+        }
+        for (SafeUrlFetcher.FetchedPage hop : hops) {
+            // Static only: a render per followed link would multiply the wait.
+            CustomCrawler.Outcome hopOutcome = customCrawler.discoverStatic(hop);
+            if (hopOutcome.status() == CustomCrawler.Status.JOBS) {
+                return new ResolveResponse(List.of(crawlCandidate(user, hopOutcome)), platformHint);
+            }
+        }
+        if (landingOutcome.status() == CustomCrawler.Status.NO_OPENINGS) {
+            return new ResolveResponse(List.of(crawlCandidate(user, landingOutcome)), platformHint);
+        }
+        String blocked = switch (landingOutcome.status()) {
+            case BOT_PROTECTED, ROBOTS_DISALLOWED -> landingOutcome.status().name();
+            default -> null;
+        };
+        log.debug("Crawl of {} found nothing: {}", landing.finalUri(), landingOutcome.describe());
+        return new ResolveResponse(List.of(), platformHint, blocked);
+    }
+
+    private ResolvedBoardResponse crawlCandidate(User user, CustomCrawler.Outcome outcome) {
+        String token = outcome.canonicalUrl();
+        BoardPreview preview = new BoardPreview(outcome.siteName(), outcome.jobs().size(),
+                outcome.jobs().stream().limit(BoardPreview.SAMPLE_SIZE).map(ExtractedJob::title).toList());
+        return toResponse(user, new BoardRef(AtsPlatform.CUSTOM, token), preview, Source.CRAWL,
+                SlugCandidates.hostOf(token));
+    }
+
+    private boolean looksJsDriven(SafeUrlFetcher.FetchedPage page) {
+        if (!customCrawler.canRender()) {
+            return false;
+        }
+        return PageSignals.looksJsDriven(Jsoup.parse(page.body(), page.finalUri().toString()));
     }
 
     /** What one careers page yielded: confirmed boards, or failing that a hint. */

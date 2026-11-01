@@ -1,0 +1,4 @@
+url: https://www.elastic.co/careers/
+requested: https://www.elastic.co/careers/
+captured: 2026-11-01
+mode: STATIC

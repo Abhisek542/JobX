@@ -6,6 +6,7 @@ import com.jobx.fetcher.AtsFetchException;
 import com.jobx.fetcher.AtsFetcher;
 import com.jobx.fetcher.BoardPreview;
 import com.jobx.fetcher.FetcherRegistry;
+import com.jobx.fetcher.FixtureSupport;
 import com.jobx.repository.CompanyRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -21,6 +22,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import static com.jobx.crawler.CrawlerTestSupport.crawler;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
@@ -61,12 +63,13 @@ class BoardRedetectorTest {
         when(fetcherRegistry.getFetcher(AtsPlatform.GREENHOUSE)).thenReturn(Optional.of(greenhouse));
         when(fetcherRegistry.getFetcher(AtsPlatform.LEVER)).thenReturn(Optional.of(lever));
         when(fetcherRegistry.getFetcher(AtsPlatform.SMARTRECRUITERS)).thenReturn(Optional.of(smartRecruiters));
+        when(fetcherRegistry.getFetcher(AtsPlatform.CUSTOM)).thenReturn(Optional.of(mock(AtsFetcher.class)));
         when(follower.follow(any())).thenReturn(List.of());
         when(boardProbe.probe(anyList(), anyList())).thenReturn(List.of());
         when(companyRepository.findById(any())).thenReturn(Optional.empty());
 
         redetector = new BoardRedetector(companyRepository, fetcherRegistry, safeUrlFetcher,
-                follower, boardProbe, Clock.fixed(NOW, ZoneOffset.UTC), 12, 24, 5, 4, 3);
+                follower, boardProbe, crawler(safeUrlFetcher), Clock.fixed(NOW, ZoneOffset.UTC), 12, 24, 7, 5, 4, 3);
     }
 
     private static Company failing(String name, String token, Duration failingFor) {
@@ -299,5 +302,117 @@ class BoardRedetectorTest {
 
         assertDoesNotThrow(() -> redetector.redetectDue(List.of(first, second)));
         verify(companyRepository).save(second);
+    }
+
+    // ---- CUSTOM directions (PR E) ----
+
+    private static Company crawled(Company.FetchStatus status) {
+        Company company = new Company();
+        company.setId(UUID.randomUUID());
+        company.setDisplayName("PhonePe");
+        company.setAtsPlatform(AtsPlatform.CUSTOM);
+        company.setBoardToken(CAREERS);
+        company.setLastFetchStatus(status);
+        company.setCreatedAt(NOW.minus(Duration.ofDays(30)));
+        if (status == Company.FetchStatus.FAILED) {
+            company.setFailingSince(NOW.minus(Duration.ofHours(13)));
+        }
+        return company;
+    }
+
+    @Test
+    void aFailingNativeBoardWhoseCareersPageNowListsJobsItselfProposesTheCrawledPage() {
+        Company phonepe = failing("PhonePe", "phonepe", Duration.ofHours(13));
+        phonepe.setCareersUrl(CAREERS);
+        careersPage(FixtureSupport.fixture("custom/static-listing.html"));
+
+        redetector.redetectDue(List.of(phonepe));
+
+        assertEquals(AtsPlatform.CUSTOM, phonepe.getMovedToPlatform());
+        assertEquals(CAREERS, phonepe.getMovedToToken());
+        assertEquals(Company.MoveReason.FAILING, phonepe.getMovedToReason());
+        // The crawl is the last resort: the name probe ran first
+        verify(boardProbe).probe(anyList(), anyList());
+    }
+
+    @Test
+    void aProbedNativeBoardOutranksTheCrawledPage() {
+        Company phonepe = failing("PhonePe", "phonepe", Duration.ofHours(13));
+        phonepe.setCareersUrl(CAREERS);
+        careersPage(FixtureSupport.fixture("custom/static-listing.html"));
+        when(boardProbe.probe(anyList(), anyList())).thenReturn(List.of(
+                new BoardProbe.Hit(new BoardRef(AtsPlatform.LEVER, "phonepe"), live(3))));
+
+        redetector.redetectDue(List.of(phonepe));
+
+        assertEquals(AtsPlatform.LEVER, phonepe.getMovedToPlatform());
+    }
+
+    @Test
+    void aHealthyCrawledBoardWhosePageNowLinksAnAtsGetsANativeAvailableProposal() {
+        Company phonepe = crawled(Company.FetchStatus.SUCCESS);
+        careersPage("<a href=\"https://jobs.lever.co/phonepe\">Open roles</a>");
+        when(lever.previewBoard(any())).thenReturn(live(6));
+
+        redetector.redetectDue(List.of(phonepe));
+
+        assertEquals(AtsPlatform.LEVER, phonepe.getMovedToPlatform());
+        assertEquals(Company.MoveReason.NATIVE_AVAILABLE, phonepe.getMovedToReason());
+    }
+
+    @Test
+    void aHealthyCrawledBoardIsNeverProbedOrReCrawled() {
+        Company phonepe = crawled(Company.FetchStatus.SUCCESS);
+        careersPage(FixtureSupport.fixture("custom/static-listing.html"));
+
+        redetector.redetectDue(List.of(phonepe));
+
+        assertFalse(phonepe.hasMoveProposal());
+        assertEquals(NOW, phonepe.getLastRedetectAt());
+        verifyNoInteractions(boardProbe);
+    }
+
+    @Test
+    void aFailingCrawledBoardIsReSniffedForANativeBoard() {
+        Company phonepe = crawled(Company.FetchStatus.FAILED);
+        careersPage("<a href=\"https://jobs.lever.co/phonepe\">Open roles</a>");
+        when(lever.previewBoard(any())).thenReturn(live(2));
+
+        redetector.redetectDue(List.of(phonepe));
+
+        assertEquals(AtsPlatform.LEVER, phonepe.getMovedToPlatform());
+        assertEquals(Company.MoveReason.FAILING, phonepe.getMovedToReason());
+    }
+
+    @Test
+    void aFailingCrawledBoardIsNotProposedAsAMoveToItself() {
+        Company phonepe = crawled(Company.FetchStatus.FAILED);
+        careersPage(FixtureSupport.fixture("custom/static-listing.html"));
+
+        redetector.redetectDue(List.of(phonepe));
+
+        assertFalse(phonepe.hasMoveProposal());
+    }
+
+    @Test
+    void healthyCrawledBoardsAreCheckedWeekly() {
+        Company addedSixDaysAgo = crawled(Company.FetchStatus.SUCCESS);
+        addedSixDaysAgo.setCreatedAt(NOW.minus(Duration.ofDays(6)));
+        Company addedEightDaysAgo = crawled(Company.FetchStatus.SUCCESS);
+        addedEightDaysAgo.setCreatedAt(NOW.minus(Duration.ofDays(8)));
+        Company checkedSixDaysAgo = crawled(Company.FetchStatus.SUCCESS);
+        checkedSixDaysAgo.setLastRedetectAt(NOW.minus(Duration.ofDays(6)));
+        Company checkedEightDaysAgo = crawled(Company.FetchStatus.SUCCESS);
+        checkedEightDaysAgo.setLastRedetectAt(NOW.minus(Duration.ofDays(8)));
+        Company neverFetched = crawled(null);
+        Company healthyNative = failing("N", "n", Duration.ofDays(30));
+        healthyNative.setLastFetchStatus(Company.FetchStatus.SUCCESS);
+
+        assertFalse(redetector.isDue(addedSixDaysAgo, NOW));
+        assertTrue(redetector.isDue(addedEightDaysAgo, NOW));
+        assertFalse(redetector.isDue(checkedSixDaysAgo, NOW));
+        assertTrue(redetector.isDue(checkedEightDaysAgo, NOW));
+        assertFalse(redetector.isDue(neverFetched, NOW));
+        assertFalse(redetector.isDue(healthyNative, NOW));
     }
 }

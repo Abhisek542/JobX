@@ -1,6 +1,7 @@
 package com.jobx.entity;
 
 import com.jobx.enums.AtsPlatform;
+import com.jobx.enums.CrawlMode;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -99,6 +100,14 @@ public class Company {
     @Column(name = "moved_to_reason")
     private MoveReason movedToReason;
 
+    /**
+     * CUSTOM boards only (V11, PR E2): whether the careers page is read with a
+     * plain GET or rendered in headless Chromium. Null on native-ATS boards.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "crawl_mode")
+    private CrawlMode crawlMode;
+
     public boolean hasMoveProposal() {
         return movedToPlatform != null && movedToToken != null;
     }
@@ -126,7 +135,7 @@ public class Company {
         FAILING,
         /**
          * A healthy crawled (CUSTOM) board whose careers page now links a real
-         * ATS. Not produced until the PR E crawler ships; a successful fetch
+         * ATS. A successful fetch
          * does not clear it, because the old board still works.
          */
         NATIVE_AVAILABLE
