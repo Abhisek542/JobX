@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
 import { MatchResponse, MatchStatus } from '../../core/models/match.model';
 import { relTime } from '../../core/util/time';
-import { band } from '../../features/dashboard/feed-logic';
+import { band, jobLabels } from '../../features/dashboard/feed-logic';
 import { CompanyLogo } from '../ui/company-logo';
 import { Icon } from '../ui/icon';
 import { MatchActions } from './match-actions';
@@ -18,7 +18,9 @@ const STATUS_TAG: Record<MatchStatus, { cls: string; text: string } | null> = {
  * One feed card. Card anatomy is the mockup's spec.
  *
  * HONESTY (uiux_plan.md §7): no location, no description excerpt, no employer
- * posting date, no verified badge — `MatchResponse` carries none of them. The
+ * posting date, no verified badge — `MatchResponse` carries none of them.
+ * Department / team / employment type ARE shown (since backend V8) because the
+ * ATS publishes them, and only when present — never a placeholder. The
  * meta line says "Found {relTime(createdAt)}", which is when *Jobx* first saw
  * the role, and is never labelled as the employer's posting date.
  *
@@ -93,6 +95,10 @@ const STATUS_TAG: Record<MatchStatus, { cls: string; text: string } | null> = {
 
             <div class="meta">
               <span>{{ match().companyName }}</span>
+              @if (labels(); as l) {
+                <span class="dot"></span>
+                <span>{{ l }}</span>
+              }
               <span class="dot"></span>
               <span>Found {{ found() }}</span>
               @if (expired(); as gone) {
@@ -147,6 +153,8 @@ export class MatchCard {
 
   protected readonly isDismissed = computed(() => this.match().status === 'DISMISSED');
   protected readonly scoreBand = computed(() => band(this.match().score));
+  /** "Engineering · Full-time" — straight from the ATS posting, null when absent. */
+  protected readonly labels = computed(() => jobLabels(this.match()));
   /**
    * A dismissed card keeps every pixel legible but drops the band colour: a
    * green "Strong match" ring on a role you've rejected is a claim the card is

@@ -10,6 +10,7 @@ import com.jobx.fetcher.AtsFetcher;
 import com.jobx.fetcher.BoardPreview;
 import com.jobx.fetcher.ExperienceParser;
 import com.jobx.fetcher.FetchFilter;
+import com.jobx.fetcher.JobLabels;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jsoup.Jsoup;
@@ -314,6 +315,11 @@ public class SmartRecruitersFetcher implements AtsFetcher {
         if (!resolved.isBlank()) {
             job.setLocation(resolved);
         }
+
+        // Display only. The list item already carries both. department is
+        // often an empty object (PhonePe), which leaves the field null.
+        job.setDepartment(JobLabels.clean(node.path("department").path("label").asText(null)));
+        job.setEmploymentType(JobLabels.employmentType(node.path("typeOfEmployment").path("label").asText(null)));
 
         // releasedDate is a full ISO instant with millis, e.g.
         // "2026-08-28T11:20:45.290Z" — the honest posting date, and now also

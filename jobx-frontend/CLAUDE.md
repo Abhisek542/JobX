@@ -365,23 +365,18 @@ Detect ATS from careers URL, hit that platform's public job API directly:
 - Ashby: `api.ashbyhq.com/posting-api/job-board/{token}` (public, no-auth path — not `jobPosting.list`)
 - Workable: `apply.workable.com/api/v1/widget/accounts/{token}` (embed-widget endpoint)
 - SmartRecruiters: `api.smartrecruiters.com/v1/companies/{id}/postings` (two-call; built 2026-08-29)
-- Next wave (PLANNED 2026-09-27): Workday, Rippling, BambooHR (JSON APIs) and Jobvite, JazzHR (HTML).
-  iCIMS and Gusto depend on recon. The backend CLAUDE.md "ATS integration approach" section has the
-  order and rules. The UI lists a platform only once its fetcher ships.
-  - PR 0 (groundwork) done 2026-10-04. All seven platforms are in the `AtsPlatform` union and in
-    `PLATFORM_LABEL`, so a resolve's `platformHint` can name them.
-  - `SUPPORTED_PLATFORMS`, `TOKEN_HINTS` and the auth-hero list are the original five plus
-    **JazzHR and Gusto** (fetchers built 2026-10-04). A token hint may carry a `suffix`
-    rendered after the token, for subdomain tokens (`brennancenter` + `.applytojob.com`).
-    iCIMS stays recognised but unwatchable (design call pending).
-  - Rippling, BambooHR and Jobvite fetchers shipped 2026-10-04. They are now in
-    `SUPPORTED_PLATFORMS`, `TOKEN_HINTS` and the auth-hero list, which makes eight.
-    The hero's platform count is `platforms.length`, no longer a hard-coded "5".
-    `TOKEN_HINTS` entries gained an optional `suffix`, because BambooHR's token is a
-    subdomain: the hint reads `<b>offdutymanagement</b>.bamboohr.com/careers`.
-  - PR 1 (Workday) done 2026-10-04. `SUPPORTED_PLATFORMS`, `TOKEN_HINTS` and the auth-hero
-    list now include Workday. Its token hint has an optional `note`, because the token is the
-    composite `tenant/wdN/site` (e.g. `salesforce/wd12/External_Career_Site`), not one URL segment.
+- Workday, Rippling, BambooHR (JSON APIs) and Jobvite, JazzHR, Gusto (HTML): **all built
+  2026-10-04**. iCIMS **dropped 2026-10-25**: it stays in the `AtsPlatform` union and
+  `PLATFORM_LABEL` so a resolve's `platformHint` can name it, but it is not watchable.
+  The backend CLAUDE.md "ATS integration approach" section has the rules.
+  - The UI lists a platform only once its fetcher ships. `SUPPORTED_PLATFORMS`,
+    `TOKEN_HINTS` and the auth-hero list hold the eleven watchable platforms. The hero's
+    platform count is `platforms.length`, never a hard-coded number.
+  - A `TOKEN_HINTS` entry may carry an optional `suffix`, rendered after the token, for
+    subdomain tokens (`<b>brennancenter</b>.applytojob.com`,
+    `<b>offdutymanagement</b>.bamboohr.com/careers`), and an optional `note`, for
+    Workday's composite `tenant/wdN/site` token (e.g.
+    `salesforce/wd12/External_Career_Site`), which is not one URL segment.
   - The add-company dead end has three branches:
     - hint is a watchable platform: "board is loaded by JavaScript, paste the direct link";
     - hint is a recognised but unwatchable platform: "uses {Platform}, can't watch yet"
@@ -389,23 +384,48 @@ Detect ATS from careers URL, hit that platform's public job API directly:
     - no hint.
   - The backend returns 400 if `POST /watchlist` names a platform with no fetcher.
 
-**Eight platforms are implemented** (four on 2026-08-02, SmartRecruiters 2026-08-29,
-Rippling/BambooHR/Jobvite 2026-10-04). Verified
-**Six platforms are implemented and live-verified** (four on 2026-08-02, SmartRecruiters 2026-08-29, Workday 2026-10-04). Verified
+**Eleven platforms are implemented**: Greenhouse, Lever, Ashby and Workable (2026-08-02),
+SmartRecruiters (2026-08-29), and Workday, Rippling, BambooHR, Jobvite, JazzHR and Gusto
+(2026-10-04). Verified
 field-level details (JSON shapes, date formats, Workable's two-call design, per-board
 quirks, dead board tokens) are in `jobx-backend/docs/ats-api-reference.md` — read that file before
 touching any fetcher code, not this one.
 
 **Add-company improvements (PLANNED 2026-09-27, not built yet)**, plan in
 `jobx-backend/add-company-improvements.md`. Frontend impact:
-- the add-company modal gets two modes, **Company name** (with typeahead) and
-  **Careers page link**, and sends `{ mode, query }` to `/watchlist/resolve`;
+- **Built 2026-10-31 (PR A):** the add-company modal has two modes, picked
+  with a segmented `.ac-mode` radiogroup: **Company name** (catalog typeahead)
+  and **Careers page link** (no typeahead; `core/util/url.ts` `looksLikeUrl`
+  mirrors the backend rule and rejects a bare name before any request). It
+  sends `{ mode, query }` to `/watchlist/resolve` and `mode` with the
+  unsupported report. Switching mode keeps the typed text. A NAME-mode dead
+  end says "Try pasting their careers page link" and offers **Paste a careers
+  link instead**, which switches to URL mode. Advanced manual entry, the four
+  steps and the post-add feed reload are unchanged;
 - the confirm card gets a "no open roles right now" state (`jobCount === 0`) and
   a "Read from their careers page" state for `CUSTOM` crawled boards;
+- the add-company modal gets two modes, **Company name** (with typeahead) and
+  **Careers page link**, and sends `{ mode, query }` to `/watchlist/resolve`;
+- the confirm card gets a "no open roles right now" state (`jobCount === 0`,
+  **built 2026-10-31 with PR B**, Watch stays enabled) and a "Read from their
+  careers page" state for `CUSTOM` crawled boards;
 - feed cards and the detail drawer show department and employment type when
-  present, plus a **"Crawled"** badge when `MatchResponse.atsPlatform ===
+  present. **Done 2026-10-31 (PR C):** `jobLabels()` in `feed-logic.ts` builds
+  "Engineering · Payments · Full-time" (nulls dropped, a team equal to the
+  department dropped) and returns null when there is nothing, so the line is
+  simply absent. Still to come with PR E: a **"Crawled"** badge when `MatchResponse.atsPlatform ===
   'CUSTOM'`;
 - a watchlist row with `movedTo` shows a banner with Switch and Dismiss buttons.
+  **Built 2026-10-31 (PR D).** The `.wl-move` banner sits under the row on the
+  Watchlist page, with copy from `moveBannerCopy()` in `watchlist-status.ts` and
+  a "See the board" link when `boardUrl` is set. **Switch** calls
+  `WatchlistStore.move()` → `POST /watchlist/{id}/move` with the proposed
+  `{atsPlatform, boardToken}`, replaces the row and reloads the feed (matches
+  move boards server-side). A 409 reloads the watchlist. **Dismiss** is
+  session-only, keyed on watch id + proposed board, and cleared by `reset()`.
+  The modal sends `careersUrl` (the URL-mode input captured when the resolve
+  was sent) when the chosen candidate's source is URL or SNIFF.
+  **Not visually verified in a browser yet.** The copy for each reason:
   The copy depends on `movedTo.reason`:
   - `FAILING`: "moved to {Platform}";
   - `NATIVE_AVAILABLE` (a healthy crawled board): "careers page now uses
@@ -556,8 +576,8 @@ resuming multi-ATS work.
    verified 2026-08-02** (order actually built: Ashby → Lever → Workable) — each
    verified against a live board as built, per-platform notes in
    `jobx-backend/docs/ats-api-reference.md`. Next wave (Workday, Rippling, BambooHR, Jobvite,
-   JazzHR, iCIMS, Gusto) PLANNED 2026-09-27; see "ATS integration approach". Recruitee still
-   out of scope.
+   JazzHR, Gusto) **done 2026-10-04**; iCIMS dropped 2026-10-25. See "ATS integration
+   approach". Recruitee still out of scope.
 4. Auth (Spring Security) + multi-tenant data, before handing app to other test users.
    **Done and verified 2026-07-30** — see Implementation status above for the full
    design (JWT access-token-only, `role` column added early, `/dev/**` intentionally

@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
 import { MatchResponse, MatchStatus } from '../../core/models/match.model';
 import { absoluteTime, relTime } from '../../core/util/time';
-import { band } from '../../features/dashboard/feed-logic';
+import { band, jobLabels } from '../../features/dashboard/feed-logic';
 import { CompanyLogo } from '../ui/company-logo';
 import { Icon } from '../ui/icon';
 import { OverlayShell } from './overlay-shell';
@@ -32,6 +32,9 @@ const STATUS_LABEL: Record<MatchStatus, string> = {
         <div style="flex:1;min-width:0">
           <h3>{{ match().jobTitle }}</h3>
           <div class="company">{{ match().companyName }}</div>
+          @if (labels(); as l) {
+            <div class="company">{{ l }}</div>
+          }
         </div>
         <button class="x-btn" type="button" aria-label="Close" (click)="closed.emit()">
           <app-icon name="x" />
@@ -119,6 +122,7 @@ export class MatchDetailDrawer {
   readonly openPosting = output<void>();
 
   protected readonly scoreBand = computed(() => band(this.match().score));
+  protected readonly labels = computed(() => jobLabels(this.match()));
   protected readonly statusLabel = computed(() => STATUS_LABEL[this.match().status]);
   protected readonly found = computed(() => relTime(this.match().createdAt));
   protected readonly absolute = computed(() => absoluteTime(this.match().createdAt));

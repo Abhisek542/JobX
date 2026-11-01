@@ -40,7 +40,11 @@ import java.util.concurrent.TimeUnit;
  *     cloud metadata endpoint with no further check. Capped at three hops.
  *  4. Nothing is ever sent but a GET and a browser-ish User-Agent — no auth
  *     headers, no cookies, no request body.
- *  5. Only the exact URL given is fetched. There is no crawling.
+ *  5. Only the exact URL given is fetched. This class never follows links on a
+ *     page. {@code CompanyResolver} (URL mode only) may call it for at most
+ *     three same-site careers links read off the pasted page, one hop and no
+ *     further. Each of those is a separate call here, so rules 1–4 apply to
+ *     every one of them.
  *
  * A failure is never an exception here: a careers page that 404s, times out or
  * refuses a server-side client is an ordinary outcome of resolution, and the
@@ -115,6 +119,19 @@ public class SafeUrlFetcher {
      *                            not the user, so it is an ordinary dead end.
      */
     public Optional<String> fetch(String url) {
+        return fetchPage(url).map(FetchedPage::body);
+    }
+
+    /**
+     * As {@link #fetch}, plus the URL the page was finally served from after any
+     * redirects. A caller reading links off the page needs that, not the URL it
+     * asked for: {@code razorpay.com/careers} may land on
+     * {@code www.razorpay.com/careers/}, and relative links and same-site checks
+     * must be resolved against where the HTML actually came from.
+     *
+     * @throws UnsafeUrlException under exactly the same conditions as {@link #fetch}
+     */
+    public Optional<FetchedPage> fetchPage(String url) {
         URI current = parse(url);
         for (int hop = 0; hop <= MAX_REDIRECTS; hop++) {
             try {
@@ -143,7 +160,8 @@ public class SafeUrlFetcher {
                 return Optional.empty();
             }
             if (response.location() == null) {
-                return Optional.ofNullable(response.body());
+                URI servedFrom = current;
+                return Optional.ofNullable(response.body()).map(body -> new FetchedPage(servedFrom, body));
             }
 
             Optional<URI> next = nextHop(current, response.location());
@@ -242,6 +260,10 @@ public class SafeUrlFetcher {
                 throw new UnsafeUrlException("that address is not on the public internet");
             }
         }
+    }
+
+    /** A fetched page and the URL it was finally served from, after redirects. */
+    public record FetchedPage(URI finalUri, String body) {
     }
 
     /** Body or redirect target — exactly one is set. */

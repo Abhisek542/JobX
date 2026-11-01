@@ -11,6 +11,7 @@ import com.jobx.fetcher.BoardPreview;
 import com.jobx.fetcher.BoardTokens;
 import com.jobx.fetcher.ExperienceParser;
 import com.jobx.fetcher.FetchFilter;
+import com.jobx.fetcher.JobLabels;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jsoup.Jsoup;
@@ -160,6 +161,10 @@ public class BambooHrFetcher implements AtsFetcher {
             job.setTitle(node.path("jobOpeningName").asText("").trim());
             job.setApplyUrl(baseUrl(sub) + "/careers/" + id);
             job.setLocation(location(node));
+            // Display only, both on the list row. employmentType is usually
+            // null; employmentStatusLabel ("Full-Time") is the one boards fill.
+            job.setDepartment(JobLabels.clean(node.path("departmentLabel").asText(null)));
+            job.setEmploymentType(JobLabels.employmentType(node.path("employmentStatusLabel").asText(null)));
             job.setRawJson(node.toString());
 
             if (fetchDetails) {

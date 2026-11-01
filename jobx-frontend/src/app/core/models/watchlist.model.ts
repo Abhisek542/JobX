@@ -35,12 +35,43 @@ export interface WatchedCompanyResponse {
   /** null = never checked. Added to the backend 2026-08-15. */
   lastFetchStatus: FetchStatus | null;
   createdAt: string;
+  /**
+   * A board Jobx thinks this company moved to, or null. A proposal only: the
+   * watchlist shows a Switch banner and POST /watchlist/{id}/move acts on it.
+   */
+  movedTo: MovedTo | null;
+}
+
+/**
+ * Why a move was proposed. FAILING: the board broke and another one turned up.
+ * NATIVE_AVAILABLE: a healthy crawled board's careers page now links a real
+ * ATS (produced once the custom-page crawler ships).
+ */
+export type MoveReason = 'FAILING' | 'NATIVE_AVAILABLE';
+
+export interface MovedTo {
+  atsPlatform: AtsPlatform;
+  boardToken: string;
+  boardUrl: string | null;
+  reason: MoveReason;
+}
+
+/** POST /watchlist/{id}/move: the proposal the user saw and is confirming. */
+export interface MoveWatchRequest {
+  atsPlatform: AtsPlatform;
+  boardToken: string;
 }
 
 export interface WatchedCompanyRequest {
   companyName: string;
   atsPlatform: AtsPlatform;
   boardToken: string;
+  /**
+   * The careers page the board was found on. Sent only for a URL-mode add whose
+   * candidate came from that link (source URL or SNIFF), so the backend can
+   * look there again if the board later stops working.
+   */
+  careersUrl?: string;
 }
 
 export interface UpdateWatchedCompanyStatusRequest {
@@ -89,7 +120,8 @@ export const PLATFORM_LABEL: Record<AtsPlatform, string> = {
 /**
  * Board-token hints, straight from the mockup's TOKEN_HINTS. Rendered as
  * `url` + bold `token` + `suffix`; `suffix` exists for platforms whose token is
- * a subdomain (BambooHR) rather than a path segment.
+ * a subdomain (JazzHR, BambooHR) rather than a path segment, and `note` for a
+ * token that is more than one URL segment (Workday).
  */
 export const TOKEN_HINTS: Record<
   string,
@@ -153,10 +185,12 @@ export type ResolveSource = 'CATALOG' | 'URL' | 'SNIFF' | 'PROBE';
  *
  * `jobCount` and `sampleTitles` are not decoration. Everything except a CATALOG
  * hit is derived — read off a careers page, or guessed from a slug and then
- * checked — so the card shows real roles and the user confirms. A candidate is
- * never offered with `jobCount: 0`: two platforms answer a token that was never
- * theirs with a cheerful empty 200, and Workable even echoes back the right
- * company name, so a live posting is the only trustworthy signal.
+ * checked — so the card shows real roles and the user confirms. `jobCount: 0`
+ * appears only for a URL or SNIFF board on a platform that 404s unknown tokens
+ * (Greenhouse, Lever, Ashby), where the board provably exists and the card says
+ * "No open roles right now". Anywhere else two platforms answer a token that was
+ * never theirs with a cheerful empty 200, and Workable even echoes back the
+ * right company name, so a live posting is the only trustworthy signal.
  */
 export interface ResolvedBoardResponse {
   source: ResolveSource;
@@ -179,7 +213,15 @@ export interface ResolveResponse {
   platformHint: AtsPlatform | null;
 }
 
+/**
+ * How the user asked to look a company up. Mirrors com.jobx.enums.ResolveMode.
+ * NAME: catalog, then slug probing; never fetches a page.
+ * URL: read the link, sniff the careers page, then probe on the domain label.
+ */
+export type ResolveMode = 'NAME' | 'URL';
+
 export interface ResolveRequest {
+  mode: ResolveMode;
   query: string;
 }
 
@@ -195,6 +237,8 @@ export interface CompanySearchResponse {
 export interface UnsupportedBoardReportRequest {
   query: string;
   platformHint: AtsPlatform | null;
+  /** The mode the dead end happened in, so demand splits by kind. */
+  mode: ResolveMode | null;
 }
 
 /** Explains where a candidate came from, in the user's terms rather than ours. */

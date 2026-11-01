@@ -10,6 +10,7 @@ import com.jobx.fetcher.AtsFetcher;
 import com.jobx.fetcher.BoardPreview;
 import com.jobx.fetcher.ExperienceParser;
 import com.jobx.fetcher.FetchFilter;
+import com.jobx.fetcher.JobLabels;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jsoup.Jsoup;
@@ -143,6 +144,10 @@ public class WorkableFetcher implements AtsFetcher {
             if (!location.isBlank()) {
                 job.setLocation(location);
             }
+
+            // Display only. The widget list item has both as plain strings.
+            job.setDepartment(JobLabels.clean(node.path("department").asText(null)));
+            job.setEmploymentType(JobLabels.employmentType(node.path("employment_type").asText(null)));
 
             // published_on is date-only ("2026-06-27") — midnight UTC fallback;
             // overwritten by the detail call's full ISO timestamp when available

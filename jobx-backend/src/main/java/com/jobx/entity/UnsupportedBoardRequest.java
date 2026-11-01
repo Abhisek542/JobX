@@ -1,6 +1,7 @@
 package com.jobx.entity;
 
 import com.jobx.enums.AtsPlatform;
+import com.jobx.enums.ResolveMode;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -50,6 +51,15 @@ public class UnsupportedBoardRequest {
     @Enumerated(EnumType.STRING)
     @Column(name = "platform_hint")
     private AtsPlatform platformHint;
+
+    /**
+     * The add-company mode the dead end happened in. Splits demand into "a name
+     * Jobx couldn't find a board for" (NAME) and "a real careers page on an ATS
+     * Jobx can't read" (URL). Null for rows recorded before V8.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "mode")
+    private ResolveMode mode;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();

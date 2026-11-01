@@ -168,6 +168,37 @@ public final class SlugCandidates {
         return label.isBlank() || HOST_PREFIXES.contains(label) ? null : label;
     }
 
+    /**
+     * Second-level labels that sit under a two-letter country code as part of
+     * the public suffix: the "co" in acme.co.in, the "com" in acme.com.au.
+     */
+    private static final Set<String> SECOND_LEVEL_SUFFIXES = Set.of(
+            "co", "com", "net", "org", "gov", "edu", "ac", "ltd", "plc",
+            "gen", "firm", "ind", "nic", "res", "or", "ne", "go");
+
+    /**
+     * The registrable domain of a host: "careers.acme.com" to "acme.com",
+     * "jobs.acme.co.in" to "acme.co.in". Used for same-site checks, so unlike
+     * {@link #domainLabel} it must never mistake a subdomain for the site
+     * itself: a short label like "abc" in careers.abc.com is not a suffix.
+     * No full public-suffix list, on purpose: this only has to recognise the
+     * ccTLD shapes an India-first product meets. Null for a host with no dot.
+     */
+    static String registrableDomain(String host) {
+        if (host == null) {
+            return null;
+        }
+        String[] parts = host.toLowerCase(Locale.ROOT).split("\\.");
+        int n = parts.length;
+        if (n < 2) {
+            return null;
+        }
+        int keep = n >= 3 && parts[n - 1].length() == 2 && SECOND_LEVEL_SUFFIXES.contains(parts[n - 2])
+                ? 3
+                : 2;
+        return String.join(".", java.util.Arrays.copyOfRange(parts, n - keep, n));
+    }
+
     /** "FamPay Technologies!" to "fampaytechnologies". */
     private static String compact(String name) {
         return name.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "");

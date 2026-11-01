@@ -3,6 +3,7 @@ package com.jobx.dto;
 import com.jobx.entity.Company;
 import com.jobx.entity.WatchedCompany;
 import com.jobx.enums.AtsPlatform;
+import com.jobx.resolve.AtsUrlParser;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -16,6 +17,10 @@ import java.util.UUID;
  * JSON shape is unchanged by V4 — the Angular app needs no changes — but the
  * fields now resolve through the shared Company: companyName is the canonical
  * displayName, and the fetch-health trio is board-wide, not per-watch-row.
+ *
+ * movedTo (PR D) is the board BoardRedetector thinks this company moved to, or
+ * null. A proposal: the watchlist shows a Switch banner, and
+ * POST /watchlist/{id}/move is what acts on it.
  */
 public record WatchedCompanyResponse(
         /** The watch row — what PATCH/DELETE /watchlist/{id} addresses. */
@@ -32,8 +37,22 @@ public record WatchedCompanyResponse(
         WatchedCompany.CompanyStatus status,
         Instant lastFetchedAt,
         Company.FetchStatus lastFetchStatus,
-        Instant createdAt
+        Instant createdAt,
+        MovedTo movedTo
 ) {
+    /** A proposed new board for the company. */
+    public record MovedTo(AtsPlatform atsPlatform, String boardToken, String boardUrl,
+                          Company.MoveReason reason) {
+        static MovedTo of(Company company) {
+            if (!company.hasMoveProposal()) {
+                return null;
+            }
+            return new MovedTo(company.getMovedToPlatform(), company.getMovedToToken(),
+                    AtsUrlParser.boardUrl(company.getMovedToPlatform(), company.getMovedToToken()),
+                    company.getMovedToReason());
+        }
+    }
+
     public static WatchedCompanyResponse from(WatchedCompany watch) {
         Company company = watch.getCompany();
         return new WatchedCompanyResponse(
@@ -45,7 +64,8 @@ public record WatchedCompanyResponse(
                 watch.getStatus(),
                 company.getLastFetchedAt(),
                 company.getLastFetchStatus(),
-                watch.getCreatedAt()
+                watch.getCreatedAt(),
+                MovedTo.of(company)
         );
     }
 }

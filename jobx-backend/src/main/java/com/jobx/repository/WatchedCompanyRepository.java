@@ -9,6 +9,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Repository
@@ -21,6 +22,8 @@ public interface WatchedCompanyRepository extends JpaRepository<WatchedCompany, 
      * rather than by a 409 afterwards.
      */
     boolean existsByUserAndCompany(User user, Company company);
+
+    Optional<WatchedCompany> findByUserAndCompany(User user, Company company);
 
     @Query("SELECT w.user FROM WatchedCompany w WHERE w.company = :company AND w.status = :status")
     List<User> findUsersByCompanyAndStatus(@Param("company") Company company,

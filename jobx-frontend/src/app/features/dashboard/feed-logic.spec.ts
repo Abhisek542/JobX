@@ -8,6 +8,7 @@ import {
   countByStatus,
   filterByStatus,
   groupByCompany,
+  jobLabels,
   pageNumbers,
   pageRangeLabel,
   pageSlice,
@@ -32,9 +33,40 @@ function match(over: Partial<MatchResponse> = {}): MatchResponse {
     status: 'NEW',
     createdAt: '2026-08-15T09:00:00Z',
     expiredAt: null,
+    department: null,
+    team: null,
+    employmentType: null,
     ...over,
   };
 }
+
+describe('jobLabels', () => {
+  it('is null when the posting carries no labels (and after expiry)', () => {
+    expect(jobLabels(match())).toBeNull();
+    expect(jobLabels(match({ department: '  ', employmentType: '' }))).toBeNull();
+  });
+
+  it('joins department, team and employment type', () => {
+    expect(
+      jobLabels(
+        match({ department: 'Engineering', team: 'Payments', employmentType: 'Full-time' }),
+      ),
+    ).toBe('Engineering · Payments · Full-time');
+  });
+
+  it('drops a team that only repeats the department', () => {
+    expect(
+      jobLabels(
+        match({ department: 'Engineering', team: 'engineering', employmentType: 'Full-time' }),
+      ),
+    ).toBe('Engineering · Full-time');
+  });
+
+  it('shows whatever subset is present', () => {
+    expect(jobLabels(match({ team: 'Marketing' }))).toBe('Marketing');
+    expect(jobLabels(match({ employmentType: 'Internship' }))).toBe('Internship');
+  });
+});
 
 function feedOf(...statuses: MatchStatus[]): MatchResponse[] {
   return statuses.map((status, i) => match({ id: `m${i}`, status }));

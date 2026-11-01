@@ -29,6 +29,14 @@ export interface MatchResponse {
    * if it were still open — the apply URL very likely 404s now.
    */
   expiredAt: string | null;
+  /**
+   * Display-only labels copied from the ATS posting (backend V8). Each is null
+   * when the board doesn't publish it, and all three are null once the posting
+   * has expired. Never scored. Render through `jobLabels()`, which drops nulls.
+   */
+  department: string | null;
+  team: string | null;
+  employmentType: string | null;
 }
 
 /** PATCH /matches/{id} body. */

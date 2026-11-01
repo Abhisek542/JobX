@@ -1,8 +1,8 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
-import { WatchedCompanyResponse, PLATFORM_LABEL } from '../../core/models/watchlist.model';
+import { MovedTo, WatchedCompanyResponse, PLATFORM_LABEL } from '../../core/models/watchlist.model';
 import { UiStore } from '../../core/services/ui.store';
 import { WatchlistStore } from '../../core/services/watchlist.store';
-import { companyStatusLine } from '../../core/util/watchlist-status';
+import { companyStatusLine, moveBannerCopy } from '../../core/util/watchlist-status';
 import { ActionBar } from '../../shared/layout/action-bar';
 import { CompanyLogo } from '../../shared/ui/company-logo';
 import { EmptyState } from '../../shared/ui/empty-state';
@@ -149,6 +149,36 @@ import { Icon } from '../../shared/ui/icon';
                     </button>
                   </div>
                 }
+
+                @if (store.visibleMove(company); as moved) {
+                  <div class="wl-move" role="status">
+                    <app-icon name="info" size="sm" />
+                    <span class="txt">
+                      {{ moveCopy(company, moved) }}
+                      @if (moved.boardUrl) {
+                        <a [href]="moved.boardUrl" target="_blank" rel="noopener noreferrer">
+                          See the board
+                        </a>
+                      }
+                    </span>
+                    <button
+                      class="btn btn-ghost btn-sm"
+                      type="button"
+                      [disabled]="store.moving().has(company.id)"
+                      (click)="store.dismissMove(company)"
+                    >
+                      Dismiss
+                    </button>
+                    <button
+                      class="btn btn-primary btn-sm"
+                      type="button"
+                      [disabled]="store.moving().has(company.id)"
+                      (click)="store.move(company)"
+                    >
+                      {{ store.moving().has(company.id) ? 'Switching…' : 'Switch' }}
+                    </button>
+                  </div>
+                }
               </div>
             }
           </div>
@@ -176,6 +206,10 @@ export class WatchlistPage {
 
   protected line(company: WatchedCompanyResponse) {
     return companyStatusLine(company);
+  }
+
+  protected moveCopy(company: WatchedCompanyResponse, moved: MovedTo): string {
+    return moveBannerCopy(company, moved);
   }
 
   protected platform(company: WatchedCompanyResponse): string {

@@ -237,4 +237,18 @@ class SmartRecruitersFetcherTest {
     void previewRejectsAPayloadThatIsNotABoard() {
         assertThrows(AtsFetchException.class, () -> fetcher.parsePreview("{\"nope\":1}", "bogus"));
     }
+
+    /** Display-only labels (V8). PhonePe's department is an empty object, which is no department. */
+    @Test
+    void mapsEmploymentTypeAndLeavesAnEmptyDepartmentNull() throws Exception {
+        JsonNode first = page().get(0);
+        Job job = fetcher.mapListItem(first, company, first.path("id").asText());
+
+        assertEquals("Full-time", job.getEmploymentType());
+        assertNull(job.getDepartment());
+
+        JsonNode labelled = jsonOf("""
+                {"name":"x","department":{"id":"1","label":" Engineering "}}""");
+        assertEquals("Engineering", fetcher.mapListItem(labelled, company, "1").getDepartment());
+    }
 }

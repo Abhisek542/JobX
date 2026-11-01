@@ -129,4 +129,14 @@ class WorkableFetcherTest {
         assertThrows(AtsFetchException.class,
                 () -> fetcher.parsePreview("not json at all", "bogus"));
     }
+
+    /** Display-only labels (V8), straight off the widget list row. */
+    @Test
+    void mapsDepartmentAndEmploymentTypeFromTheList() throws Exception {
+        Job job = fetcher.parseList(FixtureSupport.fixture("workable-apna.json"), company, FetchFilter.none(), false).get(0);
+
+        assertEquals("Skilling", job.getDepartment());
+        assertEquals("Full-time", job.getEmploymentType());
+        assertNull(job.getTeam());
+    }
 }

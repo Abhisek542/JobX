@@ -83,6 +83,24 @@ export function band(score: number): ScoreBand {
 }
 
 /**
+ * The "Engineering · Payments · Full-time" meta line, or null when the posting
+ * carries none of the three. Team is left out when it only repeats the
+ * department (Ashby often sends the same string for both).
+ */
+export function jobLabels(
+  match: Pick<MatchResponse, 'department' | 'team' | 'employmentType'>,
+): string | null {
+  const department = match.department?.trim() || null;
+  const team = match.team?.trim() || null;
+  const parts = [
+    department,
+    team && team.toLowerCase() !== department?.toLowerCase() ? team : null,
+    match.employmentType?.trim() || null,
+  ].filter((part): part is string => !!part);
+  return parts.length ? parts.join(' · ') : null;
+}
+
+/**
  * Step 1 — status. The ALL pill excludes DISMISSED; every other pill is an
  * exact match. (GET /matches returns DISMISSED rows too, so this is the only
  * thing keeping them out of the default feed.)

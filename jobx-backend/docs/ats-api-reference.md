@@ -243,7 +243,7 @@ Gusto Recruiting's hosted boards. Verified against Sage Veterinary Imaging
 - **TTL cost:** as on JazzHR, a stale posting costs one detail call ever, via
   `PastTtlMemo`.
 
-## iCIMS — INVESTIGATED 2026-10-04, NOT BUILT (decision pending)
+## iCIMS — INVESTIGATED 2026-10-04; DROPPED 2026-10-25 (will not be built)
 
 Two findings change the 2026-09-27 picture.
 
@@ -268,8 +268,10 @@ Why it isn't built: no live classic-portal board was found to build the planned
 HTML fetcher against, and the Career Sites API needs a different design — the
 token would be a whole customer domain taken from user input, which needs the
 `SafeUrlFetcher`/`PrivateAddressGuard` treatment rather than `BoardTokens`. That
-is a design call, not a recon gap. Until then `ICIMS` stays recognised but not
-watchable: a pasted iCIMS link gets the honest "uses iCIMS, can't watch yet" answer.
+is a design call, not a recon gap. **Decided 2026-10-25: not worth it, iCIMS is
+dropped.** `ICIMS` stays recognised but not watchable: a pasted iCIMS link gets the
+honest "uses iCIMS, can't watch yet" answer.
+
 ## Rippling — VERIFIED (fetcher built + live-tested 2026-10-04); TWO-CALL DESIGN
 
 Verified against Rippling's own board (`rippling`, 331 jobs).
@@ -426,6 +428,43 @@ postings). NVIDIA (`nvidia/wd5/NVIDIAExternalCareerSite`) was spot-checked.
   gets the platform hint and no probe. Boards are found from a pasted link or a
   sniffed board URL.
 
+## Bogus-token behaviour (recon 2026-10-31, for empty-board watching)
+
+Checked with curl and an honest user agent against the list endpoints the fetchers
+call, using the made-up token `jobx-bogus-token-zz91` alongside a known-good one:
+
+| Platform | Bogus token | Known-good token |
+|---|---|---|
+| Greenhouse | **404** `{"status":404,"error":"Job not found"}` | 200 (`razorpaysoftwareprivatelimited`) |
+| Lever | **404** `{"ok":false,"error":"Document not found"}` | 200 (`fampay`) |
+| Ashby | **404** `Not Found` (plain text) | 200 (`atlan`) |
+| Workable | 200 with an empty `jobs` array (ghost account, see above) | |
+| SmartRecruiters | 200 `{"totalFound":0,"content":[]}` (see above) | |
+
+On these three platforms `previewBoard` throws on the 404, so an empty 200 proves
+the board exists. They override `AtsFetcher.distinguishesMissingBoard()` to
+`true`, which lets a board with zero open roles be watched when it came from a
+pasted link (URL) or the company's own careers page (SNIFF). PROBE and CATALOG
+candidates still need live roles. Rippling, BambooHR and Workday also have a clean
+dead-board signal (above), but they haven't been opted in. Opting a platform in
+means repeating this check and updating `ValidateBoardTest`.
+## Department, team and employment type (display-only, V8, 2026-10-31)
+
+Read by each fetcher into `jobs.department` / `team` / `employment_type` via
+`JobLabels`. Never scored. Paths confirmed against the fixtures:
+
+| Platform | department | team | employment type |
+|---|---|---|---|
+| Greenhouse (`?content=true`) | `departments[0].name` | none | none |
+| Lever | `categories.department` (FamPay/Sprinto omit it) | `categories.team` | `categories.commitment` (`Full Time`; Sprinto puts `Remote` here, kept as-is) |
+| Ashby | `department` | `team` (often equals department) | `employmentType` (`FullTime`) |
+| SmartRecruiters (list item) | `department.label` (PhonePe sends `{}`) | none | `typeOfEmployment.label` (`Full-time`) |
+| Workable (widget list row) | `department` | none | `employment_type` (`Full-time`) |
+| BambooHR (list row) | `departmentLabel` | none | `employmentStatusLabel` (`employmentType` is usually null) |
+| Rippling (v1 list row) | `department.label` | none | not mapped: the v2 detail's `employmentType` has label and id swapped (`{"label":"SALARIED_FT"}`) |
+| Workday (detail `jobPostingInfo`) | none | none | `timeType` (`Full time`) |
+| Jobvite, JazzHR, Gusto | not mapped (HTML tier) | | |
+
 ## Test fixtures
 
 Real captured responses live in `src/test/resources/fixtures/` and back the fetcher
@@ -490,19 +529,3 @@ What sniffing a live careers page actually yields, measured across four boards:
 So sniffing hits about half of careers pages, and slug probing covers exactly the
 half it misses (atlan → `atlan`, fampay → `fampay`). Neither is sufficient alone.
 Page fixtures for the first three are in `src/test/resources/fixtures/careers-*.html`.
-
-## Candidate platforms — recon 2026-09-27 (NOT BUILT YET)
-
-These are first-pass curl checks, not verified fetcher notes. Each platform's PR
-must re-capture fixtures and replace its row below with a proper `## {Platform} —
-VERIFIED` section. The build order and rules are in the backend CLAUDE.md, under
-"ATS integration approach".
-
-| Platform | Endpoint(s) seen | Dead-board signal | Notes |
-|---|---|---|---|
-| Workday | List: `POST https://{tenant}.{wdN}.myworkdayjobs.com/wday/cxs/{tenant}/{site}/jobs`, body `{"appliedFacets":{},"limit":20,"offset":0,"searchText":""}` → `{total, jobPostings[{title, externalPath, locationsText, postedOn, bulletFields}]}`. Detail: `GET …/wday/cxs/{tenant}/{site}{externalPath}` → `jobPostingInfo{jobDescription (HTML), startDate (date-only), timeType, jobReqId, location}` | TBD | Token is composite `tenant/wdN/site`, e.g. `salesforce/wd12/External_Career_Site` (1,522 jobs, 20 per page). `postedOn` is relative text ("Posted Today", "Posted 30+ Days Ago"). Still to check: is `total` only set on page 0? Is the list newest-first? |
-| Rippling | List (one call, whole board): `GET https://api.rippling.com/platform/api/ats/v1/board/{slug}/jobs` → `[{uuid, name, department, url, workLocation}]`. Paged alternative: `ats.rippling.com/api/v2/board/{slug}/jobs` (`page, pageSize=20, totalItems`). Detail: `GET ats.rippling.com/api/v2/board/{slug}/jobs/{uuid}` → `description{company, role}` (HTML), `createdOn` (ISO), `employmentType`, `companyName` | v2 → 404 `RESOURCE_NOT_FOUND` | Page URL: `ats.rippling.com/{slug}/jobs` |
-| BambooHR | `GET https://{sub}.bamboohr.com/careers/list` → `{"meta":{"totalCount":N},"result":[…]}` | 302 → `www.bamboohr.com` | `andela` is real but has 0 jobs. Still need a live tenant with openings to capture the item and detail shapes. |
-| Jobvite | `GET https://jobs.jobvite.com/{co}/jobs`: server-rendered HTML with `.jv-job-list-name`, `.jv-job-list-location` and links to `/{co}/job/{id}` | Redirects to `jobvite.com/support/…?invalid=1` | Live boards: `nutanix`, `egnyte`. Detail pages have no JSON-LD. |
-
-JazzHR, Gusto and iCIMS have moved out of this table into their own sections above.

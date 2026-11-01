@@ -11,12 +11,13 @@ import com.jobx.fetcher.BoardPreview;
 import com.jobx.fetcher.BoardTokens;
 import com.jobx.fetcher.ExperienceParser;
 import com.jobx.fetcher.FetchFilter;
+import com.jobx.fetcher.HtmlPage;
+import com.jobx.fetcher.JsonLd;
 import lombok.extern.slf4j.Slf4j;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 
@@ -40,7 +41,8 @@ import java.util.regex.Pattern;
  * changes its layout, so this fetcher FAILS LOUDLY: a 200 page with zero job
  * cards throws AtsFetchException unless it shows Jobvite's own "No results
  * found" message. A changed layout must show up as FAILED health, never as a
- * quietly empty feed. JazzHR (PR 5) follows the same rule.
+ * quietly empty feed. JazzHR and Gusto follow the same rule, shared through
+ * {@link HtmlPage}.
  *
  *   List:   GET https://jobs.jobvite.com/{co}/search?p={N}
  *           → 50 cards a page: td.jv-job-list-name a[href=/{co}/job/{id}] and
@@ -103,7 +105,7 @@ public class JobviteFetcher implements AtsFetcher {
         // Cards in board order, deduped by id across pages.
         Map<String, Card> cards = new LinkedHashMap<>();
         for (int p = 0; p < maxPages; p++) {
-            Page page = parsePage(body(listUrl(token, p), token), token);
+            Page page = parsePage(readList(token, p), token);
             if (page.cards().isEmpty()) {
                 if (p == 0) {
                     requireEmptyBoard(page, token);
@@ -127,38 +129,17 @@ public class JobviteFetcher implements AtsFetcher {
         return BASE_URL + "/" + token + "/search?p=" + page;
     }
 
+    /** One list page's body. A redirect or 404 means the board is gone. */
+    private String readList(String token, int page) {
+        return fetchPage(listUrl(token, page)).requireBoard("Jobvite", token);
+    }
+
     /**
      * The one HTTP call every request goes through. Package-private so tests
      * can serve fixture pages and redirects without a server.
      */
-    ResponseEntity<String> get(String url) {
-        return webClientBuilder.build()
-                .get()
-                .uri(url)
-                .retrieve()
-                .toEntity(String.class)
-                .block();
-    }
-
-    /** A 2xx body, or an AtsFetchException. A redirect means the board (or job) is gone. */
-    private String body(String url, String token) {
-        ResponseEntity<String> response;
-        try {
-            response = get(url);
-        } catch (Exception e) {
-            throw new AtsFetchException("Jobvite request failed for token " + token, e);
-        }
-        if (response == null) {
-            throw new AtsFetchException("Empty response from Jobvite for token " + token);
-        }
-        if (response.getStatusCode().is3xxRedirection()) {
-            throw new AtsFetchException("Jobvite board '" + token + "' does not exist (redirected to "
-                    + response.getHeaders().getLocation() + ")");
-        }
-        if (response.getBody() == null) {
-            throw new AtsFetchException("Empty response from Jobvite for token " + token);
-        }
-        return response.getBody();
+    HtmlPage fetchPage(String url) {
+        return HtmlPage.get(webClientBuilder, url);
     }
 
     /**
@@ -166,10 +147,7 @@ public class JobviteFetcher implements AtsFetcher {
      * Otherwise the selectors no longer match the page, and that must fail.
      */
     private static void requireEmptyBoard(Page page, String token) {
-        if (!page.saysNoOpenings()) {
-            throw new AtsFetchException("Jobvite page for token " + token
-                    + " has no job cards and no 'no openings' message — the page layout may have changed");
-        }
+        HtmlPage.requireCardsOrEmptyMarker(page.cards(), page.saysNoOpenings(), "Jobvite", token);
     }
 
     // Package-private seam so fixture tests can exercise page parsing without HTTP.
@@ -291,7 +269,8 @@ public class JobviteFetcher implements AtsFetcher {
         if (!id.matches("[A-Za-z0-9]+")) {
             throw new AtsFetchException("Unexpected Jobvite job URL " + cardUrl);
         }
-        return body(BASE_URL + "/" + token + "/job/" + id, token);
+        // A removed job answers 303 → /careers/{co}/jobs?error=404: not OK, so it throws.
+        return fetchPage(BASE_URL + "/" + token + "/job/" + id).requireOk("Jobvite job " + id);
     }
 
     /**
@@ -303,7 +282,7 @@ public class JobviteFetcher implements AtsFetcher {
      */
     LocalDate applyDetail(String html, Job job) {
         Document doc = Jsoup.parse(html, BASE_URL + "/");
-        JsonNode posting = jsonLdPosting(doc);
+        JsonNode posting = JsonLd.find(doc, objectMapper, "JobPosting").orElse(null);
 
         String description = null;
         Element descriptionElement = doc.selectFirst(".jv-job-detail-description");
@@ -346,22 +325,13 @@ public class JobviteFetcher implements AtsFetcher {
         return posted;
     }
 
-    /** The page's JSON-LD JobPosting, or null. A malformed block is ignored, not fatal. */
-    private JsonNode jsonLdPosting(Document doc) {
-        for (Element script : doc.select("script[type=application/ld+json]")) {
-            try {
-                JsonNode node = objectMapper.readTree(script.data());
-                if (node != null && "JobPosting".equals(node.path("@type").asText())) {
-                    return node;
-                }
-            } catch (Exception e) {
-                log.debug("Ignoring unparseable JSON-LD block: {}", e.getMessage());
-            }
-        }
-        return null;
-    }
-
-    /** "Mountain View, California", up to MAX_LOCATIONS places, then "+N more". */
+    /**
+     * "Mountain View, California", up to MAX_LOCATIONS places, then "+N more".
+     *
+     * Deliberately not {@link JsonLd#location}: Jobvite postings can list a dozen
+     * sites (Nutanix), and that one shows every place with its country. This
+     * keeps the stored location short, as it has been since the fetcher shipped.
+     */
     private static String jsonLdLocation(JsonNode jobLocation) {
         List<JsonNode> places = new ArrayList<>();
         if (jobLocation.isArray()) {
@@ -406,7 +376,7 @@ public class JobviteFetcher implements AtsFetcher {
     @Override
     public BoardPreview previewBoard(Company company) {
         String token = BoardTokens.requirePathSegment(company.getBoardToken());
-        return parsePreview(body(listUrl(token, 0), token), token);
+        return parsePreview(readList(token, 0), token);
     }
 
     // Package-private seam so tests can exercise preview parsing without HTTP.

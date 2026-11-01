@@ -137,4 +137,13 @@ class RipplingFetcherTest {
             assertThrows(AtsFetchException.class, () -> fetcher.previewBoard(hostile), token);
         }
     }
+
+    /** Display-only labels (V8): the list row's department. */
+    @Test
+    void mapsDepartment() throws Exception {
+        Job job = listOnly().get(0);
+
+        assertEquals("Sales", job.getDepartment());
+        assertNull(job.getEmploymentType());
+    }
 }

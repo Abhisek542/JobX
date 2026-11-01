@@ -1,6 +1,7 @@
 package com.jobx.dto;
 
 import com.jobx.enums.AtsPlatform;
+import com.jobx.enums.ResolveMode;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
@@ -14,5 +15,12 @@ public record UnsupportedBoardReportRequest(
         String query,
 
         /** Whatever the sniffer managed to work out, if anything. Usually null. */
-        AtsPlatform platformHint) {
+        AtsPlatform platformHint,
+
+        /**
+         * The mode the dead end happened in. Nullable on purpose: this report is
+         * fire-and-forget, and an older client that omits it must not lose the
+         * demand signal to a 400.
+         */
+        ResolveMode mode) {
 }

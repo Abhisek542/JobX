@@ -97,15 +97,7 @@ public class JazzHrFetcher implements AtsFetcher {
 
     /** The board page body, or a throw for every shape of "this board isn't there". */
     private String readBoard(String sub) {
-        HtmlPage page = fetchPage(host(sub) + "/apply");
-        if (page.isRedirect()) {
-            throw new AtsFetchException("JazzHR board '" + sub + "' does not exist (redirected to "
-                    + page.location() + ")");
-        }
-        if (!page.isOk()) {
-            throw new AtsFetchException("JazzHR board '" + sub + "' answered HTTP " + page.status());
-        }
-        return page.body();
+        return fetchPage(host(sub) + "/apply").requireBoard("JazzHR", sub);
     }
 
     /** Package-private seam so tests can stand in for HTTP. */
@@ -152,11 +144,7 @@ public class JazzHrFetcher implements AtsFetcher {
             cards.add(new Card(code, link.text().trim(), location.isEmpty() ? null : location));
         }
 
-        if (cards.isEmpty() && !document.text().contains(EMPTY_MARKER)) {
-            throw new AtsFetchException("JazzHR board '" + sub
-                    + "' returned a page with no job cards and no empty-board marker — layout changed?");
-        }
-        return cards;
+        return HtmlPage.requireCardsOrEmptyMarker(cards, document.text().contains(EMPTY_MARKER), "JazzHR", sub);
     }
 
     /**
@@ -239,11 +227,7 @@ public class JazzHrFetcher implements AtsFetcher {
      * caller turns into skip-and-retry.
      */
     String fetchDetail(String sub, String code) {
-        HtmlPage page = fetchPage(host(sub) + "/apply/" + code);
-        if (!page.isOk()) {
-            throw new AtsFetchException("JazzHR posting " + code + " answered HTTP " + page.status());
-        }
-        return page.body();
+        return fetchPage(host(sub) + "/apply/" + code).requireOk("JazzHR posting " + code);
     }
 
     /**

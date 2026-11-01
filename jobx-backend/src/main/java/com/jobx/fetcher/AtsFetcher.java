@@ -81,17 +81,37 @@ public interface AtsFetcher {
      * never produce a job — the silent-empty-feed shape that has bitten this
      * project three times.
      *
-     * Accepted trade-off, unchanged from when SmartRecruiters introduced it: a
-     * real board with zero openings this week is rejected at add time. Only add
-     * time is strict — once a board is on the watchlist, {@link #fetch} treats
-     * an empty list as the ordinary "nothing new" outcome, so a company that
-     * closes all its roles keeps being polled rather than being dropped.
+     * The zero-roles rejection applies only where it is needed: on a platform
+     * that {@link #distinguishesMissingBoard() 404s an unknown token}, the
+     * preview call itself has already proven the board exists, so an empty
+     * board is accepted and the user can watch a company "for when they start
+     * hiring". Everywhere else a real board with zero openings this week is
+     * still rejected at add time. Only add time is strict — once a board is on
+     * the watchlist, {@link #fetch} treats an empty list as the ordinary
+     * "nothing new" outcome, so a company that closes all its roles keeps being
+     * polled rather than being dropped.
      */
     default void validateBoard(Company company) {
         BoardPreview preview = previewBoard(company);
-        if (preview.jobCount() == 0) {
+        if (preview.jobCount() == 0 && !distinguishesMissingBoard()) {
             throw new AtsFetchException("No live roles found on the " + supports()
                     + " board '" + company.getBoardToken() + "'");
         }
+    }
+
+    /**
+     * True only when this platform answers a token that names no board with an
+     * error (a 404) that {@link #previewBoard} turns into an
+     * {@link AtsFetchException}. On such a platform a successful empty preview
+     * proves the board is real, so a board with zero open roles may be watched.
+     *
+     * Defaults to false, the safe answer: Workable and SmartRecruiters reply to a
+     * bogus token with an empty 200, so for them "empty" and "doesn't exist" look
+     * the same. Override to true only after a recon check that the platform
+     * 404s a bogus token today, and record the result in
+     * {@code docs/ats-api-reference.md}.
+     */
+    default boolean distinguishesMissingBoard() {
+        return false;
     }
 }

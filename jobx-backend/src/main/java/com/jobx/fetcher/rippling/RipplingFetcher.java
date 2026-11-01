@@ -12,6 +12,7 @@ import com.jobx.fetcher.BoardPreview;
 import com.jobx.fetcher.BoardTokens;
 import com.jobx.fetcher.ExperienceParser;
 import com.jobx.fetcher.FetchFilter;
+import com.jobx.fetcher.JobLabels;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jsoup.Jsoup;
@@ -138,6 +139,9 @@ public class RipplingFetcher implements AtsFetcher {
                 labels.add(row.path("workLocation").path("label").asText(""));
             }
             job.setLocation(joinLocations(labels));
+            // Display only. The detail has an employmentType too, but its label
+            // and id are swapped ({"label":"SALARIED_FT"}), so it is left out.
+            job.setDepartment(JobLabels.clean(first.path("department").path("label").asText(null)));
             job.setRawJson(first.toString());
 
             if (fetchDetails) {

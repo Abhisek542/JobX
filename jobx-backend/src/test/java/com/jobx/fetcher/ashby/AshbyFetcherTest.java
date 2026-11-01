@@ -99,4 +99,14 @@ class AshbyFetcherTest {
         assertThrows(AtsFetchException.class,
                 () -> fetcher.parsePreview("<html>404</html>", "bogus"));
     }
+
+    /** Display-only labels (V8). Ashby's enum spelling "FullTime" is normalised. */
+    @Test
+    void mapsDepartmentTeamAndEmploymentType() throws Exception {
+        Job job = fetcher.parse(FixtureSupport.fixture("ashby-aspora.json"), company).get(0);
+
+        assertEquals("Engineering", job.getDepartment());
+        assertEquals("Engineering", job.getTeam());
+        assertEquals("Full-time", job.getEmploymentType());
+    }
 }

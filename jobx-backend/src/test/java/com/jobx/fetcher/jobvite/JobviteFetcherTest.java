@@ -8,13 +8,10 @@ import com.jobx.fetcher.AtsFetchException;
 import com.jobx.fetcher.BoardPreview;
 import com.jobx.fetcher.FetchFilter;
 import com.jobx.fetcher.FixtureSupport;
+import com.jobx.fetcher.HtmlPage;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 
-import java.net.URI;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -41,19 +38,19 @@ class JobviteFetcherTest {
     }
 
     /** A fetcher that serves pages by URL and records every URL requested. */
-    private static JobviteFetcher serving(Function<String, ResponseEntity<String>> pages,
+    private static JobviteFetcher serving(Function<String, HtmlPage> pages,
                                           List<String> urls, int maxPages) {
         return new JobviteFetcher(null, new ObjectMapper(), maxPages) {
             @Override
-            ResponseEntity<String> get(String url) {
+            HtmlPage fetchPage(String url) {
                 urls.add(url);
                 return pages.apply(url);
             }
         };
     }
 
-    private static ResponseEntity<String> ok(String fixture) {
-        return ResponseEntity.ok(FixtureSupport.fixture(fixture));
+    private static HtmlPage ok(String fixture) {
+        return new HtmlPage(200, null, FixtureSupport.fixture(fixture));
     }
 
     // ------------------------------------------------------------- list pages
@@ -162,7 +159,7 @@ class JobviteFetcherTest {
         String html = "<html><body><article class='jv-page-body'><ul class='new-job-list'>"
                 + "<li><a href='/egnyte/job/abc'>Engineer</a></li></ul></article></body></html>";
         List<String> urls = new ArrayList<>();
-        JobviteFetcher changed = serving(url -> ResponseEntity.ok(html), urls, 20);
+        JobviteFetcher changed = serving(url -> new HtmlPage(200, null, html), urls, 20);
 
         assertThrows(AtsFetchException.class, () -> changed.parsePreview(html, "egnyte"));
         assertThrows(AtsFetchException.class, () -> changed.fetch(egnyte, FetchFilter.none()));
@@ -243,9 +240,7 @@ class JobviteFetcherTest {
             }
             if (url.endsWith("/oBjQAfw4")) {
                 // What a removed job answers, live.
-                HttpHeaders headers = new HttpHeaders();
-                headers.setLocation(URI.create("https://jobs.jobvite.com/careers/egnyte/jobs?error=404"));
-                return new ResponseEntity<>(headers, HttpStatus.SEE_OTHER);
+                return new HtmlPage(303, "https://jobs.jobvite.com/careers/egnyte/jobs?error=404", "");
             }
             return ok("jobvite-egnyte-detail.html");
         }, urls, 20);
@@ -270,10 +265,8 @@ class JobviteFetcherTest {
 
     @Test
     void aRedirectMeansTheBoardDoesNotExist() {
-        HttpHeaders headers = new HttpHeaders();
-        headers.setLocation(URI.create("http://search.jobvite.com/?invalid=1"));
         List<String> urls = new ArrayList<>();
-        JobviteFetcher gone = serving(url -> new ResponseEntity<>(headers, HttpStatus.FOUND), urls, 20);
+        JobviteFetcher gone = serving(url -> new HtmlPage(302, "http://search.jobvite.com/?invalid=1", ""), urls, 20);
         Company unknown = FixtureSupport.company("Nope", AtsPlatform.JOBVITE, "nosuchco");
 
         AtsFetchException e = assertThrows(AtsFetchException.class, () -> gone.previewBoard(unknown));

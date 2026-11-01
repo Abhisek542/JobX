@@ -9,6 +9,7 @@ import com.jobx.fetcher.FetcherRegistry;
 import com.jobx.repository.CompanyRepository;
 import com.jobx.repository.ExpiredJobRepository;
 import com.jobx.repository.JobRepository;
+import com.jobx.resolve.BoardRedetector;
 import com.jobx.service.MatchingService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -39,6 +40,7 @@ class FetchSchedulerHealthTest {
     private FetcherRegistry fetcherRegistry;
     private AtsFetcher fetcher;
     private MatchingService matchingService;
+    private BoardRedetector boardRedetector;
     private FetchScheduler scheduler;
 
     private Company company;
@@ -49,6 +51,7 @@ class FetchSchedulerHealthTest {
         companyRepository = mock(CompanyRepository.class);
         JobRepository jobRepository = mock(JobRepository.class);
         matchingService = mock(MatchingService.class);
+        boardRedetector = mock(BoardRedetector.class);
         fetcherRegistry = mock(FetcherRegistry.class);
         fetcher = mock(AtsFetcher.class);
         ExpiredJobRepository expiredJobRepository = mock(ExpiredJobRepository.class);
@@ -57,7 +60,7 @@ class FetchSchedulerHealthTest {
         ObjectProvider<FetchScheduler> self = mock(ObjectProvider.class);
 
         scheduler = new FetchScheduler(companyRepository, jobRepository, expiredJobRepository,
-                fetcherRegistry, matchingService, self, 6);
+                fetcherRegistry, matchingService, boardRedetector, self, 6);
         when(self.getObject()).thenReturn(scheduler);
 
         company = new Company();
@@ -188,5 +191,56 @@ class FetchSchedulerHealthTest {
         // No job lookups happened at all — we bailed before the persist loop
         verifyNoMoreInteractions(fetcherRegistry);
         verifyNoInteractions(matchingService);
+    }
+
+    // ---- PR D: failing_since and the redetect hook ----
+
+    @Test
+    void firstFailureStartsTheFailingStreakAndLaterOnesKeepIt() {
+        when(fetcher.fetch(eq(company), any())).thenThrow(new AtsFetchException("404"));
+
+        scheduler.fetchCompany(company, null);
+        java.time.Instant started = company.getFailingSince();
+        assertNotNull(started);
+
+        // A later failure must not move the start, or the 12h gate never opens.
+        company.setLastFetchedAt(null);
+        scheduler.fetchCompany(company, null);
+        assertEquals(started, company.getFailingSince());
+    }
+
+    @Test
+    void successClearsTheStreakAndAFailingMoveProposal() {
+        company.setFailingSince(java.time.Instant.now().minusSeconds(86_400));
+        company.proposeMove(AtsPlatform.LEVER, "apna", Company.MoveReason.FAILING);
+        when(fetcher.fetch(eq(company), any())).thenReturn(List.of());
+
+        scheduler.fetchCompany(company, null);
+
+        assertNull(company.getFailingSince());
+        assertFalse(company.hasMoveProposal());
+        assertNull(company.getMovedToReason());
+    }
+
+    @Test
+    void successKeepsANativeAvailableProposal() {
+        // Made about a board that works; the better feed is still out there.
+        company.proposeMove(AtsPlatform.GREENHOUSE, "apna", Company.MoveReason.NATIVE_AVAILABLE);
+        when(fetcher.fetch(eq(company), any())).thenReturn(List.of());
+
+        scheduler.fetchCompany(company, null);
+
+        assertTrue(company.hasMoveProposal());
+        assertEquals(Company.MoveReason.NATIVE_AVAILABLE, company.getMovedToReason());
+    }
+
+    @Test
+    void cycleHandsItsBoardsToTheRedetectorAndSurvivesItFailing() {
+        when(fetcher.fetch(eq(company), any())).thenReturn(List.of());
+        when(companyRepository.findAllWithActiveWatchers()).thenReturn(List.of(company));
+        when(boardRedetector.redetectDue(any())).thenThrow(new RuntimeException("boom"));
+
+        assertDoesNotThrow(() -> scheduler.fetchAllCompanies());
+        verify(boardRedetector).redetectDue(List.of(company));
     }
 }

@@ -64,6 +64,21 @@ class BoardProbeTest {
                 "a board with no live roles must never be offered, however convincing its name");
     }
 
+    /**
+     * PR B lets an empty board be watched on platforms that 404 unknown tokens,
+     * but only when the token came from the user's link or the company's page. A
+     * guessed slug that exists but is empty may be a different company, so a
+     * probe still never offers it.
+     */
+    @Test
+    void anEmptyBoardIsNeverAHitEvenOnAPlatformThat404sUnknownTokens() {
+        AtsFetcher greenhouse = stub(AtsPlatform.GREENHOUSE);
+        when(greenhouse.distinguishesMissingBoard()).thenReturn(true);
+        when(greenhouse.previewBoard(any())).thenReturn(preview(null, 0));
+
+        assertTrue(probe.probe(List.of(AtsPlatform.GREENHOUSE), List.of("porter")).isEmpty());
+    }
+
     @Test
     void aBoardWithLiveRolesIsAHit() {
         AtsFetcher ashby = stub(AtsPlatform.ASHBY);
