@@ -5,9 +5,11 @@ import com.jobx.entity.WatchedCompany;
 import com.jobx.enums.AtsPlatform;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
@@ -57,4 +59,14 @@ public interface CompanyRepository extends JpaRepository<Company, UUID> {
     default List<Company> findAllWithActiveWatchers() {
         return findDistinctCompaniesByWatchStatus(WatchedCompany.CompanyStatus.ACTIVE);
     }
+
+    /**
+     * Record the careers page a board was found on, only if the company has none
+     * yet (PR D). The first page anyone gave stays; a later adder can't replace
+     * it. One UPDATE, so it can't race a fetch writing health to the same row.
+     */
+    @Modifying
+    @Transactional
+    @Query("UPDATE Company c SET c.careersUrl = :url WHERE c.id = :id AND c.careersUrl IS NULL")
+    int fillCareersUrlIfMissing(@Param("id") UUID id, @Param("url") String url);
 }

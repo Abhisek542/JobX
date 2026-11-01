@@ -35,12 +35,43 @@ export interface WatchedCompanyResponse {
   /** null = never checked. Added to the backend 2026-08-15. */
   lastFetchStatus: FetchStatus | null;
   createdAt: string;
+  /**
+   * A board Jobx thinks this company moved to, or null. A proposal only: the
+   * watchlist shows a Switch banner and POST /watchlist/{id}/move acts on it.
+   */
+  movedTo: MovedTo | null;
+}
+
+/**
+ * Why a move was proposed. FAILING: the board broke and another one turned up.
+ * NATIVE_AVAILABLE: a healthy crawled board's careers page now links a real
+ * ATS (produced once the custom-page crawler ships).
+ */
+export type MoveReason = 'FAILING' | 'NATIVE_AVAILABLE';
+
+export interface MovedTo {
+  atsPlatform: AtsPlatform;
+  boardToken: string;
+  boardUrl: string | null;
+  reason: MoveReason;
+}
+
+/** POST /watchlist/{id}/move: the proposal the user saw and is confirming. */
+export interface MoveWatchRequest {
+  atsPlatform: AtsPlatform;
+  boardToken: string;
 }
 
 export interface WatchedCompanyRequest {
   companyName: string;
   atsPlatform: AtsPlatform;
   boardToken: string;
+  /**
+   * The careers page the board was found on. Sent only for a URL-mode add whose
+   * candidate came from that link (source URL or SNIFF), so the backend can
+   * look there again if the board later stops working.
+   */
+  careersUrl?: string;
 }
 
 export interface UpdateWatchedCompanyStatusRequest {

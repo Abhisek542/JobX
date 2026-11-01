@@ -112,6 +112,16 @@ jobx:
       # own budget rather than riding the auth limiter's.
       max-attempts: 20
       window-seconds: 60
+  redetect:
+    # PR D: a board FAILED for this long gets a look at where the company's
+    # careers page points now (re-sniff careers_url, else probe the other
+    # platforms by name). The result is only a "moved to X" proposal; a user
+    # confirms it with POST /watchlist/{id}/move.
+    failing-for-hours: 12
+    # Look at the same company at most this often.
+    retry-after-hours: 24
+    # Each look is outbound HTTP on the scheduler thread, so cap it per cycle.
+    max-per-cycle: 5
   cors:
     # Origins allowed to call this API from a browser. The Angular dev server is
     # the dev default; add the deployed dashboard origin per environment.

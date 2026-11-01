@@ -416,6 +416,16 @@ touching any fetcher code, not this one.
   simply absent. Still to come with PR E: a **"Crawled"** badge when `MatchResponse.atsPlatform ===
   'CUSTOM'`;
 - a watchlist row with `movedTo` shows a banner with Switch and Dismiss buttons.
+  **Built 2026-10-31 (PR D).** The `.wl-move` banner sits under the row on the
+  Watchlist page, with copy from `moveBannerCopy()` in `watchlist-status.ts` and
+  a "See the board" link when `boardUrl` is set. **Switch** calls
+  `WatchlistStore.move()` → `POST /watchlist/{id}/move` with the proposed
+  `{atsPlatform, boardToken}`, replaces the row and reloads the feed (matches
+  move boards server-side). A 409 reloads the watchlist. **Dismiss** is
+  session-only, keyed on watch id + proposed board, and cleared by `reset()`.
+  The modal sends `careersUrl` (the URL-mode input captured when the resolve
+  was sent) when the chosen candidate's source is URL or SNIFF.
+  **Not visually verified in a browser yet.** The copy for each reason:
   The copy depends on `movedTo.reason`:
   - `FAILING`: "moved to {Platform}";
   - `NATIVE_AVAILABLE` (a healthy crawled board): "careers page now uses

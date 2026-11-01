@@ -65,7 +65,7 @@ class WatchlistControllerSharedCompanyTest {
         // write transactions out of the controller, but they are still exactly the
         // behaviour these tests are about.
         WatchlistService watchlistService = new WatchlistService(companyRepository,
-                watchedCompanyRepository, matchingService);
+                watchedCompanyRepository, matchingService, matchRepository);
         controller = new WatchlistController(watchedCompanyRepository, companyRepository,
                 matchRepository, watchlistService, mock(FetchScheduler.class), fetcherRegistry,
                 mock(CompanyResolver.class), mock(UnsupportedBoardRequestRepository.class), 300_000);

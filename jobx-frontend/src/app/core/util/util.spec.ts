@@ -6,7 +6,7 @@ import { safeNext } from './redirect';
 import { normalizeList, parseList } from './text-lists';
 import { relTime } from './time';
 import { looksLikeUrl } from './url';
-import { companyStatusLine } from './watchlist-status';
+import { companyStatusLine, moveBannerCopy } from './watchlist-status';
 
 describe('identity (derived from the email local-part)', () => {
   it('derives a display name', () => {
@@ -107,6 +107,7 @@ describe('companyStatusLine', () => {
     lastFetchedAt: new Date(now - 22 * 60_000).toISOString(),
     lastFetchStatus: 'SUCCESS',
     createdAt: '2026-07-01T00:00:00Z',
+    movedTo: null,
     ...over,
   });
 
@@ -163,5 +164,42 @@ describe('looksLikeUrl (mirrors CompanyResolver.looksLikeUrl)', () => {
 
   it('counts an explicit scheme as a URL, even one the server will refuse', () => {
     expect(looksLikeUrl('file:///etc/passwd')).toBe(true);
+  });
+});
+
+describe('moveBannerCopy', () => {
+  const company = {
+    id: 'w1',
+    companyId: 'c1',
+    companyName: 'PhonePe',
+    atsPlatform: 'GREENHOUSE',
+    boardToken: 'phonepe',
+    status: 'ACTIVE',
+    lastFetchedAt: null,
+    lastFetchStatus: 'FAILED',
+    createdAt: '2026-07-01T00:00:00Z',
+    movedTo: null,
+  } as WatchedCompanyResponse;
+
+  it('asks about a move away from a failing board', () => {
+    const copy = moveBannerCopy(company, {
+      atsPlatform: 'SMARTRECRUITERS',
+      boardToken: 'PHONEPELIMITED',
+      boardUrl: 'https://jobs.smartrecruiters.com/PHONEPELIMITED',
+      reason: 'FAILING',
+    });
+    expect(copy).toBe(
+      'PhonePe seems to have moved to SmartRecruiters. Switch this watch to their new board?',
+    );
+  });
+
+  it('offers the direct feed when a working careers page gained an ATS', () => {
+    const copy = moveBannerCopy(company, {
+      atsPlatform: 'GREENHOUSE',
+      boardToken: 'phonepe',
+      boardUrl: null,
+      reason: 'NATIVE_AVAILABLE',
+    });
+    expect(copy).toContain("PhonePe's careers page now uses Greenhouse");
   });
 });

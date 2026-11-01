@@ -896,8 +896,10 @@ per-board quirks, dead board tokens) are in `jobx-backend/docs/ats-api-reference
 — read that file before touching any fetcher code, not this one.
 
 Board tokens rot: PhonePe's Greenhouse board went from 68 live jobs to a hard 404
-in six days when they moved to SmartRecruiters. Treat a sudden FAILED board as
-"check where the company's careers page points now", not as a bug in the fetcher.
+in six days when they moved to SmartRecruiters. Since PR D (2026-10-31),
+`BoardRedetector` does that looking: a board FAILED for 12h gets its
+`careers_url` re-sniffed (else a name probe on the other platforms), and what it
+finds is shown to watchers as a "moved to X" proposal. Still not a fetcher bug.
 
 ## Add-company improvements + custom careers-page crawler (PLANNED 2026-09-27, not built yet)
 
@@ -965,9 +967,26 @@ above still describe the code that is live. Update them as each PR lands.
   the feed query (`findByUserOrderByCreatedAtDesc`) now has an `@EntityGraph` on
   `job` + `company`. Reading them lazily would have been an N+1 per card; it also
   closes the old `job.company` N+1 on the feed.
-- **D: ATS moves.** `companies.failing_since` → `BoardRedetector` (12h failing,
-  at most once a day) re-sniffs `careers_url` or re-probes → stores a
-  `moved_to_*` **proposal**. The user confirms via `POST /watchlist/{id}/move`.
+- **D: ATS moves. Built 2026-10-31 for native ↔ native** (migration
+  `V10__company_redetect.sql`; the plan's PR D section lists the differences).
+  - `markFailed` starts `failing_since`; a successful fetch clears it and any
+    `FAILING` proposal (a `NATIVE_AVAILABLE` one stays).
+  - At the end of each cycle `BoardRedetector.redetectDue` checks up to
+    `jobx.redetect.max-per-cycle` (5) boards that have been FAILED ≥12h and
+    weren't looked at in 24h. It re-sniffs `careers_url` (+ one-hop follow),
+    then probes the other platforms by name. The first board with **live
+    roles** other than the current one becomes the `moved_to_*` proposal;
+    finding nothing clears it. Not transactional (outbound HTTP), and it never
+    fails the cycle.
+  - `POST /watchlist` takes an optional `careersUrl` (stored only if the company
+    has none). The modal sends it for URL-mode adds from a URL/SNIFF candidate.
+  - `WatchedCompanyResponse.movedTo` = `{atsPlatform, boardToken, boardUrl,
+    reason}` or null. `POST /watchlist/{id}/move` with body `{atsPlatform,
+    boardToken}` (must equal the current proposal, else 409) re-previews the
+    board (no live roles → 409), get-or-creates it, deletes this user's matches
+    on the old board, re-points the same watch row and backfills.
+  - Also fixed on the way: PR A and PR C both shipped a `V8`; PR A's is now `V9`.
+  - **Still waiting on E:** the CUSTOM directions below.
   Never switch silently. Moves work in both directions between native and custom:
   - native → `CUSTOM`, when a company leaves its ATS for an in-house page;
   - `CUSTOM` → native (`NATIVE_AVAILABLE`), checked weekly even on healthy
